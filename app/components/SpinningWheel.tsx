@@ -207,6 +207,25 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names }) => {
     }
   };
 
+  const playTickSound = (volume: number = 0.3) => {
+    // Create a simple click sound using Web Audio API
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 600 + (200 * volume); // Higher pitch when louder
+    oscillator.type = 'sine';
+    
+    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.1);
+  };
+
   const playCelebrationSound = () => {
     // Create "Do-dooo-dooo-dooooooo!" celebration sound (classic fanfare)
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -264,6 +283,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names }) => {
     const finalRotation = rotation + (Math.PI * 2 * (baseRotations + Math.random() * 2));
     
     const startTime = Date.now();
+    let lastRotation = rotation;
+    let lastSoundTime = 0;
+    const segmentSize = (2 * Math.PI) / wheelNames.length;
+    let cumulativeRotation = 0;
     
     const animate = () => {
       const now = Date.now();
@@ -276,7 +299,23 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names }) => {
       const currentRotation = rotation + (finalRotation - rotation) * easeOut;
       setRotation(currentRotation);
 
-      // No clicking sounds during spin
+      // Calculate how much we've rotated since last frame
+      const rotationDelta = currentRotation - lastRotation;
+      cumulativeRotation += Math.abs(rotationDelta);
+      
+      // Play sound every time we pass through a segment amount of rotation
+      // But limit to reasonable frequency based on speed
+      const minTimeBetweenSounds = Math.max(50, 250 * (1 - (1 - progress)));
+      
+      if (cumulativeRotation >= segmentSize && (now - lastSoundTime) >= minTimeBetweenSounds) {
+        const speed = 1 - easeOut;
+        const volume = Math.max(0.05, Math.min(0.3, 0.05 + (1 - speed) * 0.25));
+        playTickSound(volume);
+        cumulativeRotation = 0;
+        lastSoundTime = now;
+      }
+      
+      lastRotation = currentRotation;
 
       if (progress < 1) {
         requestAnimationFrame(animate);
@@ -320,7 +359,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names }) => {
       {/* Speed Indicator */}
       <div className="mt-6 w-64">
         <div className="text-center mb-2 font-semibold text-gray-700">
-          Spin Power {isSpinning && "(Locked)"}
+          Spin Power
         </div>
         <div className="relative h-8 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
           <div 
