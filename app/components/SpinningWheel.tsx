@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 
 interface SpinningWheelProps {
@@ -55,7 +55,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names }) => {
   useEffect(() => {
     if (!isSpinning) {
       const interval = setInterval(() => {
-        setSpeedIndicator(prev => {
+        setSpeedIndicator(() => {
           // Sine wave oscillation between 0 and 1
           const time = Date.now() / 1000;
           return (Math.sin(time * 2) + 1) / 2;
@@ -68,11 +68,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names }) => {
     }
   }, [isSpinning]);
 
-  useEffect(() => {
-    drawWheel();
-  }, [rotation, canvasSize]);
-
-  const drawWheel = () => {
+  const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     
@@ -140,7 +136,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names }) => {
     ctx.strokeStyle = '#8B0000';
     ctx.lineWidth = 2;
     ctx.stroke();
-  };
+  }, [rotation, canvasSize, wheelNames, colors]);
+
+  useEffect(() => {
+    drawWheel();
+  }, [drawWheel]);
 
   const triggerConfetti = () => {
     // Multiple bursts for more impressive effect
@@ -150,7 +150,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names }) => {
       zIndex: 9999
     };
 
-    function fire(particleRatio: number, opts: any) {
+    function fire(particleRatio: number, opts: confetti.Options) {
       confetti({
         ...defaults,
         ...opts,
@@ -209,7 +209,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names }) => {
 
   const playTickSound = (volume: number = 0.3) => {
     // Create a simple click sound using Web Audio API
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     
@@ -228,7 +228,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names }) => {
 
   const playCelebrationSound = () => {
     // Create "Do-dooo-dooo-dooooooo!" celebration sound (classic fanfare)
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     
     // Notes and timing for "Do-dooo-dooo-dooooooo!" (classic trumpet fanfare)
     const fanfare = [
