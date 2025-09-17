@@ -44,16 +44,17 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   const wheelNames = processedNames;
 
   const winnerRhymes = [
-    "Winner winner chicken dinner",
-    "You are the chosen one",
-    "Victory is yours",
-    "Ladies and gentlemen, we have a winner",
-    "Absolute legend",
+    "Winner Winner, Chicken Dinner",
+    "You are the Chosen One",
+    "Victory Royale",
+    "Winner: Chosen",
+    "Absolute Legend",
     "Big W's",
-    "The wheel has spoken",
-    "Jackpot!",
+    "The Wheel has Spoken",
+    "You have been randomly selected",
+    "Jackpot!!",
     "Congrats",
-    "The odds were in your favor",
+    "The Algorithm was in your Favor",
   ];
 
   const colors = [
@@ -368,7 +369,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
             // Select random winner rhyme - ensure true randomness
             const randomIndex = Math.floor(Math.random() * winnerRhymes.length);
             const selectedRhyme = winnerRhymes[randomIndex];
-            console.log("Selected rhyme:", selectedRhyme, "Index:", randomIndex);
+            console.log(
+              "Selected rhyme:",
+              selectedRhyme,
+              "Index:",
+              randomIndex
+            );
             setWinnerRhyme(selectedRhyme);
             setShowWinnerModal(true);
             startContinuousConfetti();
