@@ -68,6 +68,23 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     "#FFD700",
   ];
 
+  // Animate speed indicator
+  useEffect(() => {
+    if (!isSpinning) {
+      const interval = setInterval(() => {
+        setSpeedIndicator(() => {
+          // Sine wave oscillation between 0 and 1
+          const time = Date.now() / 1000;
+          return (Math.sin(time * 2) + 1) / 2;
+        });
+      }, 50);
+      speedIntervalRef.current = interval;
+      return () => clearInterval(interval);
+    } else if (speedIntervalRef.current) {
+      clearInterval(speedIntervalRef.current);
+    }
+  }, [isSpinning]);
+
   useEffect(() => {
     const handleResize = () => {
       if (containerRef.current) {
@@ -88,22 +105,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     };
   }, []);
 
-  // Animate speed indicator
-  useEffect(() => {
-    if (!isSpinning) {
-      const interval = setInterval(() => {
-        setSpeedIndicator(() => {
-          // Sine wave oscillation between 0 and 1
-          const time = Date.now() / 1000;
-          return (Math.sin(time * 2) + 1) / 2;
-        });
-      }, 50);
-      speedIntervalRef.current = interval;
-      return () => clearInterval(interval);
-    } else if (speedIntervalRef.current) {
-      clearInterval(speedIntervalRef.current);
-    }
-  }, [isSpinning]);
 
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
@@ -391,17 +392,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       ref={containerRef}
       className="flex flex-col items-center justify-center w-full h-full"
     >
-      <div className="relative">
-        <canvas
-          ref={canvasRef}
-          width={canvasSize}
-          height={canvasSize}
-          className="border-4 border-gray-300 rounded-full shadow-2xl"
-        />
-      </div>
-
       {/* Speed Indicator */}
-      <div className="mt-6 w-64">
+      <div className="mb-6 w-64">
         <div className="text-center mb-2 font-semibold text-gray-700">
           Spin Power
         </div>
@@ -421,6 +413,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
           <span>Fast</span>
         </div>
       </div>
+
+      <div className="relative">
+        <canvas
+          ref={canvasRef}
+          width={canvasSize}
+          height={canvasSize}
+          className="border-4 border-gray-300 rounded-full shadow-2xl"
+        />
+      </div>
+
 
       <div className="flex gap-3 mt-4 justify-center">
         <button
