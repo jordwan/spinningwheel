@@ -6,19 +6,17 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useLayoutEffect,
 } from "react";
 import confetti from "canvas-confetti";
 
 /** ========= CRYPTO RNG (minimal + reliable) ========= */
 const cryptoRandom = (): number => {
-  // If we're in the browser and crypto is available, use it.
   if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
     const u32 = new Uint32Array(1);
     window.crypto.getRandomValues(u32);
-    // u32 max is 2^32-1; divide by 2^32 -> [0, 1)
-    return u32[0] / 4294967296;
+    return u32[0] / 4294967296; // [0,1)
   }
-  // Fallback (SSR/older browsers)
   return Math.random();
 };
 
@@ -29,23 +27,34 @@ interface SpinningWheelProps {
 
 const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
+  // Layout refs
+  const rootRef = useRef<HTMLDivElement>(null);
+  const wheelWrapRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const speedRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+
+  /** ========= State ========= */
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [selectedName, setSelectedName] = useState<string>("");
   const [showWinnerModal, setShowWinnerModal] = useState(false);
   const [winnerRhyme, setWinnerRhyme] = useState<string>("");
-  const [canvasSize, setCanvasSize] = useState(400);
+  const [canvasCSSSize, setCanvasCSSSize] = useState(400);
   const [speedIndicator, setSpeedIndicator] = useState(0.5);
   const [showFairnessPopup, setShowFairnessPopup] = useState(false);
   const [fairnessText, setFairnessText] = useState("");
   const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
+  const [randomBits, setRandomBits] = useState<string>("");
 
-  // Timer refs – use browser-friendly types
+  // Timer refs
   const speedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const randomBitsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
 
-  /** ========= AUDIO: reuse ONE AudioContext + prebuilt buffers ========= */
+  /** ========= AUDIO (unchanged) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
   const clickBufferRef = useRef<AudioBuffer | null>(null);
   const tadaBufferRef = useRef<AudioBuffer | null>(null);
@@ -53,7 +62,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   const ensureAudio = useCallback(() => {
     if (typeof window === "undefined") return null;
 
-    // Create (or reuse) a single AudioContext
     if (!audioCtxRef.current) {
       const Ctx =
         window.AudioContext ||
@@ -62,154 +70,203 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       audioCtxRef.current = new Ctx();
     }
 
-    // Build a tiny "tick" buffer once (1.5ms burst with quick decay)
     if (!clickBufferRef.current && audioCtxRef.current) {
       const ctx = audioCtxRef.current;
-      const duration = 0.008; // 8ms - shorter for more click-like sound
-      const sr = ctx.sampleRate;
+      const duration = 0.008,
+        sr = ctx.sampleRate;
       const frames = Math.max(1, Math.floor(duration * sr));
       const buffer = ctx.createBuffer(1, frames, sr);
       const data = buffer.getChannelData(0);
-
-      // Higher frequency, faster decay for crisp click sound
-      const freq = 2000; // higher pitch for click
+      const freq = 2000;
       for (let i = 0; i < frames; i++) {
         const t = i / sr;
-        const env = Math.exp(-t * 150); // much faster decay for sharp click
-        data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.3; // reduce amplitude
+        const env = Math.exp(-t * 150);
+        data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.3;
       }
       clickBufferRef.current = buffer;
     }
 
-    // Build a celebratory "ta da" buffer (rising musical phrase)
     if (!tadaBufferRef.current && audioCtxRef.current) {
       const ctx = audioCtxRef.current;
-      const duration = 0.8; // 800ms for ta da
-      const sr = ctx.sampleRate;
+      const duration = 0.8,
+        sr = ctx.sampleRate;
       const frames = Math.max(1, Math.floor(duration * sr));
       const tadaBuffer = ctx.createBuffer(1, frames, sr);
       const tadaData = tadaBuffer.getChannelData(0);
-
-      // Create a musical "ta da" with rising notes (C-E-G chord arpeggio)
-      const frequencies = [261.63, 329.63, 392.0]; // C4, E4, G4
+      const frequencies = [261.63, 329.63, 392.0];
       for (let i = 0; i < frames; i++) {
         const t = i / sr;
-        const progress = t / duration;
-
-        // Envelope: quick attack, sustain, then fade
-        let env;
-        if (progress < 0.1) {
-          env = progress / 0.1; // quick attack
-        } else if (progress < 0.6) {
-          env = 1; // sustain
-        } else {
-          env = (1 - progress) / 0.4; // fade out
-        }
-
-        // Play frequencies in sequence with overlap
+        const p = t / duration;
+        const env = p < 0.1 ? p / 0.1 : p < 0.6 ? 1 : (1 - p) / 0.4;
         let sample = 0;
-        frequencies.forEach((freq, index) => {
-          const noteStart = index * 0.15; // staggered start times
-          const noteEnd = noteStart + 0.4; // note duration
-          if (t >= noteStart && t <= noteEnd) {
-            const noteProgress = (t - noteStart) / (noteEnd - noteStart);
-            const noteEnv = Math.sin(Math.PI * noteProgress); // smooth bell curve
-            sample += Math.sin(2 * Math.PI * freq * t) * noteEnv * 0.3;
+        frequencies.forEach((f, idx) => {
+          const ns = idx * 0.15,
+            ne = ns + 0.4;
+          if (t >= ns && t <= ne) {
+            const np = (t - ns) / (ne - ns);
+            const nenv = Math.sin(Math.PI * np);
+            sample += Math.sin(2 * Math.PI * f * t) * nenv * 0.3;
           }
         });
-
-        tadaData[i] = sample * env * 0.4; // overall volume control
+        tadaData[i] = sample * env * 0.4;
       }
       tadaBufferRef.current = tadaBuffer;
     }
-
     return audioCtxRef.current;
   }, []);
 
-  const playTickSound = (volume = 0.1) => {
+  const playTickSound = (v = 0.1) => {
     const ctx = ensureAudio();
     if (!ctx || !clickBufferRef.current) return;
-
-    // On some browsers the context may start suspended
-    if (ctx.state === "suspended") {
-      // Fire and forget resume; user gesture already happened (spin)
-      ctx.resume().catch(() => {});
-    }
-
-    // Very light-weight buffer source each tick
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
     const src = ctx.createBufferSource();
     src.buffer = clickBufferRef.current;
-
     const gain = ctx.createGain();
-    gain.gain.value = Math.max(0.01, Math.min(0.15, volume));
-
+    gain.gain.value = Math.max(0.01, Math.min(0.15, v));
     src.connect(gain).connect(ctx.destination);
     src.start();
   };
-
-  const playTadaSound = (volume = 0.3) => {
+  const playTadaSound = (v = 0.3) => {
     const ctx = ensureAudio();
     if (!ctx || !tadaBufferRef.current) return;
-
-    // On some browsers the context may start suspended
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
-    }
-
-    // Play the ta da celebration sound
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
     const src = ctx.createBufferSource();
     src.buffer = tadaBufferRef.current;
-
     const gain = ctx.createGain();
-    gain.gain.value = Math.max(0.1, Math.min(0.5, volume));
-
+    gain.gain.value = Math.max(0.1, Math.min(0.5, v));
     src.connect(gain).connect(ctx.destination);
     src.start();
   };
 
   /** ========= Names + RESPIN placement ========= */
-  const processedNames = useMemo(() => {
-    const baseNames =
-      names && names.length > 0
+  const wheelNames = useMemo(() => {
+    const base =
+      names && names.length
         ? names
         : ["Name 1", "Name 2", "Name 3", "Name 4", "Name 5", "Name 6"];
-
-    const totalSlots = baseNames.length + 2; // 2 RESPINs
-    const midPoint = Math.floor(totalSlots / 2);
-
-    const result = [...baseNames];
+    const totalSlots = base.length + 2;
+    const mid = Math.floor(totalSlots / 2);
+    const result = [...base];
     result.splice(0, 0, "RESPIN");
-    result.splice(midPoint, 0, "RESPIN");
+    result.splice(mid, 0, "RESPIN");
     return result;
   }, [names]);
 
-  const wheelNames = processedNames;
-
-  /** ========= Initialize fairness text ========= */
+  /** ========= Fairness text ========= */
   useEffect(() => {
-    const totalSlots = wheelNames.length;
+    const total = wheelNames.length;
     const respinCount = wheelNames.filter((n) => n === "RESPIN").length;
-    const nameChance = ((1 / totalSlots) * 100).toFixed(2);
-    const respinChance = ((respinCount / totalSlots) * 100).toFixed(2);
     setFairnessText(
-      `Each name ${nameChance}% odds, Free Spin ${respinChance}% odds`
+      `Each name ${((1 / total) * 100).toFixed(2)}% odds, Free Spin ${(
+        (respinCount / total) *
+        100
+      ).toFixed(2)}% odds`
     );
   }, [wheelNames]);
 
-  const winnerRhymes = [
-    "Winner Winner, Chicken Dinner",
-    "You are the Chosen One",
-    "Victory Royale!",
-    "Winner = Chosen",
-    "Absolute Legend Pick",
-    "Throw some W's in the chat for",
-    "The Wheel has Spoken",
-    "You have been randomly selected",
-    "Jackpot!!!",
-    "Congrats",
-    "The Algorithm was in your Favor",
-  ];
+  /** ========= Idle speed indicator ========= */
+  useEffect(() => {
+    if (!isSpinning) {
+      const id = setInterval(() => {
+        const t = Date.now() / 1000;
+        setSpeedIndicator((Math.sin(t * 1.5) + 1) / 2);
+      }, 16);
+      speedIntervalRef.current = id;
+      return () => {
+        if (speedIntervalRef.current) {
+          clearInterval(speedIntervalRef.current);
+          speedIntervalRef.current = null;
+        }
+      };
+    } else if (speedIntervalRef.current) {
+      clearInterval(speedIntervalRef.current);
+      speedIntervalRef.current = null;
+    }
+  }, [isSpinning]);
 
+  /** ========= Random bits (optional) ========= */
+  useEffect(() => {
+    if (!isSpinning) {
+      const id = setInterval(() => {
+        if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+          const u32 = new Uint32Array(4);
+          window.crypto.getRandomValues(u32);
+          const bin = Array.from(u32)
+            .map((n) => n.toString(2).padStart(32, "0"))
+            .join("")
+            .slice(0, 64);
+          setRandomBits(bin);
+        }
+      }, 100);
+      randomBitsIntervalRef.current = id;
+      return () => {
+        if (randomBitsIntervalRef.current) {
+          clearInterval(randomBitsIntervalRef.current);
+          randomBitsIntervalRef.current = null;
+        }
+      };
+    } else if (randomBitsIntervalRef.current) {
+      clearInterval(randomBitsIntervalRef.current);
+      randomBitsIntervalRef.current = null;
+    }
+  }, [isSpinning]);
+
+  /** ========= Responsive sizing with ResizeObserver ========= */
+  const recomputeSize = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Conservative fallbacks so first pass doesn't oversize the wheel:
+    const speedH = Math.max(speedRef.current?.offsetHeight ?? 0, 72);
+    const controlsH = Math.max(controlsRef.current?.offsetHeight ?? 0, 88);
+    const footerH = Math.max(footerRef.current?.offsetHeight ?? 0, 56);
+
+    const buffers = 32;
+
+    // Available area for the wheel
+    const availableH = Math.max(0, vh - speedH - controlsH - footerH - buffers);
+    const sidePadding = vw < 768 ? 24 : 96;
+    const availableW = Math.max(0, vw - sidePadding);
+
+    let target = Math.min(availableW, availableH);
+
+    // Desktop guard: never let the wheel exceed ~56% of viewport height
+    const vhCap = Math.floor(vh * (vw >= 1024 ? 0.56 : 0.62));
+    target = Math.min(target, vhCap);
+
+    // Global clamps
+    const minSize = 260;
+    const maxSize = vw < 1024 ? 540 : 600;
+    target = Math.max(minSize, Math.min(maxSize, target));
+
+    setCanvasCSSSize(target);
+  }, []);
+
+  useLayoutEffect(() => {
+    // Initial pass + observers (so when controls gain height, we recalc)
+    recomputeSize();
+
+    const ro = new ResizeObserver(() => recomputeSize());
+    speedRef.current && ro.observe(speedRef.current);
+    controlsRef.current && ro.observe(controlsRef.current);
+    footerRef.current && ro.observe(footerRef.current);
+    wheelWrapRef.current && ro.observe(wheelWrapRef.current);
+    rootRef.current && ro.observe(rootRef.current);
+
+    const onResize = () => recomputeSize();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, [recomputeSize]);
+
+  /** ========= Draw wheel (HiDPI, labels, pointer) ========= */
   const colors = useMemo(
     () => [
       "#f54d4dff",
@@ -224,139 +281,51 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     []
   );
 
-  /** ========= Speed indicator animation (fast and ultra-smooth) ========= */
-  useEffect(() => {
-    if (!isSpinning) {
-      const interval = setInterval(() => {
-        const time = Date.now() / 1000;
-        setSpeedIndicator((Math.sin(time * 1.5) + 1) / 2);
-      }, 16); // ~60fps for ultra-smooth animation
-
-      speedIntervalRef.current = interval;
-      return () => {
-        if (speedIntervalRef.current) {
-          clearInterval(speedIntervalRef.current);
-          speedIntervalRef.current = null;
-        }
-      };
-    } else {
-      if (speedIntervalRef.current) {
-        clearInterval(speedIntervalRef.current);
-        speedIntervalRef.current = null;
-      }
-    }
-  }, [isSpinning]);
-
-  /** ========= Resize handling ========= */
-  useEffect(() => {
-    const handleResize = () => {
-      if (!containerRef.current) return;
-      const containerWidth = containerRef.current.offsetWidth || window.innerWidth;
-      const containerHeight = containerRef.current.offsetHeight || window.innerHeight;
-
-      // Better mobile sizing calculation
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const isMobile = viewportWidth < 768;
-
-      let maxSize;
-      if (isMobile) {
-        // On mobile, be more conservative with sizing
-        maxSize = Math.min(viewportWidth - 60, viewportHeight - 300);
-      } else {
-        maxSize = Math.min(containerWidth - 40, containerHeight - 200);
-      }
-
-      setCanvasSize(Math.max(280, Math.min(maxSize, 800)));
-    };
-
-    // Use setTimeout to ensure DOM is ready, especially on mobile
-    const timeoutId = setTimeout(handleResize, 100);
-
-    // Also call immediately
-    handleResize();
-
-    window.addEventListener("resize", handleResize);
-    window.addEventListener("orientationchange", () => {
-      // Handle mobile orientation change with a delay
-      setTimeout(handleResize, 200);
-    });
-
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener("resize", handleResize);
-      window.removeEventListener("orientationchange", handleResize);
-    };
-  }, []);
-
-  // Additional resize when wheelNames change (important for mobile)
-  useEffect(() => {
-    if (wheelNames.length > 0) {
-      const handleResize = () => {
-        if (!containerRef.current) return;
-        const containerWidth = containerRef.current.offsetWidth || window.innerWidth;
-        const containerHeight = containerRef.current.offsetHeight || window.innerHeight;
-
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-        const isMobile = viewportWidth < 768;
-
-        let maxSize;
-        if (isMobile) {
-          maxSize = Math.min(viewportWidth - 60, viewportHeight - 300);
-        } else {
-          maxSize = Math.min(containerWidth - 40, containerHeight - 200);
-        }
-
-        setCanvasSize(Math.max(280, Math.min(maxSize, 800)));
-      };
-
-      // Small delay to let the layout settle after wheelNames change
-      const timeoutId = setTimeout(handleResize, 50);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [wheelNames]);
-
-  /** ========= Draw wheel ========= */
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const css = canvasCSSSize;
+
+    canvas.style.width = `${css}px`;
+    canvas.style.height = `${css}px`;
+    canvas.width = Math.floor(css * dpr);
+    canvas.height = Math.floor(css * dpr);
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-    const radius = Math.min(centerX, centerY) - 20;
+    const centerX = css / 2;
+    const centerY = css / 2;
+    const radius = Math.min(centerX, centerY) - 18;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, css, css);
 
     const sliceAngle = (2 * Math.PI) / wheelNames.length;
 
     wheelNames.forEach((name, i) => {
-      const startAngle = i * sliceAngle + rotation;
-      const endAngle = (i + 1) * sliceAngle + rotation;
+      const start = i * sliceAngle + rotation;
+      const end = (i + 1) * sliceAngle + rotation;
 
-      // Slice
       ctx.beginPath();
       ctx.moveTo(centerX, centerY);
-      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+      ctx.arc(centerX, centerY, radius, start, end);
       ctx.closePath();
 
       if (name === "RESPIN") {
-        const gradient = ctx.createLinearGradient(
+        const g = ctx.createLinearGradient(
           centerX - radius,
           centerY - radius,
           centerX + radius,
           centerY + radius
         );
-        gradient.addColorStop(0, "#1a1a1a");
-        gradient.addColorStop(0.5, "#333333");
-        gradient.addColorStop(1, "#000000");
-        ctx.fillStyle = gradient;
+        g.addColorStop(0, "#1a1a1a");
+        g.addColorStop(0.5, "#333333");
+        g.addColorStop(1, "#000000");
+        ctx.fillStyle = g;
         ctx.fill();
-
-        // Clean white border only (no red border)
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -368,39 +337,38 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         ctx.stroke();
       }
 
-      // Text
+      // Labels
       ctx.save();
       ctx.translate(centerX, centerY);
-      ctx.rotate(startAngle + sliceAngle / 2);
+      ctx.rotate(start + sliceAngle / 2);
       ctx.textAlign = "right";
 
       if (name === "RESPIN") {
         ctx.fillStyle = "#ffff00";
-        // More aggressive scaling for RESPIN text with many segments
-        const baseFontSize = Math.max(6, Math.min(14, canvasSize / Math.max(35, wheelNames.length * 1.2)));
-        const fontSize = baseFontSize;
-        ctx.font = `bold ${fontSize}px Arial`;
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = Math.max(1, fontSize / 8); // Scale stroke width too
-
-        // Always show "FREE SPIN"
-        ctx.strokeText("FREE SPIN", radius - 10, fontSize / 3);
-        ctx.fillText("FREE SPIN", radius - 10, fontSize / 3);
+        const fs = Math.max(
+          6,
+          Math.min(14, css / Math.max(35, wheelNames.length * 1.2))
+        );
+        ctx.font = `bold ${fs}px Arial`;
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = Math.max(1, fs / 8);
+        ctx.strokeText("FREE SPIN", radius - 10, fs / 3);
+        ctx.fillText("FREE SPIN", radius - 10, fs / 3);
       } else {
         ctx.fillStyle = "#fff";
-        // Dynamic font size based on wheel size and number of names
-        const baseFontSize = Math.max(8, Math.min(16, canvasSize / Math.max(30, wheelNames.length * 0.6)));
-        const fontSize = baseFontSize;
-        ctx.font = `bold ${fontSize}px Arial`;
-        ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+        const fs = Math.max(
+          8,
+          Math.min(16, css / Math.max(30, wheelNames.length * 0.6))
+        );
+        ctx.font = `bold ${fs}px Arial`;
+        ctx.shadowColor = "rgba(0,0,0,0.5)";
         ctx.shadowBlur = 4;
-        ctx.fillText(name, radius - 10, fontSize / 3);
+        ctx.fillText(name, radius - 10, fs / 3);
       }
-
       ctx.restore();
     });
 
-    // Center
+    // Center cap
     ctx.beginPath();
     ctx.arc(centerX, centerY, 20, 0, 2 * Math.PI);
     ctx.fillStyle = "#000";
@@ -409,48 +377,34 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     // Pointer
     ctx.beginPath();
     ctx.moveTo(centerX + radius - 10, centerY);
-    ctx.lineTo(centerX + radius + 30, centerY - 15);
-    ctx.lineTo(centerX + radius + 30, centerY + 15);
+    ctx.lineTo(centerX + radius + 26, centerY - 13);
+    ctx.lineTo(centerX + radius + 26, centerY + 13);
     ctx.closePath();
-
-    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-    ctx.shadowBlur = 6;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
-
+    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 1.5;
+    ctx.shadowOffsetY = 1.5;
     ctx.fillStyle = "#FF0000";
     ctx.fill();
-
     ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-
-    ctx.strokeStyle = "#FFFFFF";
     ctx.lineWidth = 3;
+    ctx.strokeStyle = "#FFFFFF";
     ctx.stroke();
-
-    ctx.strokeStyle = "#8B0000";
     ctx.lineWidth = 1;
+    ctx.strokeStyle = "#8B0000";
     ctx.stroke();
-  }, [rotation, canvasSize, wheelNames, colors]);
+  }, [rotation, canvasCSSSize, wheelNames, colors]);
 
   useEffect(() => {
     drawWheel();
   }, [drawWheel]);
 
-  /** ========= Confetti helpers ========= */
+  /** ========= Confetti ========= */
   const triggerConfetti = () => {
     const count = 200;
     const defaults = { origin: { y: 0.7 }, zIndex: 9999 } as const;
-
-    const fire = (ratio: number, opts: confetti.Options) =>
-      confetti({
-        ...defaults,
-        ...opts,
-        particleCount: Math.floor(count * ratio),
-      });
-
+    const fire = (r: number, o: confetti.Options) =>
+      confetti({ ...defaults, ...o, particleCount: Math.floor(count * r) });
     fire(0.25, { spread: 26, startVelocity: 55 });
     fire(0.2, { spread: 60 });
     fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
@@ -459,6 +413,20 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   };
 
   /** ========= Spin logic ========= */
+  const winnerRhymes = [
+    "Winner Winner, Chicken Dinner",
+    "You are the Chosen One",
+    "Victory Royale!",
+    "Winner = Chosen",
+    "Absolute Legend Pick",
+    "Throw some W's in the chat for",
+    "The Wheel has Spoken",
+    "You have been randomly selected",
+    "Jackpot!!!",
+    "Congrats",
+    "The Algorithm was in your Favor",
+  ];
+
   const spin = () => {
     if (isSpinning) return;
 
@@ -468,9 +436,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     setShowFairnessPopup(false);
     setLockedSpeed(speedIndicator);
 
-    const spinStrength = speedIndicator; // 0..1
-    const baseRotations = 3 + spinStrength * 10; // 3-13 turns
-    const spinDuration = 4000 + (1 - spinStrength) * 4000; // 4-8s
+    const spinStrength = speedIndicator;
+    const baseRotations = 3 + spinStrength * 10;
+    const spinDuration = 4000 + (1 - spinStrength) * 4000;
     const finalRotation =
       rotation + Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
 
@@ -492,7 +460,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       const delta = Math.abs(currentRotation - lastRotation);
       accRotation += delta;
 
-      // Tick gating by time so we don't spam audio
       const minBetweenTicks = Math.max(50, 250 * (1 - (1 - progress)));
       if (
         accRotation >= segmentSize &&
@@ -521,16 +488,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         const winner = wheelNames[selectedIndex];
         setSelectedName(winner);
 
-        // Winner determined by crypto-random
-
         if (winner !== "RESPIN") {
           setTimeout(() => {
             const rhyme =
               winnerRhymes[Math.floor(cryptoRandom() * winnerRhymes.length)];
             setWinnerRhyme(rhyme);
             setShowWinnerModal(true);
-            triggerConfetti(); // Fire confetti only once
-            playTadaSound(); // Play celebratory ta da sound
+            triggerConfetti();
+            playTadaSound();
           }, 100);
         }
       }
@@ -539,14 +504,24 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     requestAnimationFrame(animate);
   };
 
+  /** ========= UI ========= */
   return (
     <div
-      ref={containerRef}
-      className="flex flex-col items-center justify-center w-full h-full"
+      ref={rootRef}
+      className="relative flex flex-col items-center w-full min-h-screen"
+      style={{
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 72px)", // more reserve for fixed footer
+      }}
     >
-      {/* Speed Indicator */}
-      <div className="mb-6 w-64">
-        <div className="text-center mb-2 font-semibold text-white">
+      {/* Spin Power (≈50% width on mobile, larger on bigger screens) */}
+      <div
+        ref={speedRef}
+        className="
+          mt-3 sm:mt-4 mb-2 sm:mb-4
+          w-[min(50vw,360px)] sm:w-[min(70vw,420px)] lg:w-[480px]
+        "
+      >
+        <div className="text-center mb-1 sm:mb-2 text-[clamp(12px,1.8vw,16px)] font-semibold text-white">
           Spin Power
         </div>
         <div className="relative h-8 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
@@ -560,37 +535,65 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
             }}
           />
         </div>
-        <div className="flex justify-between mt-1 text-xs text-white">
+        <div className="flex justify-between mt-1 text-[clamp(10px,1.4vw,12px)] text-white">
           <span>Slow</span>
           <span>Fast</span>
         </div>
       </div>
 
-      <div className="relative">
+      {/* Wheel */}
+      <div
+        ref={wheelWrapRef}
+        className="relative flex items-center justify-center"
+        style={{ marginBottom: "min(5vh, 28px)" }}
+      >
         <canvas
           ref={canvasRef}
-          width={canvasSize}
-          height={canvasSize}
-          className="border-4 border-gray-300 rounded-full shadow-2xl"
+          className="rounded-full shadow-xl border border-white/30"
+          style={{ width: canvasCSSSize, height: canvasCSSSize }}
         />
       </div>
 
-      <div className="flex gap-3 mt-4 justify-center">
+      {/* Controls — width locked to wheel, wrap when needed */}
+      <div
+        ref={controlsRef}
+        className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center mx-auto"
+        style={{
+          width: `${canvasCSSSize}px`,
+          maxWidth: "95vw",
+          marginBottom: "8px",
+        }}
+      >
         <button
           onClick={spin}
           disabled={isSpinning}
-          className={`min-w-[140px] px-8 py-4 text-xl font-bold text-white rounded-lg shadow-lg transition-all transform ${
-            isSpinning
-              ? "bg-gray-500 cursor-not-allowed"
-              : "bg-green-500 hover:bg-green-600 hover:scale-105 active:scale-95"
-          }`}
+          className={`
+            px-[clamp(14px,2.2vw,22px)]
+            py-[clamp(9px,1.8vw,14px)]
+            text-[clamp(16px,1.8vw,18px)]
+            font-bold text-white rounded-lg shadow-lg transition-all
+            min-w-[clamp(120px,24vw,156px)]
+            ${
+              isSpinning
+                ? "bg-gray-500 cursor-not-allowed"
+                : "bg-green-500 hover:bg-green-600 hover:scale-[1.02] active:scale-95"
+            }
+          `}
         >
           {isSpinning ? "Spinning..." : "SPIN!"}
         </button>
+
         {onReset && (
           <button
             onClick={onReset}
-            className="min-w-[80px] px-6 py-3 text-sm font-bold text-white bg-blue-500 rounded-lg shadow-lg hover:bg-blue-600 transition-all transform hover:scale-105 active:scale-95"
+            className="
+              px-[clamp(12px,2vw,18px)]
+              py-[clamp(8px,1.6vw,12px)]
+              text-[clamp(12px,1.6vw,14px)]
+              font-bold text-white bg-blue-500 rounded-lg shadow-lg
+              hover:bg-blue-600 transition-all hover:scale-[1.02] active:scale-95
+              min-w-[clamp(80px,18vw,110px)]
+            "
           >
             Reset
           </button>
@@ -653,11 +656,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
               <div className="bg-blue-50 p-3 rounded">
                 <strong>How it works:</strong>
                 <p>
-                  This wheel uses window.crypto.getRandomValues(), which is a
-                  Cryptographically Secure Pseudo-Random Number Generator (CSPRNG)
-                  backed by OS entropy from keystrokes, disk noise, system timers,
-                  and other unpredictable sources. This provides the same level of
-                  randomness used in the most advanced security applications.
+                  This wheel uses window.crypto.getRandomValues(), a CSPRNG
+                  backed by OS entropy.
                 </p>
               </div>
               <div className="bg-gray-50 p-3 rounded">
@@ -679,13 +679,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
                   % chance
                 </p>
               </div>
-              <div className="text-xs text-gray-600 mt-4">
-                <p>
-                  Free Spins are positioned at opposite sides of the wheel for
-                  balanced distribution. The crypto-random approach eliminates
-                  any predictable patterns or bias.
-                </p>
-              </div>
             </div>
             <button
               onClick={() => setShowFairnessPopup(false)}
@@ -697,20 +690,27 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         </div>
       )}
 
-      {/* Live Fairness Display */}
-      {fairnessText && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-white/70 z-30 text-center whitespace-nowrap">
-          <span>{fairnessText}</span>
-        </div>
-      )}
-
-      {/* Tiny Fairness Link */}
-      <button
-        onClick={() => setShowFairnessPopup(true)}
-        className="fixed bottom-2 left-1/2 transform -translate-x-1/2 text-xs text-white/70 hover:text-white underline z-30"
+      {/* Footer */}
+      <div
+        ref={footerRef}
+        className="fixed bottom-0 left-0 right-0 z-30 pb-[calc(env(safe-area-inset-bottom,0px)+6px)]"
       >
-        fairness
-      </button>
+        {fairnessText && (
+          <div className="text-center mb-1">
+            <span className="text-[clamp(10px,1.6vw,12px)] text-white/70 whitespace-nowrap">
+              {fairnessText}
+            </span>
+          </div>
+        )}
+        <div className="text-center">
+          <button
+            onClick={() => setShowFairnessPopup(true)}
+            className="text-[clamp(10px,1.6vw,12px)] text-white/70 hover:text-white underline"
+          >
+            fairness
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
