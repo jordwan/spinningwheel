@@ -206,9 +206,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     const vhCap = Math.floor(vh * (vw >= 1024 ? 0.56 : 0.62));
     target = Math.min(target, vhCap);
 
-    // Global clamps
-    const minSize = 260;
-    const maxSize = vw < 1024 ? 540 : 600;
+    // Global clamps - keep consistent sizes
+    const minSize = 280;
+    const maxSize = 600; // Same max for all devices
     target = Math.max(minSize, Math.min(maxSize, target));
 
     setCanvasCSSSize(target);
@@ -229,12 +229,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
 
+    // Force recalculation after a brief delay to ensure layout is settled
+    const timer = setTimeout(() => recomputeSize(), 100);
+
     return () => {
+      clearTimeout(timer);
       ro.disconnect();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
     };
-  }, [recomputeSize]);
+  }, [recomputeSize, wheelNames.length]); // Add dependency on names count
 
   /** ========= Draw wheel (HiDPI, labels, pointer) ========= */
   const colors = useMemo(
