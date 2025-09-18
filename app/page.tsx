@@ -139,7 +139,6 @@ export default function Home() {
                     onKeyPress={handleKeyPress}
                     placeholder="example: tom, jerry, bart, cindy..."
                     className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
-                    autoFocus
                   />
                 </>
               ) : (

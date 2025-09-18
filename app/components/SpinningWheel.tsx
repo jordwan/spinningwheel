@@ -277,6 +277,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     wheelNames.forEach((name, i) => {
       const start = i * sliceAngle + rotation;
       const end = (i + 1) * sliceAngle + rotation;
+      const midAngle = start + sliceAngle / 2;
 
       ctx.beginPath();
       ctx.moveTo(centerX, centerY);
@@ -284,26 +285,71 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       ctx.closePath();
 
       if (name === "RESPIN") {
-        const g = ctx.createLinearGradient(
-          centerX - radius,
-          centerY - radius,
-          centerX + radius,
-          centerY + radius
+        // Metallic black gradient for RESPIN
+        const g = ctx.createRadialGradient(
+          centerX + Math.cos(midAngle) * radius * 0.5,
+          centerY + Math.sin(midAngle) * radius * 0.5,
+          0,
+          centerX,
+          centerY,
+          radius
         );
-        g.addColorStop(0, "#1a1a1a");
-        g.addColorStop(0.5, "#333333");
+        g.addColorStop(0, "#2a2a2a");
+        g.addColorStop(0.7, "#0f0f0f");
         g.addColorStop(1, "#000000");
         ctx.fillStyle = g;
         ctx.fill();
+
+        // Standard white border to match other segments
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
         ctx.stroke();
+
+        // Save and clip to segment for inner golden border
+        ctx.save();
+        ctx.clip();
+
+        // Draw golden inner border (closer to edge to avoid gap)
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius - 2, start, end);
+        ctx.closePath();
+        ctx.strokeStyle = "#ffd700";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.restore();
       } else {
-        ctx.fillStyle = colors[i % colors.length];
+        // Gradient fill for regular segments
+        const g = ctx.createRadialGradient(
+          centerX + Math.cos(midAngle) * radius * 0.5,
+          centerY + Math.sin(midAngle) * radius * 0.5,
+          0,
+          centerX,
+          centerY,
+          radius
+        );
+        const baseColor = colors[i % colors.length];
+        // Remove any existing alpha channel from the color
+        const cleanColor = baseColor.slice(0, 7);
+        g.addColorStop(0, cleanColor);
+        g.addColorStop(0.85, cleanColor + "dd");
+        g.addColorStop(1, cleanColor + "99");
+        ctx.fillStyle = g;
         ctx.fill();
-        ctx.strokeStyle = "#fff";
+
+        // White border with shadow
+        ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
         ctx.stroke();
+
+        // Inner glow
+        ctx.save();
+        ctx.clip();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.restore();
       }
 
       // Labels
@@ -337,31 +383,66 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       ctx.restore();
     });
 
-    // Center cap
+    // Center cap with metallic gradient
+    const capGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 25);
+    capGradient.addColorStop(0, "#4a4a4a");
+    capGradient.addColorStop(0.5, "#2a2a2a");
+    capGradient.addColorStop(0.8, "#1a1a1a");
+    capGradient.addColorStop(1, "#000000");
+
     ctx.beginPath();
-    ctx.arc(centerX, centerY, 20, 0, 2 * Math.PI);
-    ctx.fillStyle = "#000";
+    ctx.arc(centerX, centerY, 25, 0, 2 * Math.PI);
+    ctx.fillStyle = capGradient;
+    ctx.fill();
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Inner circle accent
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 18, 0, 2 * Math.PI);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Pointer with modern arrow design
+    ctx.save();
+
+    // Outer glow effect
+    ctx.shadowColor = "rgba(255, 0, 0, 0.6)";
+    ctx.shadowBlur = 10;
+
+    // Modern arrow pointer
+    ctx.beginPath();
+    ctx.moveTo(centerX + radius - 5, centerY);
+    ctx.lineTo(centerX + radius + 30, centerY - 15);
+    ctx.lineTo(centerX + radius + 25, centerY);
+    ctx.lineTo(centerX + radius + 30, centerY + 15);
+    ctx.closePath();
+
+    // Gradient fill
+    const pointerGradient = ctx.createLinearGradient(
+      centerX + radius - 5, centerY,
+      centerX + radius + 30, centerY
+    );
+    pointerGradient.addColorStop(0, "#ff3333");
+    pointerGradient.addColorStop(0.5, "#ff0000");
+    pointerGradient.addColorStop(1, "#cc0000");
+
+    ctx.fillStyle = pointerGradient;
     ctx.fill();
 
-    // Pointer
-    ctx.beginPath();
-    ctx.moveTo(centerX + radius - 10, centerY);
-    ctx.lineTo(centerX + radius + 26, centerY - 13);
-    ctx.lineTo(centerX + radius + 26, centerY + 13);
-    ctx.closePath();
-    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 1.5;
-    ctx.shadowOffsetY = 1.5;
-    ctx.fillStyle = "#FF0000";
-    ctx.fill();
-    ctx.shadowColor = "transparent";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#FFFFFF";
+    // White highlight
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
     ctx.stroke();
+
+    // Dark edge
+    ctx.strokeStyle = "#660000";
     ctx.lineWidth = 1;
-    ctx.strokeStyle = "#8B0000";
     ctx.stroke();
+
+    ctx.restore();
   }, [rotation, canvasCSSSize, wheelNames, colors]);
 
   useEffect(() => {
