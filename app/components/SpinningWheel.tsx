@@ -153,10 +153,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     const total = wheelNames.length;
     const respinCount = wheelNames.filter((n) => n === "RESPIN").length;
     setFairnessText(
-      `Each name ${((1 / total) * 100).toFixed(2)}% odds, Free Spin ${(
+      `Each name ${((1 / total) * 100).toFixed(2)}% chance, Free Spin ${(
         (respinCount / total) *
         100
-      ).toFixed(2)}% odds`
+      ).toFixed(2)}% chance`
     );
   }, [wheelNames]);
 
@@ -179,7 +179,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       speedIntervalRef.current = null;
     }
   }, [isSpinning]);
-
 
   /** ========= Responsive sizing with ResizeObserver ========= */
   const recomputeSize = useCallback(() => {
@@ -476,10 +475,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
 
   /** ========= UI ========= */
   return (
-    <div
-      ref={rootRef}
-      className="flex flex-col items-center w-full h-full"
-    >
+    <div ref={rootRef} className="flex flex-col items-center w-full h-full">
       {/* Spin Power (≈50% width on mobile, larger on bigger screens) */}
       <div
         ref={speedRef}
@@ -612,16 +608,24 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
               <div className="bg-green-50 p-3 rounded">
                 <strong>✓ CRYPTOGRAPHICALLY SECURE RANDOMNESS</strong>
                 <p>
-                  This wheel uses crypto.getRandomValues() - the same cryptographic-grade randomness used by banks, cryptocurrency, and security systems worldwide.
+                  This wheel uses crypto.getRandomValues() - the same
+                  cryptographic-grade randomness used by banks, cryptocurrency,
+                  and security systems worldwide.
                 </p>
               </div>
               <div className="bg-blue-50 p-3 rounded">
                 <strong>Technical Implementation:</strong>
                 <p>
-                  <strong>CSPRNG Source:</strong> window.crypto.getRandomValues() accesses your operating system's hardware entropy pool, collecting randomness from mouse movements, keyboard timings, disk activity, and other unpredictable system events.
+                  <strong>CSPRNG Source:</strong>{" "}
+                  window.crypto.getRandomValues() accesses your operating
+                  system&apos;s hardware entropy pool, collecting randomness
+                  from mouse movements, keyboard timings, disk activity, and
+                  other unpredictable system events.
                 </p>
                 <p className="mt-2">
-                  <strong>Entropy Quality:</strong> Each spin uses 32+ bits of true entropy - mathematically impossible to predict or manipulate. This exceeds casino-grade randomness standards.
+                  <strong>Entropy Quality:</strong> Each spin uses 32+ bits of
+                  true entropy - mathematically impossible to predict or
+                  manipulate. This exceeds casino-grade randomness standards.
                 </p>
               </div>
               <div className="bg-gray-50 p-3 rounded">
@@ -631,7 +635,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
                 </p>
                 <p>
                   <strong>Each Name:</strong>{" "}
-                  {((1 / wheelNames.length) * 100).toFixed(2)}% chance ({(1/wheelNames.length).toFixed(6)} probability)
+                  {((1 / wheelNames.length) * 100).toFixed(2)}% chance (
+                  {(1 / wheelNames.length).toFixed(6)} probability)
                 </p>
                 <p>
                   <strong>Free Spins:</strong>{" "}
@@ -643,7 +648,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
                   % chance
                 </p>
                 <p className="mt-1 text-xs text-gray-600">
-                  <strong>Entropy per spin:</strong> {Math.ceil(Math.log2(wheelNames.length))} bits minimum
+                  <strong>Entropy per spin:</strong>{" "}
+                  {Math.ceil(Math.log2(wheelNames.length))} bits minimum
                 </p>
               </div>
             </div>
@@ -658,10 +664,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       )}
 
       {/* Footer */}
-      <div
-        ref={footerRef}
-        className="w-full text-center"
-      >
+      <div ref={footerRef} className="w-full text-center">
         {fairnessText && (
           <div className="text-center mb-1">
             <span className="text-[clamp(10px,1.6vw,12px)] text-white/70 whitespace-nowrap">
