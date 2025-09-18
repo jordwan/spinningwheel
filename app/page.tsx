@@ -119,84 +119,84 @@ export default function Home() {
       <div
         className="absolute inset-0"
         style={{
-          backgroundImage: "url('/bkgd.jpg')",
+          backgroundImage: "url('/bkgddT.png')",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
           filter: "blur(3px)",
-          zIndex: -1
+          zIndex: -1,
         }}
       />
 
       {/* Content overlay - not blurred */}
       <div className="relative z-10">
-      {/* Name Input Popup (no overlay) */}
-      {showNameInput && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full pointer-events-auto text-center relative">
-            {/* Close X button */}
-            <button
-              onClick={() => {
-                setWheelNames(generateRandomNames());
-                setShowNameInput(false);
-              }}
-              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              ×
-            </button>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              Enter Names Below
-            </h2>
-            <p className="text-gray-600 mb-4">
-              <span className="text-sm text-gray-500">
-                example: name1, name2 name3, etc. Leave blank for random.
-              </span>
-            </p>
-            <input
-              type="text"
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              placeholder="Team name (optional)"
-              className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-            />
-            <textarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Enter comma separated names..."
-              className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
-              autoFocus
-            />
-            <div className="mt-6">
+        {/* Name Input Popup (no overlay) */}
+        {showNameInput && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full pointer-events-auto text-center relative">
+              {/* Close X button */}
               <button
-                onClick={handleSubmitNames}
-                className="w-full px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors"
+                onClick={() => {
+                  setWheelNames(generateRandomNames());
+                  setShowNameInput(false);
+                }}
+                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-black hover:text-gray-100 hover:bg-black rounded-full transition-colors"
               >
-                Enter
+                X
               </button>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                Enter Names Below
+              </h2>
+              <p className="text-gray-600 mb-4">
+                <span className="text-sm text-gray-500">
+                  Enter comma separated names. Leave blank for random.
+                </span>
+              </p>
+              <input
+                type="text"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="Team name (optional)"
+                className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+              />
+              <textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="example: tom, jerry, beavis, bart, etc."
+                className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
+                autoFocus
+              />
+              <div className="mt-6">
+                <button
+                  onClick={handleSubmitNames}
+                  className="w-full px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                  Enter
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <main className="h-full w-full flex flex-col items-center justify-center p-4">
-        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-800 mb-6 text-center">
-          iWxeel
-        </h1>
-        <div className="flex-1 w-full max-w-4xl">
-          {!showNameInput && (
-            <SpinningWheel
-              names={wheelNames}
-              onReset={() => {
-                setShowNameInput(true);
-                setInputValue("");
-                setTeamName("");
-                document.title = "iWxeel";
-              }}
-            />
-          )}
-        </div>
-      </main>
+        <main className="h-full w-full flex flex-col items-center justify-center p-4">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6 text-center">
+            iWxeel
+          </h1>
+          <div className="flex-1 w-full max-w-4xl">
+            {!showNameInput && (
+              <SpinningWheel
+                names={wheelNames}
+                onReset={() => {
+                  setShowNameInput(true);
+                  setInputValue("");
+                  setTeamName("");
+                  document.title = "iWxeel";
+                }}
+              />
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );

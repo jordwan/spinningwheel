@@ -446,7 +446,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     >
       {/* Speed Indicator */}
       <div className="mb-6 w-64">
-        <div className="text-center mb-2 font-semibold text-gray-700">
+        <div className="text-center mb-2 font-semibold text-white">
           Spin Power
         </div>
         <div className="relative h-8 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
@@ -460,7 +460,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
             }}
           />
         </div>
-        <div className="flex justify-between mt-1 text-xs text-gray-600">
+        <div className="flex justify-between mt-1 text-xs text-white">
           <span>Slow</span>
           <span>Fast</span>
         </div>
