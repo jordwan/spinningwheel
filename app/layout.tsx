@@ -34,18 +34,31 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {/* Google Analytics */}
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-PS93ENEFF5"
-          strategy="afterInteractive"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'G-PS93ENEFF5');
-          `}
-        </Script>
+        {process.env.NEXT_PUBLIC_GA_TRACKING_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_TRACKING_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${process.env.NEXT_PUBLIC_GA_TRACKING_ID}', {
+                  debug_mode: ${process.env.NODE_ENV === 'development'},
+                  send_page_view: true
+                });
+
+                // Log GA initialization for debugging
+                console.log('Google Analytics initialized with ID: ${process.env.NEXT_PUBLIC_GA_TRACKING_ID}');
+
+                // Make gtag available globally for custom events
+                window.gtag = gtag;
+              `}
+            </Script>
+          </>
+        )}
         {children}
       </body>
     </html>

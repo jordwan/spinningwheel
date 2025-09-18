@@ -489,6 +489,18 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   const spin = () => {
     if (isSpinning) return;
 
+    // Track wheel spin event
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'wheel_spin', {
+        event_category: 'engagement',
+        event_label: 'spin_wheel',
+        custom_map: {
+          'segments': wheelNames.length,
+          'spin_power': speedIndicator
+        }
+      });
+    }
+
     setIsSpinning(true);
     setSelectedName("");
     setShowWinnerModal(false);
@@ -546,6 +558,19 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         );
         const winner = wheelNames[selectedIndex];
         setSelectedName(winner);
+
+        // Track winner selection
+        if (typeof window !== 'undefined' && window.gtag) {
+          window.gtag('event', 'wheel_result', {
+            event_category: 'engagement',
+            event_label: winner === "RESPIN" ? 'free_spin' : 'winner_selected',
+            custom_map: {
+              'result': winner,
+              'segments': wheelNames.length,
+              'is_respin': winner === "RESPIN"
+            }
+          });
+        }
 
         if (winner !== "RESPIN") {
           setTimeout(() => {
@@ -811,7 +836,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         )}
         <div className="text-center">
           <button
-            onClick={() => setShowFairnessPopup(true)}
+            onClick={() => {
+              setShowFairnessPopup(true);
+              // Track fairness popup view
+              if (typeof window !== 'undefined' && window.gtag) {
+                window.gtag('event', 'fairness_view', {
+                  event_category: 'engagement',
+                  event_label: 'view_fairness_popup'
+                });
+              }
+            }}
             className="text-[clamp(10px,1.6vw,12px)] text-white/70 hover:text-white underline"
           >
             fairness

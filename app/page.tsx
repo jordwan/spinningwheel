@@ -188,6 +188,13 @@ export default function Home() {
               <SpinningWheel
                 names={wheelNames}
                 onReset={() => {
+                  // Track reset action
+                  if (typeof window !== 'undefined' && window.gtag) {
+                    window.gtag('event', 'wheel_reset', {
+                      event_category: 'engagement',
+                      event_label: 'reset_wheel'
+                    });
+                  }
                   setShowNameInput(true);
                   setInputValue("");
                   setTeamName("");
