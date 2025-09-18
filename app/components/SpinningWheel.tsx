@@ -526,7 +526,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         <div className="fixed inset-0 flex items-center justify-center z-40 pointer-events-none">
           <div className="bg-gradient-to-br from-yellow-400 to-yellow-600 text-black rounded-2xl shadow-2xl p-8 transform scale-100 animate-bounce-in text-center border-4 border-red-600">
             <h2 className="text-4xl font-bold mb-2">FREE SPIN!</h2>
-            <p className="text-xl font-semibold">Try 'er one more time...</p>
+            <p className="text-xl font-semibold">Try one more time...</p>
           </div>
         </div>
       )}
