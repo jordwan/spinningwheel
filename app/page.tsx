@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import SpinningWheel from "./components/SpinningWheel";
 
 export default function Home() {
@@ -8,8 +9,10 @@ export default function Home() {
   const [wheelNames, setWheelNames] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [teamName, setTeamName] = useState("");
+  const [randomNameCount, setRandomNameCount] = useState("10");
+  const [showRandomCountInput, setShowRandomCountInput] = useState(false);
 
-  const generateRandomNames = () => {
+  const generateRandomNames = (count: number = 10) => {
     const firstNames = [
       "Emma",
       "Liam",
@@ -79,12 +82,21 @@ export default function Home() {
       "Finn",
     ];
 
-    // Shuffle and pick 10 random names
+    // Shuffle and pick specified number of random names
     const shuffled = [...firstNames].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 10);
+    return shuffled.slice(0, Math.min(count, shuffled.length));
   };
 
   const handleSubmitNames = () => {
+    // If showing random count input, generate random names
+    if (showRandomCountInput) {
+      const count = parseInt(randomNameCount) || 10;
+      setWheelNames(generateRandomNames(count));
+      setShowNameInput(false);
+      setShowRandomCountInput(false);
+      return;
+    }
+
     // Parse comma-separated names and trim whitespace
     const names = inputValue
       .split(",")
@@ -95,9 +107,8 @@ export default function Home() {
       setWheelNames(names);
       setShowNameInput(false);
     } else {
-      // If no input, generate random names
-      setWheelNames(generateRandomNames());
-      setShowNameInput(false);
+      // If no input, show the random count input
+      setShowRandomCountInput(true);
     }
 
     // Update document title with team name
@@ -137,36 +148,55 @@ export default function Home() {
               {/* Close X button */}
               <button
                 onClick={() => {
-                  setWheelNames(generateRandomNames());
-                  setShowNameInput(false);
+                  if (inputValue.trim() === "") {
+                    setShowRandomCountInput(true);
+                  } else {
+                    handleSubmitNames();
+                  }
                 }}
                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-black hover:text-gray-100 hover:bg-black rounded-full transition-colors"
               >
                 X
               </button>
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                Enter Names Below
+                {showRandomCountInput ? "How many random names?" : "Enter Names Below"}
               </h2>
               <p className="text-gray-600 mb-4">
                 <span className="text-sm text-gray-500">
-                  Enter comma separated names. Leave blank for random.
+                  {showRandomCountInput ? "Choose between 2-50 names" : "Enter comma separated names. Leave blank for random."}
                 </span>
               </p>
-              <input
-                type="text"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                placeholder="Team name (optional)"
-                className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-              />
-              <textarea
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="example: tom, jerry, beavis, bart, etc."
-                className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
-                autoFocus
-              />
+              {!showRandomCountInput ? (
+                <>
+                  <input
+                    type="text"
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                    placeholder="Team name (optional)"
+                    className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                  />
+                  <textarea
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="example: tom, jerry, beavis, bart, etc."
+                    className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
+                    autoFocus
+                  />
+                </>
+              ) : (
+                <input
+                  type="number"
+                  value={randomNameCount}
+                  onChange={(e) => setRandomNameCount(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Number of random names"
+                  min="2"
+                  max="50"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                  autoFocus
+                />
+              )}
               <div className="mt-6">
                 <button
                   onClick={handleSubmitNames}
@@ -180,9 +210,17 @@ export default function Home() {
         )}
 
         <main className="h-full w-full flex flex-col items-center justify-center p-4">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6 text-center">
-            iWxeel
-          </h1>
+          <div className="mb-6 flex justify-center">
+            <div className="relative h-48 sm:h-24 lg:h-28 w-[30rem] sm:w-48 lg:w-64">
+              <Image
+                src="/logo.png"
+                alt="iWxeel"
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
+          </div>
           <div className="flex-1 w-full max-w-4xl">
             {!showNameInput && (
               <SpinningWheel
@@ -191,6 +229,7 @@ export default function Home() {
                   setShowNameInput(true);
                   setInputValue("");
                   setTeamName("");
+                  setShowRandomCountInput(false);
                   document.title = "iWxeel";
                 }}
               />
