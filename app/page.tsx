@@ -114,19 +114,42 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-gradient-to-br from-blue-50 to-purple-50">
+    <div className="h-screen w-screen overflow-hidden relative">
+      {/* Blurred background image */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: "url('/bkgd.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          filter: "blur(3px)",
+          zIndex: -1
+        }}
+      />
+
+      {/* Content overlay - not blurred */}
+      <div className="relative z-10">
       {/* Name Input Popup (no overlay) */}
       {showNameInput && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full pointer-events-auto">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              Add Names to the Wheel
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full pointer-events-auto text-center relative">
+            {/* Close X button */}
+            <button
+              onClick={() => {
+                setWheelNames(generateRandomNames());
+                setShowNameInput(false);
+              }}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              ×
+            </button>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">
+              Enter Names Below
             </h2>
             <p className="text-gray-600 mb-4">
-              Enter comma-separated names - name1, name2, etc
-              <br />
               <span className="text-sm text-gray-500">
-                Leave empty for random names
+                example: name1, name2 name3, etc. Leave blank for random.
               </span>
             </p>
             <input
@@ -174,6 +197,7 @@ export default function Home() {
           )}
         </div>
       </main>
+      </div>
     </div>
   );
 }

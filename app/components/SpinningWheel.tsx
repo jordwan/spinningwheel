@@ -46,13 +46,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   const winnerRhymes = [
     "Winner Winner, Chicken Dinner",
     "You are the Chosen One",
-    "Victory Royale",
-    "Winner: Chosen",
-    "Absolute Legend",
-    "Big W's",
+    "Victory Royale!",
+    "Winner = Chosen",
+    "Absolute Legend Pick",
+    "Throw some W's in the chat for",
     "The Wheel has Spoken",
     "You have been randomly selected",
-    "Jackpot!!",
+    "Jackpot!!!",
     "Congrats",
     "The Algorithm was in your Favor",
   ];
@@ -105,7 +105,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     };
   }, []);
 
-
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -131,48 +130,101 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       ctx.arc(centerX, centerY, radius, startAngle, endAngle);
       ctx.closePath();
 
-      // Special color for RESPIN
+      // Special styling for RESPIN (Free Spin)
       if (name === "RESPIN") {
-        ctx.fillStyle = "#333333";
+        // Dark gradient background like bankrupt tile
+        const gradient = ctx.createLinearGradient(
+          centerX - radius,
+          centerY - radius,
+          centerX + radius,
+          centerY + radius
+        );
+        gradient.addColorStop(0, "#1a1a1a");
+        gradient.addColorStop(0.5, "#333333");
+        gradient.addColorStop(1, "#000000");
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Bold border
+        ctx.strokeStyle = "#ff0000";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // Inner red border
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
       } else {
         ctx.fillStyle = colors[i % colors.length];
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
-
-      ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2;
-      ctx.stroke();
 
       // Draw text
       ctx.save();
       ctx.translate(centerX, centerY);
       ctx.rotate(startAngle + sliceAngle / 2);
       ctx.textAlign = "right";
-      ctx.fillStyle = "#fff";
-      const fontSize = Math.max(14, Math.min(20, canvasSize / 30));
-      ctx.font = `bold ${fontSize}px Arial`;
-      ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-      ctx.shadowBlur = 4;
-      ctx.fillText(name, radius - 10, fontSize / 3);
+
+      if (name === "RESPIN") {
+        // Special styling for Free Spin text
+        ctx.fillStyle = "#ffff00"; // Bright yellow text
+        const fontSize = Math.max(12, Math.min(16, canvasSize / 35));
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 2;
+        ctx.strokeText("FREE SPIN", radius - 10, fontSize / 3);
+        ctx.fillText("FREE SPIN", radius - 10, fontSize / 3);
+      } else {
+        ctx.fillStyle = "#fff";
+        const fontSize = Math.max(14, Math.min(20, canvasSize / 30));
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+        ctx.shadowBlur = 4;
+        ctx.fillText(name, radius - 10, fontSize / 3);
+      }
+
       ctx.restore();
     });
 
     // Draw center circle
     ctx.beginPath();
     ctx.arc(centerX, centerY, 20, 0, 2 * Math.PI);
-    ctx.fillStyle = "#333";
+    ctx.fillStyle = "#000";
     ctx.fill();
 
-    // Draw pointer
+    // Draw pointer with enhanced visibility
     ctx.beginPath();
     ctx.moveTo(centerX + radius - 10, centerY);
     ctx.lineTo(centerX + radius + 30, centerY - 15);
     ctx.lineTo(centerX + radius + 30, centerY + 15);
     ctx.closePath();
+
+    // Add shadow for better visibility against various backgrounds
+    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+
     ctx.fillStyle = "#FF0000";
     ctx.fill();
+
+    // Reset shadow for stroke
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // White outline for contrast
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Inner red border
     ctx.strokeStyle = "#8B0000";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1;
     ctx.stroke();
   }, [rotation, canvasSize, wheelNames, colors]);
 
@@ -361,9 +413,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         const winner = wheelNames[selectedIndex];
         setSelectedName(winner);
 
-        // Check if it's a respin
+        // Check if it's a free spin
         if (winner === "RESPIN") {
-          // Just show the respin indicator, don't auto-spin
+          // Just show the free spin indicator, don't auto-spin
         } else {
           // Show winner modal with minimal delay
           setTimeout(() => {
@@ -423,7 +475,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         />
       </div>
 
-
       <div className="flex gap-3 mt-4 justify-center">
         <button
           onClick={spin}
@@ -470,12 +521,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         </div>
       )}
 
-      {/* Respin Indicator */}
+      {/* Free Spin Indicator */}
       {selectedName === "RESPIN" && !isSpinning && (
         <div className="fixed inset-0 flex items-center justify-center z-40 pointer-events-none">
-          <div className="bg-gray-800 text-white rounded-2xl shadow-2xl p-8 transform scale-100 animate-bounce-in text-center">
-            <h2 className="text-4xl font-bold mb-2">🔄 RESPIN! 🔄</h2>
-            <p className="text-xl">Press the button to spin again!</p>
+          <div className="bg-gradient-to-br from-yellow-400 to-yellow-600 text-black rounded-2xl shadow-2xl p-8 transform scale-100 animate-bounce-in text-center border-4 border-red-600">
+            <h2 className="text-4xl font-bold mb-2">FREE SPIN!</h2>
+            <p className="text-xl font-semibold">Try 'er one more time...</p>
           </div>
         </div>
       )}

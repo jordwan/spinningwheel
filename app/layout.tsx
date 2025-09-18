@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "iWxeel",
-  description: "Random name wheel spinner free",
+  title: "iWxeeli.com",
+  description: "Random name wheel spinner free and simple",
 };
 
 export default function RootLayout({
