@@ -1,7 +1,26 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import confetti from "canvas-confetti";
+
+/** ========= CRYPTO RNG (minimal + reliable) ========= */
+const cryptoRandom = (): number => {
+  // If we're in the browser and crypto is available, use it.
+  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+    const u32 = new Uint32Array(1);
+    window.crypto.getRandomValues(u32);
+    // u32 max is 2^32-1; divide by 2^32 -> [0, 1)
+    return u32[0] / 4294967296;
+  }
+  // Fallback (SSR/older browsers)
+  return Math.random();
+};
 
 interface SpinningWheelProps {
   names?: string[];
@@ -11,6 +30,7 @@ interface SpinningWheelProps {
 const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [selectedName, setSelectedName] = useState<string>("");
@@ -19,30 +39,162 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   const [canvasSize, setCanvasSize] = useState(400);
   const [speedIndicator, setSpeedIndicator] = useState(0.5);
   const [showFairnessPopup, setShowFairnessPopup] = useState(false);
+  const [fairnessText, setFairnessText] = useState("");
   const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
-  const speedIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const confettiIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Process names to include RESPIN tiles
-  const processedNames = (() => {
+  // Timer refs – use browser-friendly types
+  const speedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /** ========= AUDIO: reuse ONE AudioContext + prebuilt buffers ========= */
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const clickBufferRef = useRef<AudioBuffer | null>(null);
+  const tadaBufferRef = useRef<AudioBuffer | null>(null);
+
+  const ensureAudio = useCallback(() => {
+    if (typeof window === "undefined") return null;
+
+    // Create (or reuse) a single AudioContext
+    if (!audioCtxRef.current) {
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      audioCtxRef.current = new Ctx();
+    }
+
+    // Build a tiny "tick" buffer once (1.5ms burst with quick decay)
+    if (!clickBufferRef.current && audioCtxRef.current) {
+      const ctx = audioCtxRef.current;
+      const duration = 0.008; // 8ms - shorter for more click-like sound
+      const sr = ctx.sampleRate;
+      const frames = Math.max(1, Math.floor(duration * sr));
+      const buffer = ctx.createBuffer(1, frames, sr);
+      const data = buffer.getChannelData(0);
+
+      // Higher frequency, faster decay for crisp click sound
+      const freq = 2000; // higher pitch for click
+      for (let i = 0; i < frames; i++) {
+        const t = i / sr;
+        const env = Math.exp(-t * 150); // much faster decay for sharp click
+        data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.3; // reduce amplitude
+      }
+      clickBufferRef.current = buffer;
+    }
+
+    // Build a celebratory "ta da" buffer (rising musical phrase)
+    if (!tadaBufferRef.current && audioCtxRef.current) {
+      const ctx = audioCtxRef.current;
+      const duration = 0.8; // 800ms for ta da
+      const sr = ctx.sampleRate;
+      const frames = Math.max(1, Math.floor(duration * sr));
+      const tadaBuffer = ctx.createBuffer(1, frames, sr);
+      const tadaData = tadaBuffer.getChannelData(0);
+
+      // Create a musical "ta da" with rising notes (C-E-G chord arpeggio)
+      const frequencies = [261.63, 329.63, 392.0]; // C4, E4, G4
+      for (let i = 0; i < frames; i++) {
+        const t = i / sr;
+        const progress = t / duration;
+
+        // Envelope: quick attack, sustain, then fade
+        let env;
+        if (progress < 0.1) {
+          env = progress / 0.1; // quick attack
+        } else if (progress < 0.6) {
+          env = 1; // sustain
+        } else {
+          env = (1 - progress) / 0.4; // fade out
+        }
+
+        // Play frequencies in sequence with overlap
+        let sample = 0;
+        frequencies.forEach((freq, index) => {
+          const noteStart = index * 0.15; // staggered start times
+          const noteEnd = noteStart + 0.4; // note duration
+          if (t >= noteStart && t <= noteEnd) {
+            const noteProgress = (t - noteStart) / (noteEnd - noteStart);
+            const noteEnv = Math.sin(Math.PI * noteProgress); // smooth bell curve
+            sample += Math.sin(2 * Math.PI * freq * t) * noteEnv * 0.3;
+          }
+        });
+
+        tadaData[i] = sample * env * 0.4; // overall volume control
+      }
+      tadaBufferRef.current = tadaBuffer;
+    }
+
+    return audioCtxRef.current;
+  }, []);
+
+  const playTickSound = (volume = 0.1) => {
+    const ctx = ensureAudio();
+    if (!ctx || !clickBufferRef.current) return;
+
+    // On some browsers the context may start suspended
+    if (ctx.state === "suspended") {
+      // Fire and forget resume; user gesture already happened (spin)
+      ctx.resume().catch(() => {});
+    }
+
+    // Very light-weight buffer source each tick
+    const src = ctx.createBufferSource();
+    src.buffer = clickBufferRef.current;
+
+    const gain = ctx.createGain();
+    gain.gain.value = Math.max(0.01, Math.min(0.15, volume));
+
+    src.connect(gain).connect(ctx.destination);
+    src.start();
+  };
+
+  const playTadaSound = (volume = 0.3) => {
+    const ctx = ensureAudio();
+    if (!ctx || !tadaBufferRef.current) return;
+
+    // On some browsers the context may start suspended
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+
+    // Play the ta da celebration sound
+    const src = ctx.createBufferSource();
+    src.buffer = tadaBufferRef.current;
+
+    const gain = ctx.createGain();
+    gain.gain.value = Math.max(0.1, Math.min(0.5, volume));
+
+    src.connect(gain).connect(ctx.destination);
+    src.start();
+  };
+
+  /** ========= Names + RESPIN placement ========= */
+  const processedNames = useMemo(() => {
     const baseNames =
       names && names.length > 0
         ? names
         : ["Name 1", "Name 2", "Name 3", "Name 4", "Name 5", "Name 6"];
 
-    // Calculate positions for RESPIN tiles
-    const totalSlots = baseNames.length + 2; // Adding 2 RESPIN tiles
+    const totalSlots = baseNames.length + 2; // 2 RESPINs
     const midPoint = Math.floor(totalSlots / 2);
 
-    // Create the wheel with RESPIN tiles on opposite sides
     const result = [...baseNames];
-    result.splice(0, 0, "RESPIN"); // Add first RESPIN at the beginning
-    result.splice(midPoint, 0, "RESPIN"); // Add second RESPIN at the middle (opposite side)
-
+    result.splice(0, 0, "RESPIN");
+    result.splice(midPoint, 0, "RESPIN");
     return result;
-  })();
+  }, [names]);
 
   const wheelNames = processedNames;
+
+  /** ========= Initialize fairness text ========= */
+  useEffect(() => {
+    const totalSlots = wheelNames.length;
+    const respinCount = wheelNames.filter((n) => n === "RESPIN").length;
+    const nameChance = ((1 / totalSlots) * 100).toFixed(2);
+    const respinChance = ((respinCount / totalSlots) * 100).toFixed(2);
+    setFairnessText(
+      `Each name ${nameChance}% odds, Free Spin ${respinChance}% odds`
+    );
+  }, [wheelNames]);
 
   const winnerRhymes = [
     "Winner Winner, Chicken Dinner",
@@ -58,54 +210,114 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     "The Algorithm was in your Favor",
   ];
 
-  const colors = [
-    "#f54d4dff",
-    "#399a94ff",
-    "#45B7D1",
-    "#54cb94ff",
-    "#FECA57",
-    "#da71daff",
-    "#FF6B9D",
-    "#FFD700",
-  ];
+  const colors = useMemo(
+    () => [
+      "#f54d4dff",
+      "#399a94ff",
+      "#45B7D1",
+      "#54cb94ff",
+      "#FECA57",
+      "#da71daff",
+      "#FF6B9D",
+      "#FFD700",
+    ],
+    []
+  );
 
-  // Animate speed indicator
+  /** ========= Speed indicator animation (fast and ultra-smooth) ========= */
   useEffect(() => {
     if (!isSpinning) {
       const interval = setInterval(() => {
-        setSpeedIndicator(() => {
-          // Sine wave oscillation between 0 and 1
-          const time = Date.now() / 1000;
-          return (Math.sin(time * 2) + 1) / 2;
-        });
-      }, 50);
+        const time = Date.now() / 1000;
+        setSpeedIndicator((Math.sin(time * 1.5) + 1) / 2);
+      }, 16); // ~60fps for ultra-smooth animation
+
       speedIntervalRef.current = interval;
-      return () => clearInterval(interval);
-    } else if (speedIntervalRef.current) {
-      clearInterval(speedIntervalRef.current);
+      return () => {
+        if (speedIntervalRef.current) {
+          clearInterval(speedIntervalRef.current);
+          speedIntervalRef.current = null;
+        }
+      };
+    } else {
+      if (speedIntervalRef.current) {
+        clearInterval(speedIntervalRef.current);
+        speedIntervalRef.current = null;
+      }
     }
   }, [isSpinning]);
 
+  /** ========= Resize handling ========= */
   useEffect(() => {
     const handleResize = () => {
-      if (containerRef.current) {
-        const containerWidth = containerRef.current.offsetWidth;
-        const containerHeight = containerRef.current.offsetHeight;
-        // Leave space for title and button
-        const maxSize = Math.min(containerWidth - 40, containerHeight - 200);
-        // Increased max size from 600 to 800 for larger displays
-        setCanvasSize(Math.max(300, Math.min(maxSize, 800)));
+      if (!containerRef.current) return;
+      const containerWidth = containerRef.current.offsetWidth || window.innerWidth;
+      const containerHeight = containerRef.current.offsetHeight || window.innerHeight;
+
+      // Better mobile sizing calculation
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const isMobile = viewportWidth < 768;
+
+      let maxSize;
+      if (isMobile) {
+        // On mobile, be more conservative with sizing
+        maxSize = Math.min(viewportWidth - 60, viewportHeight - 300);
+      } else {
+        maxSize = Math.min(containerWidth - 40, containerHeight - 200);
       }
+
+      setCanvasSize(Math.max(280, Math.min(maxSize, 800)));
     };
 
+    // Use setTimeout to ensure DOM is ready, especially on mobile
+    const timeoutId = setTimeout(handleResize, 100);
+
+    // Also call immediately
     handleResize();
+
     window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", () => {
+      // Handle mobile orientation change with a delay
+      setTimeout(handleResize, 200);
+    });
+
     return () => {
+      clearTimeout(timeoutId);
       window.removeEventListener("resize", handleResize);
-      stopContinuousConfetti(); // Clean up confetti on unmount
+      window.removeEventListener("orientationchange", handleResize);
     };
   }, []);
 
+  // Additional resize when wheelNames change (important for mobile)
+  useEffect(() => {
+    if (wheelNames.length > 0) {
+      const handleResize = () => {
+        if (!containerRef.current) return;
+        const containerWidth = containerRef.current.offsetWidth || window.innerWidth;
+        const containerHeight = containerRef.current.offsetHeight || window.innerHeight;
+
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const isMobile = viewportWidth < 768;
+
+        let maxSize;
+        if (isMobile) {
+          maxSize = Math.min(viewportWidth - 60, viewportHeight - 300);
+        } else {
+          maxSize = Math.min(containerWidth - 40, containerHeight - 200);
+        }
+
+        setCanvasSize(Math.max(280, Math.min(maxSize, 800)));
+      };
+
+      // Small delay to let the layout settle after wheelNames change
+      const timeoutId = setTimeout(handleResize, 50);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [wheelNames]);
+
+  /** ========= Draw wheel ========= */
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -125,15 +337,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       const startAngle = i * sliceAngle + rotation;
       const endAngle = (i + 1) * sliceAngle + rotation;
 
-      // Draw slice
+      // Slice
       ctx.beginPath();
       ctx.moveTo(centerX, centerY);
       ctx.arc(centerX, centerY, radius, startAngle, endAngle);
       ctx.closePath();
 
-      // Special styling for RESPIN (Free Spin)
       if (name === "RESPIN") {
-        // Dark gradient background like bankrupt tile
         const gradient = ctx.createLinearGradient(
           centerX - radius,
           centerY - radius,
@@ -146,12 +356,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         ctx.fillStyle = gradient;
         ctx.fill();
 
-        // Bold border
-        ctx.strokeStyle = "#ff0000";
-        ctx.lineWidth = 4;
-        ctx.stroke();
-
-        // Inner red border
+        // Clean white border only (no red border)
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -163,24 +368,29 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         ctx.stroke();
       }
 
-      // Draw text
+      // Text
       ctx.save();
       ctx.translate(centerX, centerY);
       ctx.rotate(startAngle + sliceAngle / 2);
       ctx.textAlign = "right";
 
       if (name === "RESPIN") {
-        // Special styling for Free Spin text
-        ctx.fillStyle = "#ffff00"; // Bright yellow text
-        const fontSize = Math.max(12, Math.min(16, canvasSize / 35));
+        ctx.fillStyle = "#ffff00";
+        // More aggressive scaling for RESPIN text with many segments
+        const baseFontSize = Math.max(6, Math.min(14, canvasSize / Math.max(35, wheelNames.length * 1.2)));
+        const fontSize = baseFontSize;
         ctx.font = `bold ${fontSize}px Arial`;
         ctx.strokeStyle = "#000000";
-        ctx.lineWidth = 2;
+        ctx.lineWidth = Math.max(1, fontSize / 8); // Scale stroke width too
+
+        // Always show "FREE SPIN"
         ctx.strokeText("FREE SPIN", radius - 10, fontSize / 3);
         ctx.fillText("FREE SPIN", radius - 10, fontSize / 3);
       } else {
         ctx.fillStyle = "#fff";
-        const fontSize = Math.max(14, Math.min(20, canvasSize / 30));
+        // Dynamic font size based on wheel size and number of names
+        const baseFontSize = Math.max(8, Math.min(16, canvasSize / Math.max(30, wheelNames.length * 0.6)));
+        const fontSize = baseFontSize;
         ctx.font = `bold ${fontSize}px Arial`;
         ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
         ctx.shadowBlur = 4;
@@ -190,20 +400,19 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       ctx.restore();
     });
 
-    // Draw center circle
+    // Center
     ctx.beginPath();
     ctx.arc(centerX, centerY, 20, 0, 2 * Math.PI);
     ctx.fillStyle = "#000";
     ctx.fill();
 
-    // Draw pointer with enhanced visibility
+    // Pointer
     ctx.beginPath();
     ctx.moveTo(centerX + radius - 10, centerY);
     ctx.lineTo(centerX + radius + 30, centerY - 15);
     ctx.lineTo(centerX + radius + 30, centerY + 15);
     ctx.closePath();
 
-    // Add shadow for better visibility against various backgrounds
     ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
     ctx.shadowBlur = 6;
     ctx.shadowOffsetX = 2;
@@ -212,18 +421,15 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     ctx.fillStyle = "#FF0000";
     ctx.fill();
 
-    // Reset shadow for stroke
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
 
-    // White outline for contrast
     ctx.strokeStyle = "#FFFFFF";
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    // Inner red border
     ctx.strokeStyle = "#8B0000";
     ctx.lineWidth = 1;
     ctx.stroke();
@@ -233,169 +439,69 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     drawWheel();
   }, [drawWheel]);
 
+  /** ========= Confetti helpers ========= */
   const triggerConfetti = () => {
-    // Multiple bursts for more impressive effect
     const count = 200;
-    const defaults = {
-      origin: { y: 0.7 },
-      zIndex: 9999,
-    };
+    const defaults = { origin: { y: 0.7 }, zIndex: 9999 } as const;
 
-    function fire(particleRatio: number, opts: confetti.Options) {
+    const fire = (ratio: number, opts: confetti.Options) =>
       confetti({
         ...defaults,
         ...opts,
-        particleCount: Math.floor(count * particleRatio),
+        particleCount: Math.floor(count * ratio),
       });
-    }
 
-    fire(0.25, {
-      spread: 26,
-      startVelocity: 55,
-    });
-    fire(0.2, {
-      spread: 60,
-    });
-    fire(0.35, {
-      spread: 100,
-      decay: 0.91,
-      scalar: 0.8,
-    });
-    fire(0.1, {
-      spread: 120,
-      startVelocity: 25,
-      decay: 0.92,
-      scalar: 1.2,
-    });
-    fire(0.1, {
-      spread: 120,
-      startVelocity: 45,
-    });
+    fire(0.25, { spread: 26, startVelocity: 55 });
+    fire(0.2, { spread: 60 });
+    fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+    fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+    fire(0.1, { spread: 120, startVelocity: 45 });
   };
 
-  const startContinuousConfetti = () => {
-    let confettiCount = 0;
-
-    // Fire confetti 3 times total
-    const fireConfetti = () => {
-      if (confettiCount < 1) {
-        triggerConfetti();
-        confettiCount++;
-
-        if (confettiCount < 1) {
-          setTimeout(fireConfetti, 1000);
-        }
-      }
-    };
-
-    fireConfetti();
-  };
-
-  const stopContinuousConfetti = () => {
-    if (confettiIntervalRef.current) {
-      clearInterval(confettiIntervalRef.current);
-      confettiIntervalRef.current = null;
-    }
-  };
-
-  const playTickSound = (volume: number = 0.3) => {
-    // Create a more realistic wheel tick sound
-    const audioContext = new (window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext)();
-
-    // Create multiple oscillators for a richer sound
-    const oscillator1 = audioContext.createOscillator();
-    const oscillator2 = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    const filter = audioContext.createBiquadFilter();
-
-    // Set up the audio graph
-    oscillator1.connect(filter);
-    oscillator2.connect(filter);
-    filter.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    // Configure filter for a wooden click sound
-    filter.type = "bandpass";
-    filter.frequency.value = 1000;
-    filter.Q.value = 10;
-
-    // Set frequencies for a click sound (mix of high and low)
-    oscillator1.frequency.value = 800 + 400 * volume; // Higher component
-    oscillator2.frequency.value = 200 + 100 * volume; // Lower component
-    oscillator1.type = "square";
-    oscillator2.type = "triangle";
-
-    // Sharp attack, quick decay for click sound
-    const clickDuration = 0.02; // Very short click
-    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-    gainNode.gain.linearRampToValueAtTime(
-      volume * 0.5,
-      audioContext.currentTime + 0.001
-    );
-    gainNode.gain.exponentialRampToValueAtTime(
-      0.001,
-      audioContext.currentTime + clickDuration
-    );
-
-    // Start and stop oscillators
-    const now = audioContext.currentTime;
-    oscillator1.start(now);
-    oscillator2.start(now);
-    oscillator1.stop(now + clickDuration + 0.01);
-    oscillator2.stop(now + clickDuration + 0.01);
-  };
-
+  /** ========= Spin logic ========= */
   const spin = () => {
     if (isSpinning) return;
 
     setIsSpinning(true);
     setSelectedName("");
     setShowWinnerModal(false);
-    setShowFairnessPopup(false); // Close fairness popup when spinning
-    setLockedSpeed(speedIndicator); // Lock the speed when button is pressed
+    setShowFairnessPopup(false);
+    setLockedSpeed(speedIndicator);
 
-    // Use speed indicator to determine spin strength
-    const spinStrength = speedIndicator; // 0 = slow, 1 = fast
-    const baseRotations = 3 + spinStrength * 10; // 3-13 rotations based on timing
-    const spinDuration = 4000 + (1 - spinStrength) * 4000; // 4-8 seconds (slower = longer)
+    const spinStrength = speedIndicator; // 0..1
+    const baseRotations = 3 + spinStrength * 10; // 3-13 turns
+    const spinDuration = 4000 + (1 - spinStrength) * 4000; // 4-8s
     const finalRotation =
-      rotation + Math.PI * 2 * (baseRotations + Math.random() * 2);
+      rotation + Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
 
     const startTime = Date.now();
     let lastRotation = rotation;
     let lastSoundTime = 0;
     const segmentSize = (2 * Math.PI) / wheelNames.length;
-    let cumulativeRotation = 0;
+    let accRotation = 0;
 
     const animate = () => {
       const now = Date.now();
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / spinDuration, 1);
-
-      // More dramatic easing - faster start, much slower end
       const easeOut = 1 - Math.pow(1 - progress, 4);
 
       const currentRotation = rotation + (finalRotation - rotation) * easeOut;
       setRotation(currentRotation);
 
-      // Calculate how much we've rotated since last frame
-      const rotationDelta = currentRotation - lastRotation;
-      cumulativeRotation += Math.abs(rotationDelta);
+      const delta = Math.abs(currentRotation - lastRotation);
+      accRotation += delta;
 
-      // Play sound every time we pass through a segment amount of rotation
-      // But limit to reasonable frequency based on speed
-      const minTimeBetweenSounds = Math.max(50, 250 * (1 - (1 - progress)));
-
+      // Tick gating by time so we don't spam audio
+      const minBetweenTicks = Math.max(50, 250 * (1 - (1 - progress)));
       if (
-        cumulativeRotation >= segmentSize &&
-        now - lastSoundTime >= minTimeBetweenSounds
+        accRotation >= segmentSize &&
+        now - lastSoundTime >= minBetweenTicks
       ) {
         const speed = 1 - easeOut;
-        const volume = Math.max(0.05, Math.min(0.3, 0.05 + (1 - speed) * 0.25));
-        playTickSound(volume);
-        cumulativeRotation = 0;
+        const vol = Math.max(0.02, Math.min(0.1, 0.02 + (1 - speed) * 0.08));
+        playTickSound(vol);
+        accRotation = 0;
         lastSoundTime = now;
       }
 
@@ -405,34 +511,26 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         requestAnimationFrame(animate);
       } else {
         setIsSpinning(false);
-        setLockedSpeed(null); // Reset locked speed after spin completes
-        // Calculate selected segment
-        const normalizedRotation =
+        setLockedSpeed(null);
+
+        const normalized =
           (2 * Math.PI - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
         const selectedIndex = Math.floor(
-          normalizedRotation / ((2 * Math.PI) / wheelNames.length)
+          normalized / ((2 * Math.PI) / wheelNames.length)
         );
         const winner = wheelNames[selectedIndex];
         setSelectedName(winner);
 
-        // Check if it's a free spin
-        if (winner === "RESPIN") {
-          // Just show the free spin indicator, don't auto-spin
-        } else {
-          // Show winner modal with minimal delay
+        // Winner determined by crypto-random
+
+        if (winner !== "RESPIN") {
           setTimeout(() => {
-            // Select random winner rhyme - ensure true randomness
-            const randomIndex = Math.floor(Math.random() * winnerRhymes.length);
-            const selectedRhyme = winnerRhymes[randomIndex];
-            console.log(
-              "Selected rhyme:",
-              selectedRhyme,
-              "Index:",
-              randomIndex
-            );
-            setWinnerRhyme(selectedRhyme);
+            const rhyme =
+              winnerRhymes[Math.floor(cryptoRandom() * winnerRhymes.length)];
+            setWinnerRhyme(rhyme);
             setShowWinnerModal(true);
-            startContinuousConfetti();
+            triggerConfetti(); // Fire confetti only once
+            playTadaSound(); // Play celebratory ta da sound
           }, 100);
         }
       }
@@ -512,8 +610,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
             <button
               onClick={() => {
                 setShowWinnerModal(false);
-                stopContinuousConfetti();
-                setWinnerRhyme(""); // Clear the rhyme when closing
+                setWinnerRhyme("");
               }}
               className="min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
             >
@@ -548,36 +645,45 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
             </h2>
             <div className="text-left space-y-3 text-sm">
               <div className="bg-green-50 p-3 rounded">
-                <strong>✓ FAIR DISTRIBUTION CONFIRMED</strong>
-                <p>Statistical testing with 1,000,000 simulated spins each:</p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="bg-gray-50 p-3 rounded">
-                  <strong>5 Names Test:</strong>
-                  <p><strong>Free Spins:</strong> 28.53% (Expected: 28.57%)</p>
-                  <p><strong>Deviation:</strong> 0.042%</p>
-                  <p><strong>Names:</strong> All within 0.06%</p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded">
-                  <strong>50 Names Test:</strong>
-                  <p><strong>Free Spins:</strong> 3.82% (Expected: 3.85%)</p>
-                  <p><strong>Deviation:</strong> 0.023%</p>
-                  <p><strong>Names:</strong> Avg deviation 0.047%</p>
-                </div>
+                <strong>✓ CRYPTOGRAPHICALLY SECURE RANDOMNESS</strong>
+                <p>
+                  iWheeli.com uses crypto.getRandomValues() for true randomness.
+                </p>
               </div>
               <div className="bg-blue-50 p-3 rounded">
                 <strong>How it works:</strong>
                 <p>
-                  iWheeli.com uses JaveScript Math.random() with true randomness
-                  calculations. Each segment has equal probability based on its
-                  size on the wheel.
+                  This wheel uses window.crypto.getRandomValues(), which is a
+                  Cryptographically Secure Pseudo-Random Number Generator (CSPRNG)
+                  backed by OS entropy from keystrokes, disk noise, system timers,
+                  and other unpredictable sources. This provides the same level of
+                  randomness used in the most advanced security applications.
+                </p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded">
+                <strong>Current Configuration:</strong>
+                <p>
+                  <strong>Total Segments:</strong> {wheelNames.length}
+                </p>
+                <p>
+                  <strong>Each Name:</strong>{" "}
+                  {((1 / wheelNames.length) * 100).toFixed(2)}% chance
+                </p>
+                <p>
+                  <strong>Free Spins:</strong>{" "}
+                  {(
+                    (wheelNames.filter((n) => n === "RESPIN").length /
+                      wheelNames.length) *
+                    100
+                  ).toFixed(2)}
+                  % chance
                 </p>
               </div>
               <div className="text-xs text-gray-600 mt-4">
                 <p>
                   Free Spins are positioned at opposite sides of the wheel for
-                  balanced distribution. Testing shows no bias toward any
-                  particular outcome.
+                  balanced distribution. The crypto-random approach eliminates
+                  any predictable patterns or bias.
                 </p>
               </div>
             </div>
@@ -588,6 +694,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
               Got it!
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Live Fairness Display */}
+      {fairnessText && (
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-white/70 z-30 text-center whitespace-nowrap">
+          <span>{fairnessText}</span>
         </div>
       )}
 

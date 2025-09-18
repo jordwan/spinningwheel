@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import SpinningWheel from "./components/SpinningWheel";
+import { getRandomNames } from "./data/names";
 
 export default function Home() {
   const [showNameInput, setShowNameInput] = useState(true);
@@ -13,78 +14,7 @@ export default function Home() {
   const [showRandomCountInput, setShowRandomCountInput] = useState(false);
 
   const generateRandomNames = (count: number = 10) => {
-    const firstNames = [
-      "Emma",
-      "Liam",
-      "Olivia",
-      "Noah",
-      "Ava",
-      "Ethan",
-      "Sophia",
-      "Mason",
-      "Isabella",
-      "William",
-      "Mia",
-      "James",
-      "Charlotte",
-      "Benjamin",
-      "Amelia",
-      "Lucas",
-      "Harper",
-      "Henry",
-      "Evelyn",
-      "Alex",
-      "Luna",
-      "Jack",
-      "Ella",
-      "Daniel",
-      "Chloe",
-      "Matthew",
-      "Grace",
-      "Jackson",
-      "Zoe",
-      "David",
-      "Lily",
-      "Leo",
-      "Aria",
-      "Ryan",
-      "Hazel",
-      "Nathan",
-      "Ellie",
-      "Adam",
-      "Sofia",
-      "Owen",
-      "Avery",
-      "Luke",
-      "Madison",
-      "Gabriel",
-      "Scarlett",
-      "Anthony",
-      "Abigail",
-      "Isaac",
-      "Emily",
-      "Dylan",
-      "Mila",
-      "Julian",
-      "Sam",
-      "Max",
-      "Victoria",
-      "Felix",
-      "Maya",
-      "Oscar",
-      "Aurora",
-      "Theo",
-      "Penelope",
-      "Charlie",
-      "Riley",
-      "Jake",
-      "Nora",
-      "Finn",
-    ];
-
-    // Shuffle and pick specified number of random names
-    const shuffled = [...firstNames].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, Math.min(count, shuffled.length));
+    return getRandomNames(count);
   };
 
   const handleSubmitNames = () => {
@@ -97,11 +27,21 @@ export default function Home() {
       return;
     }
 
-    // Parse comma-separated names and trim whitespace
-    const names = inputValue
-      .split(",")
-      .map((name) => name.trim())
-      .filter((name) => name.length > 0);
+    // Parse names - try comma-separated first, then space-separated if no commas
+    let names: string[];
+    if (inputValue.includes(",")) {
+      // Use comma-separated parsing
+      names = inputValue
+        .split(",")
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0);
+    } else {
+      // Use space-separated parsing
+      names = inputValue
+        .split(/\s+/)
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0);
+    }
 
     if (names.length > 0) {
       setWheelNames(names);
@@ -159,11 +99,15 @@ export default function Home() {
                 X
               </button>
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                {showRandomCountInput ? "How many random names?" : "Enter Names Below"}
+                {showRandomCountInput
+                  ? "How many random names?"
+                  : "Enter Names Below"}
               </h2>
               <p className="text-gray-600 mb-4">
                 <span className="text-sm text-gray-500">
-                  {showRandomCountInput ? "Choose between 2-50 names" : "Enter comma separated names. Leave blank for random."}
+                  {showRandomCountInput
+                    ? "Choose between 2-101 names"
+                    : "Enter comma separated names. Leave blank for random."}
                 </span>
               </p>
               {!showRandomCountInput ? (
@@ -179,7 +123,7 @@ export default function Home() {
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    placeholder="example: tom, jerry, beavis, bart, etc."
+                    placeholder="example: tom jerry beavis bart  or  tom, jerry, beavis, bart"
                     className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
                     autoFocus
                   />
@@ -192,7 +136,7 @@ export default function Home() {
                   onKeyPress={handleKeyPress}
                   placeholder="Number of random names"
                   min="2"
-                  max="50"
+                  max="101"
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                   autoFocus
                 />
@@ -211,7 +155,11 @@ export default function Home() {
 
         <main className="h-full w-full flex flex-col items-center justify-center p-4">
           <div className="mb-4 flex justify-center">
-            <div className={`relative w-52 sm:w-48 lg:w-64 ${showNameInput ? 'h-32 sm:h-24 lg:h-28' : 'h-20 sm:h-24 lg:h-28'}`}>
+            <div
+              className={`relative w-52 sm:w-48 lg:w-64 ${
+                showNameInput ? "h-32 sm:h-24 lg:h-28" : "h-20 sm:h-24 lg:h-28"
+              }`}
+            >
               <Image
                 src="/logo.png"
                 alt="iWxeel"
@@ -230,7 +178,7 @@ export default function Home() {
                   setInputValue("");
                   setTeamName("");
                   setShowRandomCountInput(false);
-                  document.title = "iWxeel";
+                  document.title = "iWheeli.com";
                 }}
               />
             )}
