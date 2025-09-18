@@ -239,13 +239,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   const colors = useMemo(
     () => [
       "#f54d4dff",
-      "#399a94ff",
+      "#205cbdff",
       "#45B7D1",
       "#54cb94ff",
       "#FECA57",
-      "#da71daff",
+      "#c810c8ff",
       "#FF6B9D",
-      "#FFD700",
+      "#bea412ff",
     ],
     []
   );
