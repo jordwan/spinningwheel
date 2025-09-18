@@ -10,7 +10,7 @@ export default function Home() {
   const [wheelNames, setWheelNames] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [teamName, setTeamName] = useState("");
-  const [randomNameCount, setRandomNameCount] = useState("10");
+  const [randomNameCount, setRandomNameCount] = useState("6");
   const [showRandomCountInput, setShowRandomCountInput] = useState(false);
 
   const generateRandomNames = (count: number = 10) => {
@@ -85,7 +85,7 @@ export default function Home() {
         {showNameInput && (
           <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
             <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full pointer-events-auto text-center relative">
-              {/* Close X button */}
+              {/* Close button */}
               <button
                 onClick={() => {
                   if (inputValue.trim() === "") {
@@ -94,9 +94,23 @@ export default function Home() {
                     handleSubmitNames();
                   }
                 }}
-                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-black hover:text-gray-100 hover:bg-black rounded-full transition-colors"
+                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
+                aria-label="Close"
               >
-                X
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </button>
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
                 {showRandomCountInput
@@ -107,7 +121,7 @@ export default function Home() {
                 <span className="text-sm text-gray-500">
                   {showRandomCountInput
                     ? "Choose between 2-101 names"
-                    : "Enter comma separated names. Leave blank for random."}
+                    : "Enter comma separated names. Leave blank and hit enter for random."}
                 </span>
               </p>
               {!showRandomCountInput ? (
@@ -123,23 +137,28 @@ export default function Home() {
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    placeholder="example: tom jerry beavis bart  or  tom, jerry, beavis, bart"
+                    placeholder="example: tom, jerry, bart, cindy..."
                     className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
                     autoFocus
                   />
                 </>
               ) : (
-                <input
-                  type="number"
-                  value={randomNameCount}
-                  onChange={(e) => setRandomNameCount(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Number of random names"
-                  min="2"
-                  max="101"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                  autoFocus
-                />
+                <div className="w-full">
+                  <label className="block text-center text-gray-600 mb-2 text-sm">
+                    Select number of names
+                  </label>
+                  <select
+                    value={randomNameCount}
+                    onChange={(e) => setRandomNameCount(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center text-lg bg-white cursor-pointer"
+                  >
+                    {Array.from({ length: 100 }, (_, i) => i + 2).map((num) => (
+                      <option key={num} value={num}>
+                        {num} names
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
               <div className="mt-6">
                 <button

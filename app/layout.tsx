@@ -14,13 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "iWxeeli.com",
-  description: "Random name wheel spinner free and simple",
+  title: "iWheeli.com",
+  description:
+    "Random name wheel spinner free and simple, but also cryptographically verified random.",
   icons: {
-    icon: [
-      { url: "/favicon.ico" },
-      { url: "/favicon.png", type: "image/png" },
-    ],
+    icon: [{ url: "/favicon.ico" }, { url: "/favicon.png", type: "image/png" }],
     apple: "/favicon.png",
   },
 };

@@ -593,69 +593,111 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
 
       {/* Fairness Popup */}
       {showFairnessPopup && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-auto">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full mx-4 text-center relative">
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-auto backdrop-blur-sm bg-black/20">
+          <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl p-6 max-w-lg w-full mx-4 text-center relative border border-gray-700">
             <button
               onClick={() => setShowFairnessPopup(false)}
-              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-black hover:text-gray-100 hover:bg-black rounded-full transition-colors"
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-700 rounded-full transition-all duration-200"
+              aria-label="Close"
             >
-              ×
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
             </button>
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              Wheel Fairness Verification
-            </h2>
+
+            <div className="flex items-center justify-center mb-4">
+              <div className="relative">
+                <div className="absolute inset-0 animate-pulse bg-green-500/20 rounded-full blur-xl"></div>
+                <svg className="w-12 h-12 text-green-400 relative" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-white ml-3">
+                Fairness Verification
+              </h2>
+            </div>
+
             <div className="text-left space-y-3 text-sm">
-              <div className="bg-green-50 p-3 rounded">
-                <strong>✓ CRYPTOGRAPHICALLY SECURE RANDOMNESS</strong>
-                <p>
-                  This wheel uses crypto.getRandomValues() - the same
-                  cryptographic-grade randomness used by banks, cryptocurrency,
+              <div className="bg-gradient-to-r from-green-500/10 to-green-600/10 border border-green-500/30 p-3 rounded-lg">
+                <div className="flex items-center mb-2">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse mr-2"></div>
+                  <strong className="text-green-400 uppercase text-xs tracking-wider">Cryptographically Secure Randomness</strong>
+                </div>
+                <p className="text-gray-300 text-xs leading-relaxed">
+                  Powered by crypto.getRandomValues() - military-grade randomness used by banks, cryptocurrency,
                   and security systems worldwide.
                 </p>
               </div>
-              <div className="bg-blue-50 p-3 rounded">
-                <strong>Technical Implementation:</strong>
-                <p>
-                  <strong>CSPRNG Source:</strong>{" "}
-                  window.crypto.getRandomValues() accesses your operating
-                  system&apos;s hardware entropy pool, collecting randomness
-                  from mouse movements, keyboard timings, disk activity, and
-                  other unpredictable system events.
-                </p>
-                <p className="mt-2">
-                  <strong>Entropy Quality:</strong> Each spin uses 32+ bits of
-                  true entropy - mathematically impossible to predict or
-                  manipulate. This exceeds casino-grade randomness standards.
-                </p>
+
+              <div className="bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-500/30 p-3 rounded-lg">
+                <div className="flex items-center mb-2">
+                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse mr-2"></div>
+                  <strong className="text-blue-400 uppercase text-xs tracking-wider">Technical Stack</strong>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-start">
+                    <span className="text-blue-300 mr-2">▸</span>
+                    <p className="text-gray-300 text-xs">
+                      <span className="text-blue-300 font-mono">CSPRNG:</span> Hardware entropy from OS kernel
+                    </p>
+                  </div>
+                  <div className="flex items-start">
+                    <span className="text-blue-300 mr-2">▸</span>
+                    <p className="text-gray-300 text-xs">
+                      <span className="text-blue-300 font-mono">Entropy:</span> Keyboard/mouse timing, CPU thermal noise
+                    </p>
+                  </div>
+                  <div className="flex items-start">
+                    <span className="text-blue-300 mr-2">▸</span>
+                    <p className="text-gray-300 text-xs">
+                      <span className="text-blue-300 font-mono">RNG Quality:</span> 32+ bits true randomness used
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-gray-50 p-3 rounded">
-                <strong>Current Configuration:</strong>
-                <p>
-                  <strong>Total Segments:</strong> {wheelNames.length}
-                </p>
-                <p>
-                  <strong>Each Name:</strong>{" "}
-                  {((1 / wheelNames.length) * 100).toFixed(2)}% chance (
-                  {(1 / wheelNames.length).toFixed(6)} probability)
-                </p>
-                <p>
-                  <strong>Free Spins:</strong>{" "}
-                  {(
-                    (wheelNames.filter((n) => n === "RESPIN").length /
-                      wheelNames.length) *
-                    100
-                  ).toFixed(2)}
-                  % chance
-                </p>
-                <p className="mt-1 text-xs text-gray-600">
-                  <strong>Entropy per spin:</strong>{" "}
-                  {Math.ceil(Math.log2(wheelNames.length))} bits minimum
-                </p>
+
+              <div className="bg-gradient-to-r from-purple-500/10 to-purple-600/10 border border-purple-500/30 p-3 rounded-lg">
+                <div className="flex items-center mb-2">
+                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse mr-2"></div>
+                  <strong className="text-purple-400 uppercase text-xs tracking-wider">Live Statistics</strong>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-black/30 rounded p-2">
+                    <p className="text-purple-300 font-mono text-[10px]">SEGMENTS</p>
+                    <p className="text-white font-bold">{wheelNames.length}</p>
+                  </div>
+                  <div className="bg-black/30 rounded p-2">
+                    <p className="text-purple-300 font-mono text-[10px]">OUTCOME BITS</p>
+                    <p className="text-white font-bold">{Math.ceil(Math.log2(wheelNames.length))}</p>
+                  </div>
+                  <div className="bg-black/30 rounded p-2">
+                    <p className="text-purple-300 font-mono text-[10px]">NAME ODDS</p>
+                    <p className="text-white font-bold">{((1 / wheelNames.length) * 100).toFixed(2)}%</p>
+                  </div>
+                  <div className="bg-black/30 rounded p-2">
+                    <p className="text-purple-300 font-mono text-[10px]">RESPIN ODDS</p>
+                    <p className="text-white font-bold">
+                      {((wheelNames.filter((n) => n === "RESPIN").length / wheelNames.length) * 100).toFixed(2)}%
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
+
             <button
               onClick={() => setShowFairnessPopup(false)}
-              className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              className="mt-4 px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg hover:from-blue-600 hover:to-purple-600 transition-all transform hover:scale-105 font-semibold"
             >
               Got it!
             </button>
