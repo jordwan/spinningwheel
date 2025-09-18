@@ -211,7 +211,7 @@ export default function Home() {
 
         <main className="h-full w-full flex flex-col items-center justify-center p-4">
           <div className="mb-4 flex justify-center">
-            <div className="relative h-20 sm:h-24 lg:h-28 w-52 sm:w-48 lg:w-64">
+            <div className={`relative w-52 sm:w-48 lg:w-64 ${showNameInput ? 'h-32 sm:h-24 lg:h-28' : 'h-20 sm:h-24 lg:h-28'}`}>
               <Image
                 src="/logo.png"
                 alt="iWxeel"
