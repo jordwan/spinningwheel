@@ -12,6 +12,7 @@ export default function Home() {
   const [teamName, setTeamName] = useState("");
   const [randomNameCount, setRandomNameCount] = useState("6");
   const [showRandomCountInput, setShowRandomCountInput] = useState(false);
+  const [includeFreeSpins, setIncludeFreeSpins] = useState(true);
 
   const generateRandomNames = (count: number = 10) => {
     return getRandomNames(count);
@@ -160,6 +161,21 @@ export default function Home() {
                 </div>
               )}
               <div className="mt-6">
+                <div className="flex items-center justify-center mb-4">
+                  <input
+                    type="checkbox"
+                    id="includeFreeSpins"
+                    checked={includeFreeSpins}
+                    onChange={(e) => setIncludeFreeSpins(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <label
+                    htmlFor="includeFreeSpins"
+                    className="ml-2 text-sm font-medium text-gray-700 cursor-pointer"
+                  >
+                    Include free spin tiles
+                  </label>
+                </div>
                 <button
                   onClick={handleSubmitNames}
                   className="w-full px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors"
@@ -187,6 +203,7 @@ export default function Home() {
             {!showNameInput && (
               <SpinningWheel
                 names={wheelNames}
+                includeFreeSpins={includeFreeSpins}
                 onReset={() => {
                   // Track reset action
                   if (typeof window !== 'undefined' && window.gtag) {

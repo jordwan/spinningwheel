@@ -23,9 +23,10 @@ const cryptoRandom = (): number => {
 interface SpinningWheelProps {
   names?: string[];
   onReset?: () => void;
+  includeFreeSpins?: boolean;
 }
 
-const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
+const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFreeSpins = true }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Layout refs
@@ -137,25 +138,37 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       names && names.length
         ? names
         : ["Name 1", "Name 2", "Name 3", "Name 4", "Name 5", "Name 6"];
+
+    if (!includeFreeSpins) {
+      return base;
+    }
+
     const totalSlots = base.length + 2;
     const mid = Math.floor(totalSlots / 2);
     const result = [...base];
     result.splice(0, 0, "RESPIN");
     result.splice(mid, 0, "RESPIN");
     return result;
-  }, [names]);
+  }, [names, includeFreeSpins]);
 
   /** ========= Fairness text ========= */
   useEffect(() => {
     const total = wheelNames.length;
     const respinCount = wheelNames.filter((n) => n === "RESPIN").length;
-    setFairnessText(
-      `Each name ${((1 / total) * 100).toFixed(2)}% chance, Free Spin ${(
-        (respinCount / total) *
-        100
-      ).toFixed(2)}% chance`
-    );
-  }, [wheelNames]);
+
+    if (!includeFreeSpins || respinCount === 0) {
+      setFairnessText(
+        `Each name ${((1 / total) * 100).toFixed(2)}% chance`
+      );
+    } else {
+      setFairnessText(
+        `Each name ${((1 / total) * 100).toFixed(2)}% chance, Free Spin ${(
+          (respinCount / total) *
+          100
+        ).toFixed(2)}% chance`
+      );
+    }
+  }, [wheelNames, includeFreeSpins]);
 
   /** ========= Idle speed indicator with RAF for smooth animation ========= */
   useEffect(() => {
@@ -805,12 +818,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
                     <p className="text-purple-300 font-mono text-[10px]">NAME ODDS</p>
                     <p className="text-white font-bold">{((1 / wheelNames.length) * 100).toFixed(2)}%</p>
                   </div>
-                  <div className="bg-black/30 rounded p-2">
-                    <p className="text-purple-300 font-mono text-[10px]">RESPIN ODDS</p>
-                    <p className="text-white font-bold">
-                      {((wheelNames.filter((n) => n === "RESPIN").length / wheelNames.length) * 100).toFixed(2)}%
-                    </p>
-                  </div>
+                  {includeFreeSpins && wheelNames.filter((n) => n === "RESPIN").length > 0 && (
+                    <div className="bg-black/30 rounded p-2">
+                      <p className="text-purple-300 font-mono text-[10px]">RESPIN ODDS</p>
+                      <p className="text-white font-bold">
+                        {((wheelNames.filter((n) => n === "RESPIN").length / wheelNames.length) * 100).toFixed(2)}%
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
