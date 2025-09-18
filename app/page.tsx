@@ -153,13 +153,9 @@ export default function Home() {
           </div>
         )}
 
-        <main className="h-full w-full flex flex-col items-center justify-center p-4">
-          <div className="mb-4 flex justify-center">
-            <div
-              className={`relative w-52 sm:w-48 lg:w-64 ${
-                showNameInput ? "h-32 sm:h-24 lg:h-28" : "h-20 sm:h-24 lg:h-28"
-              }`}
-            >
+        <main className="h-full w-full flex flex-col p-4">
+          <div className="flex justify-center mb-3">
+            <div className="relative w-48 h-16 sm:w-56 sm:h-18 lg:w-64 lg:h-20">
               <Image
                 src="/logo.png"
                 alt="iWxeel"
@@ -169,7 +165,7 @@ export default function Home() {
               />
             </div>
           </div>
-          <div className="flex-1 w-full max-w-4xl">
+          <div className="flex-1 w-full max-w-4xl mx-auto">
             {!showNameInput && (
               <SpinningWheel
                 names={wheelNames}

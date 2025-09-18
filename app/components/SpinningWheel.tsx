@@ -478,23 +478,17 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   return (
     <div
       ref={rootRef}
-      className="relative flex flex-col items-center w-full min-h-screen"
-      style={{
-        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 72px)", // more reserve for fixed footer
-      }}
+      className="flex flex-col items-center w-full h-full"
     >
       {/* Spin Power (≈50% width on mobile, larger on bigger screens) */}
       <div
         ref={speedRef}
-        className="
-          mt-3 sm:mt-4 mb-2 sm:mb-4
-          w-[min(50vw,360px)] sm:w-[min(70vw,420px)] lg:w-[480px]
-        "
+        className="mb-3 w-[min(45vw,300px)] sm:w-[min(60vw,360px)] lg:w-[400px]"
       >
-        <div className="text-center mb-1 sm:mb-2 text-[clamp(12px,1.8vw,16px)] font-semibold text-white">
+        <div className="text-center mb-1 text-[clamp(11px,1.6vw,14px)] font-semibold text-white">
           Spin Power
         </div>
-        <div className="relative h-8 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
+        <div className="relative h-6 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
           <div
             className="absolute top-0 bottom-0 w-4 bg-white border-2 border-gray-800 rounded-full shadow-lg"
             style={{
@@ -514,8 +508,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       {/* Wheel */}
       <div
         ref={wheelWrapRef}
-        className="relative flex items-center justify-center"
-        style={{ marginBottom: "min(5vh, 28px)" }}
+        className="relative flex items-center justify-center mb-4 flex-1 flex-col justify-center"
       >
         <canvas
           ref={canvasRef}
@@ -527,11 +520,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       {/* Controls — width locked to wheel, wrap when needed */}
       <div
         ref={controlsRef}
-        className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center mx-auto"
+        className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center mx-auto mb-4"
         style={{
           width: `${canvasCSSSize}px`,
           maxWidth: "95vw",
-          marginBottom: "8px",
         }}
       >
         <button
@@ -663,7 +655,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
       {/* Footer */}
       <div
         ref={footerRef}
-        className="fixed bottom-0 left-0 right-0 z-30 pb-[calc(env(safe-area-inset-bottom,0px)+6px)]"
+        className="w-full text-center"
       >
         {fairnessText && (
           <div className="text-center mb-1">
