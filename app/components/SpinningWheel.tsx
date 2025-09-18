@@ -47,9 +47,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   const [fairnessText, setFairnessText] = useState("");
   const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
 
-  // Timer refs
-  const speedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   /** ========= AUDIO (unchanged) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
   const clickBufferRef = useRef<AudioBuffer | null>(null);
@@ -160,23 +157,27 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     );
   }, [wheelNames]);
 
-  /** ========= Idle speed indicator ========= */
+  /** ========= Idle speed indicator with RAF for smooth animation ========= */
   useEffect(() => {
     if (!isSpinning) {
-      const id = setInterval(() => {
-        const t = Date.now() / 1000;
-        setSpeedIndicator((Math.sin(t * 1.5) + 1) / 2);
-      }, 16);
-      speedIntervalRef.current = id;
-      return () => {
-        if (speedIntervalRef.current) {
-          clearInterval(speedIntervalRef.current);
-          speedIntervalRef.current = null;
+      let animationId: number;
+      let lastTime = 0;
+
+      const animate = (currentTime: number) => {
+        // Throttle to ~120fps (8.33ms) for high refresh displays
+        if (currentTime - lastTime >= 8.33) {
+          const t = currentTime / 1000;
+          setSpeedIndicator((Math.sin(t * 1.5) + 1) / 2);
+          lastTime = currentTime;
         }
+        animationId = requestAnimationFrame(animate);
       };
-    } else if (speedIntervalRef.current) {
-      clearInterval(speedIntervalRef.current);
-      speedIntervalRef.current = null;
+
+      animationId = requestAnimationFrame(animate);
+
+      return () => {
+        cancelAnimationFrame(animationId);
+      };
     }
   }, [isSpinning]);
 
@@ -452,7 +453,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   /** ========= Confetti ========= */
   const triggerConfetti = () => {
     const count = 200;
-    const defaults = { origin: { y: 0.7 }, zIndex: 9999 } as const;
+    const defaults = {
+      origin: { y: 0.7 },
+      zIndex: 9999,
+      disableForReducedMotion: true // Respect accessibility settings
+    } as const;
     const fire = (r: number, o: confetti.Options) =>
       confetti({ ...defaults, ...o, particleCount: Math.floor(count * r) });
     fire(0.25, { spread: 26, startVelocity: 55 });
@@ -590,7 +595,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
         <canvas
           ref={canvasRef}
           className="rounded-full shadow-xl border border-white/30"
-          style={{ width: canvasCSSSize, height: canvasCSSSize }}
+          style={{
+            width: canvasCSSSize,
+            height: canvasCSSSize,
+            transform: 'translateZ(0)', // Hardware acceleration
+            willChange: 'transform',     // Hint browser for optimization
+          }}
         />
       </div>
 
