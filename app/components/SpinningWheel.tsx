@@ -46,13 +46,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
   const [showFairnessPopup, setShowFairnessPopup] = useState(false);
   const [fairnessText, setFairnessText] = useState("");
   const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
-  const [randomBits, setRandomBits] = useState<string>("");
 
   // Timer refs
   const speedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const randomBitsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null
-  );
 
   /** ========= AUDIO (unchanged) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -184,32 +180,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     }
   }, [isSpinning]);
 
-  /** ========= Random bits (optional) ========= */
-  useEffect(() => {
-    if (!isSpinning) {
-      const id = setInterval(() => {
-        if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
-          const u32 = new Uint32Array(4);
-          window.crypto.getRandomValues(u32);
-          const bin = Array.from(u32)
-            .map((n) => n.toString(2).padStart(32, "0"))
-            .join("")
-            .slice(0, 64);
-          setRandomBits(bin);
-        }
-      }, 100);
-      randomBitsIntervalRef.current = id;
-      return () => {
-        if (randomBitsIntervalRef.current) {
-          clearInterval(randomBitsIntervalRef.current);
-          randomBitsIntervalRef.current = null;
-        }
-      };
-    } else if (randomBitsIntervalRef.current) {
-      clearInterval(randomBitsIntervalRef.current);
-      randomBitsIntervalRef.current = null;
-    }
-  }, [isSpinning]);
 
   /** ========= Responsive sizing with ResizeObserver ========= */
   const recomputeSize = useCallback(() => {
@@ -249,11 +219,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset }) => {
     recomputeSize();
 
     const ro = new ResizeObserver(() => recomputeSize());
-    speedRef.current && ro.observe(speedRef.current);
-    controlsRef.current && ro.observe(controlsRef.current);
-    footerRef.current && ro.observe(footerRef.current);
-    wheelWrapRef.current && ro.observe(wheelWrapRef.current);
-    rootRef.current && ro.observe(rootRef.current);
+    if (speedRef.current) ro.observe(speedRef.current);
+    if (controlsRef.current) ro.observe(controlsRef.current);
+    if (footerRef.current) ro.observe(footerRef.current);
+    if (wheelWrapRef.current) ro.observe(wheelWrapRef.current);
+    if (rootRef.current) ro.observe(rootRef.current);
 
     const onResize = () => recomputeSize();
     window.addEventListener("resize", onResize);
