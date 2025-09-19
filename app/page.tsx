@@ -143,39 +143,43 @@ export default function Home() {
                   />
                 </>
               ) : (
-                <div className="w-full">
-                  <label className="block text-center text-gray-600 mb-2 text-sm">
-                    Select number of names
-                  </label>
-                  <select
-                    value={randomNameCount}
-                    onChange={(e) => setRandomNameCount(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center text-lg bg-white cursor-pointer"
-                  >
-                    {Array.from({ length: 100 }, (_, i) => i + 2).map((num) => (
-                      <option key={num} value={num}>
-                        {num} names
-                      </option>
-                    ))}
-                  </select>
+                <div className="flex gap-3">
+                  <div className="flex-[5]">
+                    <label className="block text-center text-gray-600 mb-2 text-sm">
+                      Select number of names
+                    </label>
+                    <select
+                      value={randomNameCount}
+                      onChange={(e) => setRandomNameCount(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center text-lg bg-white cursor-pointer"
+                    >
+                      {Array.from({ length: 100 }, (_, i) => i + 2).map((num) => (
+                        <option key={num} value={num}>
+                          {num} names
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="flex flex-col items-center">
+                      <input
+                        type="checkbox"
+                        id="includeFreeSpins"
+                        checked={includeFreeSpins}
+                        onChange={(e) => setIncludeFreeSpins(e.target.checked)}
+                        className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                      />
+                      <label
+                        htmlFor="includeFreeSpins"
+                        className="mt-2 text-xs font-medium text-gray-600 cursor-pointer text-center leading-tight"
+                      >
+                        Free<br/>Spins
+                      </label>
+                    </div>
+                  </div>
                 </div>
               )}
               <div className="mt-6">
-                <div className="flex items-center justify-center mb-4">
-                  <input
-                    type="checkbox"
-                    id="includeFreeSpins"
-                    checked={includeFreeSpins}
-                    onChange={(e) => setIncludeFreeSpins(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                  />
-                  <label
-                    htmlFor="includeFreeSpins"
-                    className="ml-2 text-sm font-medium text-gray-700 cursor-pointer"
-                  >
-                    Include free spin tiles
-                  </label>
-                </div>
                 <button
                   onClick={handleSubmitNames}
                   className="w-full px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors"
