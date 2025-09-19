@@ -14,13 +14,66 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "iWheeli.com",
+  title: "iWheeli.com - Free Random Name Wheel Spinner | Cryptographically Secure",
   description:
-    "Random name wheel spinner free and simple, but also cryptographically verified random.",
-  icons: {
-    icon: [{ url: "/favicon.ico" }, { url: "/favicon.png", type: "image/png" }],
-    apple: "/favicon.png",
+    "Free online random name wheel spinner with cryptographically secure randomness. Perfect for classroom activities, team selection, giveaways, and decision making. No ads, no signup required.",
+  keywords: "random wheel, name picker, wheel spinner, random name generator, decision wheel, spinner wheel, classroom tool, team selector, raffle wheel, fortune wheel, random picker, free spinner",
+  authors: [{ name: "iWheeli" }],
+  creator: "iWheeli",
+  publisher: "iWheeli",
+  metadataBase: new URL("https://iwheeli.com"),
+  alternates: {
+    canonical: "/",
   },
+  openGraph: {
+    title: "iWheeli.com - Free Random Name Wheel Spinner",
+    description: "Free online random name wheel spinner with cryptographically secure randomness. Perfect for classroom activities, team selection, and decision making.",
+    url: "https://iwheeli.com",
+    siteName: "iWheeli",
+    images: [
+      {
+        url: "/logo.png",
+        width: 1200,
+        height: 630,
+        alt: "iWheeli - Random Name Wheel Spinner",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "iWheeli.com - Free Random Name Wheel Spinner",
+    description: "Free online random name wheel spinner with cryptographically secure randomness. No ads, no signup required.",
+    images: ["/logo.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: [
+      { url: "/favicon.png", sizes: "180x180" },
+    ],
+    shortcut: "/favicon.ico",
+  },
+  manifest: "/manifest.json",
+  themeColor: "#1e40af",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=5",
 };
 
 export default function RootLayout({
