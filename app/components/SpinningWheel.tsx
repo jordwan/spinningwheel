@@ -1152,7 +1152,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       {/* Controls — width locked to wheel, wrap when needed */}
       <div
         ref={controlsRef}
-        className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center mx-auto mb-4"
+        className="flex flex-wrap gap-3 sm:gap-4 justify-center items-center mx-auto mb-4"
         style={{
           width: `${canvasCSSSize}px`,
           maxWidth: isFirefox ? "600px" : "95vw",
@@ -1167,7 +1167,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           ...(isFirefox ? {
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 'clamp(8px, 1.2vw, 12px)',
+            gap: 'clamp(12px, 1.5vw, 16px)',
             justifyContent: 'center',
             alignItems: 'center'
           } : {}),
