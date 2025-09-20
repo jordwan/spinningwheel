@@ -35,8 +35,6 @@ input, textarea {
 html {
   /* Prevent pull-to-refresh and rubber band scrolling */
   overscroll-behavior: none;
-  /* Prevent touch gestures from causing scrolling */
-  touch-action: none;
   /* Use dynamic viewport height for better mobile support */
   --vh: 100vh;
   height: 100%;
@@ -54,7 +52,12 @@ body {
   height: 100%;
   /* Prevent iOS bounce/rubber band effect */
   overscroll-behavior: none;
-  /* Prevent touch gestures */
+  /* Allow touch gestures by default - specific elements will override */
+  touch-action: manipulation;
+}
+
+/* Apply no-touch to specific areas that shouldn't be draggable */
+.no-touch {
   touch-action: none;
 }
 

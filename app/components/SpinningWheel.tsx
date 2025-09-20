@@ -32,11 +32,10 @@ const getAngleFromPoint = (centerX: number, centerY: number, pointX: number, poi
 
 const getCanvasCoordinates = (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
   const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
+  // Convert to canvas coordinate space (not including device pixel ratio)
   return {
-    x: (clientX - rect.left) * scaleX,
-    y: (clientY - rect.top) * scaleY
+    x: (clientX - rect.left) * (canvas.offsetWidth / rect.width),
+    y: (clientY - rect.top) * (canvas.offsetHeight / rect.height)
   };
 };
 
@@ -497,15 +496,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   }, []);
 
   /** ========= DRAG INTERACTION HANDLERS ========= */
-  const canDrag = !isSpinning && !showWinnerModal && !showBlank;
+  // Allow drag when wheel is visible and not spinning, even if blank
+  const canDrag = !isSpinning && !showWinnerModal;
 
   const startDrag = useCallback((clientX: number, clientY: number) => {
     if (!canDrag || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
-    const centerX = canvas.width / (window.devicePixelRatio || 1) / 2;
-    const centerY = canvas.height / (window.devicePixelRatio || 1) / 2;
+    const centerX = canvas.offsetWidth / 2;
+    const centerY = canvas.offsetHeight / 2;
 
     // Check if click/touch is within wheel area
     const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
@@ -531,8 +531,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
     const canvas = canvasRef.current;
     const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
-    const centerX = canvas.width / (window.devicePixelRatio || 1) / 2;
-    const centerY = canvas.height / (window.devicePixelRatio || 1) / 2;
+    const centerX = canvas.offsetWidth / 2;
+    const centerY = canvas.offsetHeight / 2;
 
     const currentAngle = getAngleFromPoint(centerX, centerY, x, y);
     const angleDiff = normalizeAngleDifference(currentAngle - lastDragAngle);
@@ -584,8 +584,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   }, [startDrag]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    updateDrag(e.clientX, e.clientY);
-  }, [updateDrag]);
+    if (isDragging) {
+      updateDrag(e.clientX, e.clientY);
+    }
+  }, [isDragging, updateDrag]);
 
   const handleMouseUp = useCallback(() => {
     endDrag();
@@ -1108,7 +1110,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             width: canvasCSSSize,
             height: canvasCSSSize,
             cursor: canDrag ? (isDragging ? 'grabbing' : 'grab') : 'default',
-            touchAction: 'none', // Handle touch events manually
+            touchAction: 'pan-x pan-y', // Allow touch gestures for dragging
             // Remove problematic iOS 16 properties
             ...(isIOS16 ? {} : {
               transform: 'translateZ(0)', // Hardware acceleration
@@ -1116,7 +1118,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             }),
           }}
           onMouseDown={handleMouseDown}
-          onMouseMove={isDragging ? handleMouseMove : undefined}
+          onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
