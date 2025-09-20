@@ -50,6 +50,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
   const [lastWinner, setLastWinner] = useState<string>("");
   const [isIOS16, setIsIOS16] = useState(false);
+  const [isOlderBrowser, setIsOlderBrowser] = useState(false);
 
   /** ========= AUDIO (unchanged) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -308,6 +309,33 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     };
 
     setIsIOS16(detectIOS16());
+
+    // Detect older browsers for performance optimization
+    const detectOlderBrowser = () => {
+      if (typeof window === 'undefined') return false;
+
+      const userAgent = window.navigator.userAgent;
+
+      // Chrome < 80 (released Feb 2020)
+      const chromeMatch = userAgent.match(/Chrome\/(\d+)/);
+      if (chromeMatch && parseInt(chromeMatch[1]) < 80) return true;
+
+      // Safari < 14 (released Sep 2020)
+      const safariMatch = userAgent.match(/Version\/(\d+).*Safari/);
+      if (safariMatch && parseInt(safariMatch[1]) < 14) return true;
+
+      // Firefox < 75 (released Apr 2020)
+      const firefoxMatch = userAgent.match(/Firefox\/(\d+)/);
+      if (firefoxMatch && parseInt(firefoxMatch[1]) < 75) return true;
+
+      // Edge < 80 (released Feb 2020)
+      const edgeMatch = userAgent.match(/Edg\/(\d+)/);
+      if (edgeMatch && parseInt(edgeMatch[1]) < 80) return true;
+
+      return false;
+    };
+
+    setIsOlderBrowser(detectOlderBrowser());
   }, []);
 
   /** ========= Draw wheel (HiDPI, labels, pointer) ========= */
@@ -551,7 +579,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
   /** ========= Confetti ========= */
   const triggerConfetti = () => {
-    const count = 200;
+    const baseCount = 200;
+    // Reduce particle count by 50% for older browsers
+    const scaleFactor = isOlderBrowser ? 0.5 : 1.0;
+    const count = baseCount * scaleFactor;
+
     const defaults = {
       origin: { y: 0.7 },
       zIndex: 9999,
