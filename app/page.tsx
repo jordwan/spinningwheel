@@ -454,7 +454,6 @@ export default function Home() {
                     autoCorrect="off"
                     autoCapitalize="none"
                     spellCheck={false}
-                    autoFocus={!showRandomCountInput}
                   />
                   <textarea
                     value={inputValue}
@@ -467,6 +466,7 @@ export default function Home() {
                     autoCorrect="off"
                     autoCapitalize="none"
                     spellCheck={false}
+                    autoFocus={!showRandomCountInput}
                   />
                 </>
               ) : (
@@ -503,7 +503,11 @@ export default function Home() {
                           setShowRandomCountInput(true);
                         }
                       }}
-                      className="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
+                      className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-colors cursor-pointer ${
+                        inputValue.trim() !== ""
+                          ? "bg-blue-500 text-white hover:bg-blue-600"
+                          : "bg-green-500 text-white hover:bg-green-600"
+                      }`}
                       style={{ touchAction: "manipulation" }}
                     >
                       {inputValue.trim() !== "" ? "Clear" : "Random"}
@@ -513,7 +517,7 @@ export default function Home() {
                       disabled={inputValue.trim() === ""}
                       className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-colors ${
                         inputValue.trim() === ""
-                          ? "bg-gray-300 text-gray-500"
+                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                           : "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
                       }`}
                       style={{ touchAction: "manipulation" }}

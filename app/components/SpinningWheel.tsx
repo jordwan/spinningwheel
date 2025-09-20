@@ -110,6 +110,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const controlsRef = useRef<HTMLDivElement>(null);
   const speedRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
+  const footerContentRef = useRef<HTMLDivElement>(null);
 
   /** ========= State ========= */
   const [isSpinning, setIsSpinning] = useState(false);
@@ -427,7 +428,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     // Conservative fallbacks so first pass doesn't oversize the wheel:
     const speedH = Math.max(speedRef.current?.offsetHeight ?? 0, 72);
     const controlsH = Math.max(controlsRef.current?.offsetHeight ?? 0, 88);
-    const footerH = Math.max(footerRef.current?.offsetHeight ?? 0, 56);
+    // Increased footer fallback to account for dynamic content (fairness text + last winner)
+    const footerH = Math.max(footerRef.current?.offsetHeight ?? 0, 80);
 
     const buffers = 32;
 
@@ -475,6 +477,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       window.removeEventListener("orientationchange", onResize);
     };
   }, [recomputeSize, wheelNames.length]); // Add dependency on names count
+
+  /** ========= Footer content observer for dynamic layout ========= */
+  useEffect(() => {
+    // Recalculate layout when footer content changes (e.g., lastWinner appears)
+    const timer = setTimeout(() => recomputeSize(), 50);
+    return () => clearTimeout(timer);
+  }, [lastWinner, fairnessText, recomputeSize]);
 
   /** ========= Audio Context Cleanup ========= */
   useEffect(() => {
@@ -1577,38 +1586,40 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       )}
 
       {/* Footer */}
-      <div ref={footerRef} className="w-full text-center">
-        {(fairnessText || lastWinner) && (
-          <div className="text-center mb-1 flex flex-col items-center gap-1">
-            {fairnessText && (
-              <span className="text-[clamp(10px,1.6vw,12px)] text-white/70 whitespace-nowrap">
-                {fairnessText}
-              </span>
-            )}
-            {lastWinner && (
-              <span className="text-[clamp(10px,1.6vw,12px)] text-white/70">
-                Last winner: <span className="text-white font-semibold">{lastWinner}</span>
-              </span>
-            )}
+      <div ref={footerRef} className="w-full text-center min-h-[60px] flex flex-col justify-end">
+        <div ref={footerContentRef} className="space-y-2">
+          {(fairnessText || lastWinner) && (
+            <div className="text-center flex flex-col items-center gap-1 mb-2">
+              {fairnessText && (
+                <span className="text-[clamp(10px,1.6vw,12px)] text-white/70 whitespace-nowrap">
+                  {fairnessText}
+                </span>
+              )}
+              {lastWinner && (
+                <span className="text-[clamp(10px,1.6vw,12px)] text-white/70 break-words max-w-full px-2">
+                  Last winner: <span className="text-white font-semibold">{lastWinner}</span>
+                </span>
+              )}
+            </div>
+          )}
+          <div className="text-center pb-2">
+            <button
+              onClick={() => {
+                setShowFairnessPopup(true);
+                // Track fairness popup view
+                if (typeof window !== 'undefined' && window.gtag) {
+                  window.gtag('event', 'fairness_view', {
+                    event_category: 'engagement',
+                    event_label: 'view_fairness_popup'
+                  });
+                }
+              }}
+              className="text-[clamp(10px,1.6vw,12px)] text-white/70 hover:text-white underline min-h-[24px] px-2 py-1"
+              style={{ touchAction: 'manipulation' }}
+            >
+              fairness
+            </button>
           </div>
-        )}
-        <div className="text-center">
-          <button
-            onClick={() => {
-              setShowFairnessPopup(true);
-              // Track fairness popup view
-              if (typeof window !== 'undefined' && window.gtag) {
-                window.gtag('event', 'fairness_view', {
-                  event_category: 'engagement',
-                  event_label: 'view_fairness_popup'
-                });
-              }
-            }}
-            className="text-[clamp(10px,1.6vw,12px)] text-white/70 hover:text-white underline"
-            style={{ touchAction: 'manipulation' }}
-          >
-            fairness
-          </button>
         </div>
       </div>
     </div>
