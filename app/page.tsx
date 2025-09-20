@@ -67,7 +67,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden relative">
+    <div className="h-screen w-screen overflow-hidden relative animate-glow-pulse">
       {/* Blurred background image */}
       <div
         className="absolute inset-0"
@@ -199,7 +199,12 @@ export default function Home() {
 
         <main className="h-full w-full flex flex-col p-4">
           <div className="flex justify-center mb-3">
-            <div className="relative w-48 h-16 sm:w-56 sm:h-18 lg:w-64 lg:h-20">
+            <div
+              className="relative w-48 h-16 sm:w-56 sm:h-18 lg:w-64 lg:h-20"
+              style={{
+                filter: 'drop-shadow(0 0 15px rgba(255, 255, 255, 0.25)) drop-shadow(0 0 30px rgba(255, 255, 255, 0.15))',
+              }}
+            >
               <Image
                 src="/logo.png"
                 alt="iWxeel"
