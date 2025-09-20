@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import SpinningWheel from "./components/SpinningWheel";
 import { getRandomNames } from "./data/names";
@@ -19,6 +19,13 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [duplicateWarningText, setDuplicateWarningText] = useState("");
+
+  // Debouncing refs for performance optimization
+  const inputDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const nameProcessingDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Local input state for immediate UI feedback (separate from debounced state)
+  const [localInputValue, setLocalInputValue] = useState("");
 
   // Hydration guard - ensures client-side rendering
   useEffect(() => {
@@ -42,6 +49,18 @@ export default function Home() {
     return () => {
       window.removeEventListener("resize", updateViewportHeight);
       window.removeEventListener("orientationchange", updateViewportHeight);
+    };
+  }, []);
+
+  // Cleanup debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      if (inputDebounceRef.current) {
+        clearTimeout(inputDebounceRef.current);
+      }
+      if (nameProcessingDebounceRef.current) {
+        clearTimeout(nameProcessingDebounceRef.current);
+      }
     };
   }, []);
 
@@ -245,6 +264,54 @@ export default function Home() {
     return getRandomNames(count);
   };
 
+  // Debounced input change handler to reduce expensive processing
+  const handleInputChange = useCallback((value: string) => {
+    // Update local state immediately for UI responsiveness
+    setLocalInputValue(value);
+
+    // Clear any existing debounce timer
+    if (inputDebounceRef.current) {
+      clearTimeout(inputDebounceRef.current);
+    }
+
+    // Debounce the actual processing for performance (especially with regex operations)
+    inputDebounceRef.current = setTimeout(() => {
+      setInputValue(value);
+    }, 150); // 150ms debounce to balance responsiveness with performance
+  }, []);
+
+  // Memoized enhanced name processing to reduce computation
+  const processNames = useCallback((input: string): string[] => {
+    const enhancedTrim = (name: string): string => {
+      return name
+        .trim()
+        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+        .replace(/[^\w\s\-\.]/g, '') // Remove special characters except hyphens and dots
+        .substring(0, 20); // Cap length at 20 characters
+    };
+
+    let names: string[];
+
+    if (input.includes(",")) {
+      // Use comma-separated parsing
+      names = input
+        .split(",")
+        .map(enhancedTrim)
+        .filter((name) => name.length > 0);
+    } else {
+      // Use space-separated parsing
+      names = input
+        .split(/\s+/)
+        .map(enhancedTrim)
+        .filter((name) => name.length > 0);
+    }
+
+    // Remove duplicates (case-insensitive)
+    return names.filter((name, index, arr) =>
+      arr.findIndex(n => n.toLowerCase() === name.toLowerCase()) === index
+    );
+  }, []);
+
   const handleSubmitNames = () => {
     // If showing random count input, generate random names
     if (showRandomCountInput) {
@@ -256,47 +323,22 @@ export default function Home() {
       return;
     }
 
-    // Enhanced name parsing with better trimming and deduplication
-    let names: string[];
+    // Use optimized name processing
+    const rawNames = inputValue
+      .split(/[,\s]+/)
+      .map(name => name.trim())
+      .filter(name => name.length > 0);
 
-    const enhancedTrim = (name: string): string => {
-      return name
-        .trim()
-        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-        .replace(/[^\w\s\-\.]/g, '') // Remove special characters except hyphens and dots
-        .substring(0, 20); // Cap length at 20 characters
-    };
-
-    if (inputValue.includes(",")) {
-      // Use comma-separated parsing
-      names = inputValue
-        .split(",")
-        .map(enhancedTrim)
-        .filter((name) => name.length > 0);
-    } else {
-      // Use space-separated parsing
-      names = inputValue
-        .split(/\s+/)
-        .map(enhancedTrim)
-        .filter((name) => name.length > 0);
-    }
-
-    // Remove duplicates (case-insensitive) and track them
-    const uniqueNames = names.filter((name, index, arr) =>
-      arr.findIndex(n => n.toLowerCase() === name.toLowerCase()) === index
-    );
+    const names = processNames(inputValue);
 
     // Show warning if duplicates were removed
-    const duplicatesRemoved = names.length - uniqueNames.length;
+    const duplicatesRemoved = rawNames.length - names.length;
     if (duplicatesRemoved > 0) {
       setDuplicateWarningText(
         `${duplicatesRemoved} duplicate ${duplicatesRemoved === 1 ? 'name was' : 'names were'} removed.`
       );
       setShowDuplicateWarning(true);
     }
-
-    // Use deduplicated names
-    names = uniqueNames;
 
     if (names.length >= 2) {
       // Validate name lengths before accepting
@@ -321,7 +363,7 @@ export default function Home() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       // Only submit if there's input or we're on the random count screen
-      if (inputValue.trim() !== "" || showRandomCountInput) {
+      if (localInputValue.trim() !== "" || showRandomCountInput) {
         handleSubmitNames();
       }
     }
@@ -456,8 +498,8 @@ export default function Home() {
                     spellCheck={false}
                   />
                   <textarea
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
+                    value={localInputValue}
+                    onChange={(e) => handleInputChange(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="example: tom, jerry, bart, cindy..."
                     className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
@@ -494,29 +536,34 @@ export default function Home() {
                   <div className="flex gap-3">
                     <button
                       onClick={() => {
-                        if (inputValue.trim() !== "") {
-                          // Clear input and team name
+                        if (localInputValue.trim() !== "") {
+                          // Clear both local and debounced input states
+                          setLocalInputValue("");
                           setInputValue("");
                           setTeamName("");
+                          // Clear debounce timer
+                          if (inputDebounceRef.current) {
+                            clearTimeout(inputDebounceRef.current);
+                          }
                         } else {
                           // Show random count input
                           setShowRandomCountInput(true);
                         }
                       }}
                       className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-colors cursor-pointer ${
-                        inputValue.trim() !== ""
+                        localInputValue.trim() !== ""
                           ? "bg-blue-500 text-white hover:bg-blue-600"
                           : "bg-green-500 text-white hover:bg-green-600"
                       }`}
                       style={{ touchAction: "manipulation" }}
                     >
-                      {inputValue.trim() !== "" ? "Clear" : "Random"}
+                      {localInputValue.trim() !== "" ? "Clear" : "Random"}
                     </button>
                     <button
                       onClick={handleSubmitNames}
-                      disabled={inputValue.trim() === ""}
+                      disabled={localInputValue.trim() === ""}
                       className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-colors ${
-                        inputValue.trim() === ""
+                        localInputValue.trim() === ""
                           ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                           : "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
                       }`}
@@ -714,6 +761,7 @@ export default function Home() {
                 // Only clear inputValue if we weren't using custom names
                 if (!isUsingCustomNames) {
                   setInputValue("");
+                  setLocalInputValue("");
                 }
                 setTeamName("");
                 setShowRandomCountInput(false);

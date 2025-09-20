@@ -42,56 +42,17 @@ const normalizeAngleDifference = (angleDiff: number): number => {
 };
 
 /** ========= TEXT UTILITIES ========= */
-const truncateText = (text: string, maxLength: number): string => {
+
+const getSimpleFontSize = (segmentCount: number): number => {
+  if (segmentCount <= 10) return 16;
+  if (segmentCount <= 20) return 14;
+  if (segmentCount <= 30) return 12;
+  return 10;
+};
+
+const simpleTextTruncate = (text: string, maxLength: number): string => {
   if (text.length <= maxLength) return text;
-
-  // Try to break at word boundaries
-  const truncated = text.slice(0, maxLength - 3);
-  const lastSpaceIndex = truncated.lastIndexOf(' ');
-
-  if (lastSpaceIndex > maxLength * 0.6) {
-    // Break at word boundary if it's not too early
-    return truncated.slice(0, lastSpaceIndex) + '...';
-  }
-
-  // Break at character boundary
-  return truncated + '...';
-};
-
-const measureTextWidth = (ctx: CanvasRenderingContext2D, text: string, fontSize: number): number => {
-  ctx.save();
-  ctx.font = `bold ${fontSize}px Arial`;
-  const metrics = ctx.measureText(text);
-  ctx.restore();
-  return metrics.width;
-};
-
-const calculateOptimalFontSize = (
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number,
-  minSize: number = 6,
-  maxSize: number = 16
-): number => {
-  let fontSize = maxSize;
-
-  while (fontSize >= minSize) {
-    const textWidth = measureTextWidth(ctx, text, fontSize);
-    if (textWidth <= maxWidth) {
-      return fontSize;
-    }
-    fontSize -= 0.5;
-  }
-
-  return minSize;
-};
-
-const getMaxTextWidth = (radius: number, sliceAngle: number): number => {
-  // Calculate maximum text width that fits within the segment
-  // Use 70% of the radius and consider the angular constraints
-  const maxRadialWidth = radius * 0.7;
-  const maxAngularWidth = radius * sliceAngle * 0.8; // Arc length constraint
-  return Math.min(maxRadialWidth, maxAngularWidth, radius - 30); // 30px padding from edge
+  return text.slice(0, maxLength - 3) + '...';
 };
 
 interface SpinningWheelProps {
@@ -138,19 +99,32 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [lastDragTime, setLastDragTime] = useState(0);
   const momentumAnimationRef = useRef<number | null>(null);
 
-  // Offscreen canvas for pre-rendering
-  const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // RAF throttling for drag handlers
   const dragUpdateRef = useRef<number | null>(null);
   const pendingDragUpdate = useRef<{ clientX: number; clientY: number } | null>(null);
 
-  /** ========= AUDIO (unchanged) ========= */
+
+  // Canvas optimization caches
+  const pointerGradientCache = useRef<CanvasGradient | null>(null);
+  const lastCanvasSize = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+
+  // Segment gradient caches for performance
+  const segmentGradientsCache = useRef<Map<string, CanvasGradient>>(new Map());
+  const lastWheelConfig = useRef<string>("");
+
+  // Performance management
+  const [performanceMode, setPerformanceMode] = useState<'optimal' | 'balanced' | 'performance'>('optimal');
+
+  /** ========= AUDIO (optimized for async) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
   const clickBufferRef = useRef<AudioBuffer | null>(null);
   const tadaBufferRef = useRef<AudioBuffer | null>(null);
+  const audioInitPromiseRef = useRef<Promise<void> | null>(null);
+  const isAudioInitializingRef = useRef<boolean>(false);
 
-  const ensureAudio = useCallback(() => {
+  // Create audio context only (fast operation)
+  const getAudioContext = useCallback(() => {
     if (typeof window === "undefined") return null;
 
     try {
@@ -161,78 +135,156 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             .webkitAudioContext;
         audioCtxRef.current = new Ctx();
       }
-
-      if (!clickBufferRef.current && audioCtxRef.current) {
-        const ctx = audioCtxRef.current;
-        const duration = 0.008,
-          sr = ctx.sampleRate;
-        const frames = Math.max(1, Math.floor(duration * sr));
-        const buffer = ctx.createBuffer(1, frames, sr);
-        const data = buffer.getChannelData(0);
-        const freq = 2000;
-        for (let i = 0; i < frames; i++) {
-          const t = i / sr;
-          const env = Math.exp(-t * 150);
-          data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.3;
-        }
-        clickBufferRef.current = buffer;
-      }
-
-      if (!tadaBufferRef.current && audioCtxRef.current) {
-        const ctx = audioCtxRef.current;
-        const duration = 0.8,
-          sr = ctx.sampleRate;
-        const frames = Math.max(1, Math.floor(duration * sr));
-        const tadaBuffer = ctx.createBuffer(1, frames, sr);
-        const tadaData = tadaBuffer.getChannelData(0);
-        const frequencies = [261.63, 329.63, 392.0];
-        for (let i = 0; i < frames; i++) {
-          const t = i / sr;
-          const p = t / duration;
-          const env = p < 0.1 ? p / 0.1 : p < 0.6 ? 1 : (1 - p) / 0.4;
-          let sample = 0;
-          frequencies.forEach((f, idx) => {
-            const ns = idx * 0.15,
-              ne = ns + 0.4;
-            if (t >= ns && t <= ne) {
-              const np = (t - ns) / (ne - ns);
-              const nenv = Math.sin(Math.PI * np);
-              sample += Math.sin(2 * Math.PI * f * t) * nenv * 0.3;
-            }
-          });
-          tadaData[i] = sample * env * 0.4;
-        }
-        tadaBufferRef.current = tadaBuffer;
-      }
       return audioCtxRef.current;
     } catch (error) {
-      console.warn("Audio initialization failed:", error);
+      console.warn("Audio context creation failed:", error);
       return null;
     }
   }, []);
 
-  const playTickSound = (v = 0.1) => {
-    const ctx = ensureAudio();
-    if (!ctx || !clickBufferRef.current) return;
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
-    const src = ctx.createBufferSource();
-    src.buffer = clickBufferRef.current;
-    const gain = ctx.createGain();
-    gain.gain.value = Math.max(0.01, Math.min(0.15, v));
-    src.connect(gain).connect(ctx.destination);
-    src.start();
-  };
-  const playTadaSound = (v = 0.3) => {
-    const ctx = ensureAudio();
-    if (!ctx || !tadaBufferRef.current) return;
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
-    const src = ctx.createBufferSource();
-    src.buffer = tadaBufferRef.current;
-    const gain = ctx.createGain();
-    gain.gain.value = Math.max(0.1, Math.min(0.5, v));
-    src.connect(gain).connect(ctx.destination);
-    src.start();
-  };
+  // Async audio buffer creation to avoid blocking main thread
+  const createAudioBuffersAsync = useCallback(async (): Promise<void> => {
+    if (isAudioInitializingRef.current || typeof window === "undefined") return;
+
+    isAudioInitializingRef.current = true;
+
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      // Create click buffer asynchronously
+      if (!clickBufferRef.current) {
+        await new Promise<void>(resolve => {
+          setTimeout(() => {
+            const duration = 0.008;
+            const sr = ctx.sampleRate;
+            const frames = Math.max(1, Math.floor(duration * sr));
+            const buffer = ctx.createBuffer(1, frames, sr);
+            const data = buffer.getChannelData(0);
+            const freq = 2000;
+
+            for (let i = 0; i < frames; i++) {
+              const t = i / sr;
+              const env = Math.exp(-t * 150);
+              data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.3;
+            }
+
+            clickBufferRef.current = buffer;
+            resolve();
+          }, 0);
+        });
+      }
+
+      // Create tada buffer asynchronously in chunks
+      if (!tadaBufferRef.current) {
+        await new Promise<void>(resolve => {
+          setTimeout(() => {
+            const duration = 0.8;
+            const sr = ctx.sampleRate;
+            const frames = Math.max(1, Math.floor(duration * sr));
+            const tadaBuffer = ctx.createBuffer(1, frames, sr);
+            const tadaData = tadaBuffer.getChannelData(0);
+            const frequencies = [261.63, 329.63, 392.0];
+
+            // Process in chunks to avoid blocking
+            const chunkSize = Math.ceil(frames / 4);
+            let processedFrames = 0;
+
+            const processChunk = () => {
+              const endFrame = Math.min(processedFrames + chunkSize, frames);
+
+              for (let i = processedFrames; i < endFrame; i++) {
+                const t = i / sr;
+                const p = t / duration;
+                const env = p < 0.1 ? p / 0.1 : p < 0.6 ? 1 : (1 - p) / 0.4;
+                let sample = 0;
+
+                frequencies.forEach((f, idx) => {
+                  const ns = idx * 0.15;
+                  const ne = ns + 0.4;
+                  if (t >= ns && t <= ne) {
+                    const np = (t - ns) / (ne - ns);
+                    const nenv = Math.sin(Math.PI * np);
+                    sample += Math.sin(2 * Math.PI * f * t) * nenv * 0.3;
+                  }
+                });
+
+                tadaData[i] = sample * env * 0.4;
+              }
+
+              processedFrames = endFrame;
+
+              if (processedFrames < frames) {
+                setTimeout(processChunk, 0); // Yield to main thread
+              } else {
+                tadaBufferRef.current = tadaBuffer;
+                resolve();
+              }
+            };
+
+            processChunk();
+          }, 0);
+        });
+      }
+    } catch (error) {
+      console.warn("Audio buffer creation failed:", error);
+    } finally {
+      isAudioInitializingRef.current = false;
+    }
+  }, [getAudioContext]);
+
+  // Ensure audio with async initialization
+  const ensureAudio = useCallback(async (): Promise<AudioContext | null> => {
+    const ctx = getAudioContext();
+    if (!ctx) return null;
+
+    // Start async buffer creation if not already done
+    if (!audioInitPromiseRef.current && !clickBufferRef.current && !tadaBufferRef.current) {
+      audioInitPromiseRef.current = createAudioBuffersAsync();
+    }
+
+    return ctx;
+  }, [getAudioContext, createAudioBuffersAsync]);
+
+  const playTickSound = useCallback(async (v = 0.1) => {
+    try {
+      const ctx = await ensureAudio();
+      if (!ctx || !clickBufferRef.current) return;
+
+      if (ctx.state === "suspended") {
+        await ctx.resume().catch(() => {});
+      }
+
+      const src = ctx.createBufferSource();
+      src.buffer = clickBufferRef.current;
+      const gain = ctx.createGain();
+      gain.gain.value = Math.max(0.01, Math.min(0.15, v));
+      src.connect(gain).connect(ctx.destination);
+      src.start();
+    } catch {
+      // Silently fail for audio errors
+    }
+  }, [ensureAudio]);
+
+  const playTadaSound = useCallback(async (v = 0.3) => {
+    try {
+      const ctx = await ensureAudio();
+      if (!ctx || !tadaBufferRef.current) return;
+
+      if (ctx.state === "suspended") {
+        await ctx.resume().catch(() => {});
+      }
+
+      const src = ctx.createBufferSource();
+      src.buffer = tadaBufferRef.current;
+      const gain = ctx.createGain();
+      gain.gain.value = Math.max(0.1, Math.min(0.5, v));
+      src.connect(gain).connect(ctx.destination);
+      src.start();
+    } catch {
+      // Silently fail for audio errors
+    }
+  }, [ensureAudio]);
 
   /** ========= Names + RESPIN placement ========= */
   const wheelNames = useMemo(() => {
@@ -272,86 +324,26 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       centerX,
       centerY,
       radius,
-      sliceAngle,
-      maxTextWidth: getMaxTextWidth(radius, sliceAngle),
-      baseFontSize: Math.max(8, Math.min(16, canvasCSSSize / Math.max(30, wheelNames.length * 0.6)))
+      sliceAngle
     };
   }, [canvasCSSSize, wheelNames.length]);
 
-  /** ========= Memoized text layout calculations ========= */
-  const textLayout = useMemo(() => {
-    if (!wheelGeometry || showBlank) return { uniformFontSize: 16, uniformDisplayTexts: [] };
+  /** ========= Simple text processing ========= */
+  const textInfo = useMemo(() => {
+    if (showBlank) return { fontSize: 16, displayTexts: [] };
 
-    const { maxTextWidth, baseFontSize } = wheelGeometry;
+    const fontSize = getSimpleFontSize(wheelNames.length);
 
-    // Find the longest name (excluding RESPIN) and calculate optimal size for it
-    const regularNames = wheelNames.filter(name => name !== "RESPIN" && name !== "");
-    if (regularNames.length === 0) {
-      return { uniformFontSize: baseFontSize, uniformDisplayTexts: wheelNames };
-    }
+    // Simple truncation based on segment count
+    const maxLength = wheelNames.length <= 10 ? 20 : wheelNames.length <= 20 ? 15 : 12;
 
-    // Test font sizes for all names and find the smallest size that fits all
-    let testFontSize = baseFontSize;
-    let bestFontSize = baseFontSize;
-    let bestDisplayTexts: string[] = [];
+    const displayTexts = wheelNames.map(name => {
+      if (name === "RESPIN" || name === "") return name;
+      return simpleTextTruncate(name, maxLength);
+    });
 
-    // Create a temporary canvas for text measurement
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-    if (!tempCtx) return { uniformFontSize: baseFontSize, uniformDisplayTexts: wheelNames };
-
-    while (testFontSize >= 6) {
-      let allFit = true;
-      const currentDisplayTexts: string[] = [];
-
-      for (const name of regularNames) {
-        let displayText = name;
-        const textWidth = measureTextWidth(tempCtx, displayText, testFontSize);
-
-        // If text doesn't fit, try truncating
-        if (textWidth > maxTextWidth) {
-          let maxChars = 15;
-          while (maxChars > 12) {
-            displayText = truncateText(name, maxChars);
-            const truncatedWidth = measureTextWidth(tempCtx, displayText, testFontSize);
-            if (truncatedWidth <= maxTextWidth) break;
-            maxChars -= 2;
-          }
-
-          // If still doesn't fit even after truncation, this font size won't work
-          if (measureTextWidth(tempCtx, displayText, testFontSize) > maxTextWidth) {
-            allFit = false;
-            break;
-          }
-        }
-        currentDisplayTexts.push(displayText);
-      }
-
-      if (allFit) {
-        bestFontSize = testFontSize;
-        // Create the full array including RESPIN entries
-        bestDisplayTexts = wheelNames.map(name => {
-          if (name === "RESPIN" || name === "") return name;
-          const index = regularNames.indexOf(name);
-          return index !== -1 ? currentDisplayTexts[index] : name;
-        });
-        break;
-      }
-
-      testFontSize -= 0.5;
-    }
-
-    // Fallback if no size worked
-    if (testFontSize < 6) {
-      bestFontSize = 6;
-      bestDisplayTexts = wheelNames.map(name => {
-        if (name === "RESPIN" || name === "") return name;
-        return truncateText(name, 14); // Aggressive truncation as fallback
-      });
-    }
-
-    return { uniformFontSize: bestFontSize, uniformDisplayTexts: bestDisplayTexts };
-  }, [wheelGeometry, wheelNames, showBlank]);
+    return { fontSize, displayTexts };
+  }, [wheelNames, showBlank]);
 
   /** ========= Fairness text ========= */
   useEffect(() => {
@@ -507,8 +499,28 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         cancelAnimationFrame(momentumAnimationRef.current);
         momentumAnimationRef.current = null;
       }
+
+      // Clear canvas optimization caches
+      pointerGradientCache.current = null;
+      lastCanvasSize.current = { width: 0, height: 0 };
+      segmentGradientsCache.current.clear();
     };
   }, []);
+
+  /** ========= Async Audio Initialization ========= */
+  useEffect(() => {
+    // Start audio buffer creation early in background
+    if (typeof window !== 'undefined') {
+      // Small delay to let other initialization complete first
+      const timer = setTimeout(() => {
+        ensureAudio().catch(() => {
+          // Silently handle audio initialization failures
+        });
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [ensureAudio]);
 
   /** ========= iOS 16 Detection ========= */
   useEffect(() => {
@@ -784,33 +796,88 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     []
   );
 
-  // Pre-render wheel to offscreen canvas for performance
-  const preRenderWheel = useCallback(() => {
-    if (!wheelGeometry) return null;
+  // Cached gradient creation for performance
+  const getCachedGradient = useCallback((
+    ctx: CanvasRenderingContext2D,
+    type: string,
+    segmentIndex: number,
+    centerX: number,
+    centerY: number,
+    radius: number,
+    midAngle: number,
+    color?: string
+  ): CanvasGradient => {
+    const cacheKey = `${type}-${segmentIndex}-${centerX}-${centerY}-${radius}-${color || ''}`;
+    const cache = segmentGradientsCache.current;
 
-    const dpr = typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio || 1) : 1; // Cap DPR at 2
-    const css = canvasCSSSize;
-
-    // Create or reuse offscreen canvas
-    if (!offscreenCanvasRef.current) {
-      offscreenCanvasRef.current = document.createElement('canvas');
+    if (cache.has(cacheKey)) {
+      return cache.get(cacheKey)!;
     }
 
-    const offscreenCanvas = offscreenCanvasRef.current;
-    offscreenCanvas.width = Math.floor(css * dpr);
-    offscreenCanvas.height = Math.floor(css * dpr);
+    let gradient: CanvasGradient;
 
-    const ctx = offscreenCanvas.getContext("2d");
-    if (!ctx) return null;
+    if (type === 'blank') {
+      gradient = ctx.createRadialGradient(
+        centerX + Math.cos(midAngle) * radius * 0.5,
+        centerY + Math.sin(midAngle) * radius * 0.5,
+        0,
+        centerX,
+        centerY,
+        radius
+      );
+      const cleanColor = color!.slice(0, 7);
+      gradient.addColorStop(0, cleanColor + "33");
+      gradient.addColorStop(0.85, cleanColor + "22");
+      gradient.addColorStop(1, cleanColor + "11");
+    } else if (type === 'respin') {
+      gradient = ctx.createRadialGradient(
+        centerX + Math.cos(midAngle) * radius * 0.5,
+        centerY + Math.sin(midAngle) * radius * 0.5,
+        0,
+        centerX,
+        centerY,
+        radius
+      );
+      gradient.addColorStop(0, "#2a2a2a");
+      gradient.addColorStop(0.7, "#0f0f0f");
+      gradient.addColorStop(1, "#000000");
+    } else { // regular segment
+      gradient = ctx.createRadialGradient(
+        centerX + Math.cos(midAngle) * radius * 0.5,
+        centerY + Math.sin(midAngle) * radius * 0.5,
+        0,
+        centerX,
+        centerY,
+        radius
+      );
+      const cleanColor = color!.slice(0, 7);
+      gradient.addColorStop(0, cleanColor);
+      gradient.addColorStop(0.85, cleanColor + "dd");
+      gradient.addColorStop(1, cleanColor + "99");
+    }
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cache.set(cacheKey, gradient);
+    return gradient;
+  }, []);
+
+  // Clear gradient cache when wheel configuration changes
+  const clearGradientCache = useCallback(() => {
+    segmentGradientsCache.current.clear();
+  }, []);
+
+  // Draw wheel segments with performance-aware rendering
+  const drawWheelSegments = useCallback((ctx: CanvasRenderingContext2D) => {
+    if (!wheelGeometry) return;
 
     const { centerX, centerY, radius, sliceAngle } = wheelGeometry;
-    const { uniformFontSize, uniformDisplayTexts } = textLayout;
+    const { fontSize, displayTexts } = textInfo;
 
-    ctx.clearRect(0, 0, css, css);
+    // Performance optimizations based on segment count
+    const useSimplifiedGradients = performanceMode === 'performance';
+    const skipInnerGlow = performanceMode === 'performance';
+    const reducedShadows = performanceMode !== 'optimal';
 
-    // Draw wheel segments (same logic as before, but without rotation)
+    // Draw wheel segments
     wheelNames.forEach((name, i) => {
       const start = i * sliceAngle;
       const end = (i + 1) * sliceAngle;
@@ -822,22 +889,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       ctx.closePath();
 
       if (showBlank) {
-        // Simple gradient for blank segments
-        const g = ctx.createRadialGradient(
-          centerX + Math.cos(midAngle) * radius * 0.5,
-          centerY + Math.sin(midAngle) * radius * 0.5,
-          0,
-          centerX,
-          centerY,
-          radius
-        );
-        const baseColor = colors[i % colors.length];
-        const cleanColor = baseColor.slice(0, 7);
-        // More muted colors for blank state
-        g.addColorStop(0, cleanColor + "33");
-        g.addColorStop(0.85, cleanColor + "22");
-        g.addColorStop(1, cleanColor + "11");
-        ctx.fillStyle = g;
+        // Use simplified or cached gradient for blank segments
+        if (useSimplifiedGradients) {
+          const baseColor = colors[i % colors.length];
+          const cleanColor = baseColor.slice(0, 7);
+          ctx.fillStyle = cleanColor + "33";
+        } else {
+          const baseColor = colors[i % colors.length];
+          const g = getCachedGradient(ctx, 'blank', i, centerX, centerY, radius, midAngle, baseColor);
+          ctx.fillStyle = g;
+        }
         ctx.fill();
 
         // Lighter border for blank state
@@ -845,19 +906,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         ctx.lineWidth = 1;
         ctx.stroke();
       } else if (name === "RESPIN") {
-        // Metallic black gradient for RESPIN
-        const g = ctx.createRadialGradient(
-          centerX + Math.cos(midAngle) * radius * 0.5,
-          centerY + Math.sin(midAngle) * radius * 0.5,
-          0,
-          centerX,
-          centerY,
-          radius
-        );
-        g.addColorStop(0, "#2a2a2a");
-        g.addColorStop(0.7, "#0f0f0f");
-        g.addColorStop(1, "#000000");
-        ctx.fillStyle = g;
+        // Use simplified or cached gradient for RESPIN
+        if (useSimplifiedGradients) {
+          ctx.fillStyle = "#1a1a1a";
+        } else {
+          const g = getCachedGradient(ctx, 'respin', i, centerX, centerY, radius, midAngle);
+          ctx.fillStyle = g;
+        }
         ctx.fill();
 
         // Standard white border to match other segments
@@ -880,22 +935,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
         ctx.restore();
       } else {
-        // Gradient fill for regular segments
-        const g = ctx.createRadialGradient(
-          centerX + Math.cos(midAngle) * radius * 0.5,
-          centerY + Math.sin(midAngle) * radius * 0.5,
-          0,
-          centerX,
-          centerY,
-          radius
-        );
-        const baseColor = colors[i % colors.length];
-        // Remove any existing alpha channel from the color
-        const cleanColor = baseColor.slice(0, 7);
-        g.addColorStop(0, cleanColor);
-        g.addColorStop(0.85, cleanColor + "dd");
-        g.addColorStop(1, cleanColor + "99");
-        ctx.fillStyle = g;
+        // Use simplified or cached gradient for regular segments
+        if (useSimplifiedGradients) {
+          const baseColor = colors[i % colors.length];
+          const cleanColor = baseColor.slice(0, 7);
+          ctx.fillStyle = cleanColor;
+        } else {
+          const baseColor = colors[i % colors.length];
+          const g = getCachedGradient(ctx, 'regular', i, centerX, centerY, radius, midAngle, baseColor);
+          ctx.fillStyle = g;
+        }
         ctx.fill();
 
         // White border with shadow
@@ -903,13 +952,15 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Inner glow (optimized - use existing clipped path)
-        ctx.save();
-        ctx.clip();
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-        ctx.lineWidth = 4;
-        ctx.stroke();
-        ctx.restore();
+        // Inner glow (skip in performance mode)
+        if (!skipInnerGlow) {
+          ctx.save();
+          ctx.clip();
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+          ctx.lineWidth = 4;
+          ctx.stroke();
+          ctx.restore();
+        }
       }
 
       // Labels (skip for blank segments)
@@ -921,39 +972,42 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
         if (name === "RESPIN") {
           const text = "FREE SPIN";
-          // Use separate font size calculation for RESPIN to maintain its distinct appearance
-          const maxWidth = getMaxTextWidth(radius, sliceAngle);
-          const baseFontSize = Math.max(6, Math.min(14, css / Math.max(35, wheelNames.length * 1.2)));
-          const fs = calculateOptimalFontSize(ctx, text, maxWidth, 6, baseFontSize);
+          const fs = Math.max(8, fontSize - 2); // Slightly smaller than regular text
 
           ctx.font = `bold ${fs}px Arial`;
           ctx.strokeStyle = "#000";
           ctx.lineWidth = Math.max(1, fs / 8);
-          const paddingFromEdge = 15; // Consistent with regular text
+          const paddingFromEdge = 15;
           ctx.strokeText(text, radius - paddingFromEdge, fs / 3);
           ctx.fillStyle = "#ffff00";
           ctx.fillText(text, radius - paddingFromEdge, fs / 3);
         } else {
-          // Use pre-calculated uniform font size and display text
-          const displayText = uniformDisplayTexts[i] || name;
-          const fs = uniformFontSize;
+          // Use simple pre-calculated font size and display text
+          const displayText = displayTexts[i] || name;
+          const fs = fontSize;
 
           ctx.fillStyle = "#fff";
           ctx.font = `bold ${fs}px Arial`;
-          ctx.shadowColor = "rgba(0,0,0,0.7)";
-          ctx.shadowBlur = Math.max(2, fs / 4);
-          ctx.shadowOffsetX = 1;
-          ctx.shadowOffsetY = 1;
+
+          // Apply shadows only in optimal mode for performance
+          if (!reducedShadows) {
+            ctx.shadowColor = "rgba(0,0,0,0.7)";
+            ctx.shadowBlur = Math.max(2, fs / 4);
+            ctx.shadowOffsetX = 1;
+            ctx.shadowOffsetY = 1;
+          }
 
           // Position text consistently from edge, regardless of length
           const paddingFromEdge = 15; // Consistent padding from wheel edge
           ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
 
           // Reset shadow properties to prevent context pollution
-          ctx.shadowColor = "transparent";
-          ctx.shadowBlur = 0;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 0;
+          if (!reducedShadows) {
+            ctx.shadowColor = "transparent";
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+          }
         }
         ctx.restore();
       }
@@ -980,9 +1034,31 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
     ctx.lineWidth = 1;
     ctx.stroke();
+  }, [wheelGeometry, textInfo, wheelNames, colors, showBlank, getCachedGradient, performanceMode]);
 
-    return offscreenCanvas;
-  }, [wheelGeometry, textLayout, canvasCSSSize, wheelNames, colors, showBlank]);
+  /** ========= Performance Mode Detection ========= */
+  useEffect(() => {
+    const segmentCount = wheelNames.length;
+
+    // Determine performance mode based on segment count
+    if (segmentCount <= 8) {
+      setPerformanceMode('optimal'); // Full quality rendering
+    } else if (segmentCount <= 15) {
+      setPerformanceMode('balanced'); // Cached gradients, full features
+    } else {
+      setPerformanceMode('performance'); // Simplified rendering for high counts
+    }
+  }, [wheelNames.length]);
+
+  /** ========= Gradient Cache Management ========= */
+  useEffect(() => {
+    // Clear gradient cache when wheel configuration changes
+    const currentConfig = `${wheelNames.join('-')}-${canvasCSSSize}-${colors.join('-')}-${showBlank}`;
+    if (lastWheelConfig.current !== currentConfig) {
+      clearGradientCache();
+      lastWheelConfig.current = currentConfig;
+    }
+  }, [wheelNames, canvasCSSSize, colors, showBlank, clearGradientCache]);
 
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
@@ -991,66 +1067,90 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     const dpr = typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio || 1) : 1; // Cap DPR at 2
     const css = canvasCSSSize;
 
-    canvas.style.width = `${css}px`;
-    canvas.style.height = `${css}px`;
-    canvas.width = Math.floor(css * dpr);
-    canvas.height = Math.floor(css * dpr);
+    // Optimize canvas sizing - only update if changed
+    const currentWidth = Math.floor(css * dpr);
+    const currentHeight = Math.floor(css * dpr);
+    const sizeChanged = (
+      canvas.width !== currentWidth ||
+      canvas.height !== currentHeight ||
+      lastCanvasSize.current.width !== currentWidth ||
+      lastCanvasSize.current.height !== currentHeight
+    );
+
+    if (sizeChanged) {
+      canvas.style.width = `${css}px`;
+      canvas.style.height = `${css}px`;
+      canvas.width = currentWidth;
+      canvas.height = currentHeight;
+      lastCanvasSize.current = { width: currentWidth, height: currentHeight };
+      // Clear gradient cache when canvas size changes
+      pointerGradientCache.current = null;
+    }
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    // Set transform efficiently
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const { centerX, centerY, radius } = wheelGeometry;
 
+    // Clear with optimized method
     ctx.clearRect(0, 0, css, css);
 
-    // Use pre-rendered wheel for performance
-    const preRenderedWheel = preRenderWheel();
-    if (preRenderedWheel) {
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.rotate(rotation);
-      ctx.translate(-centerX, -centerY);
-      ctx.drawImage(preRenderedWheel, 0, 0, css, css);
-      ctx.restore();
-    }
-
-    // Draw pointer (always drawn on top, regardless of rendering method)
+    // Draw wheel segments directly with rotation applied
     ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation);
+    ctx.translate(-centerX, -centerY);
+    drawWheelSegments(ctx);
+    ctx.restore();
 
-    // Outer glow effect (respect reduced motion)
+    // Draw pointer with minimal state changes
+    const pointerX = centerX + radius;
+    const pointerOffsetX = 30;
+    const pointerOffsetY = 15;
+
+    // Create path without save/restore for better performance
+    ctx.beginPath();
+    ctx.moveTo(pointerX - 5, centerY);
+    ctx.lineTo(pointerX + pointerOffsetX, centerY - pointerOffsetY);
+    ctx.lineTo(pointerX + 25, centerY);
+    ctx.lineTo(pointerX + pointerOffsetX, centerY + pointerOffsetY);
+    ctx.closePath();
+
+    // Batch style operations
     if (!prefersReducedMotion) {
       ctx.shadowColor = "rgba(255, 0, 0, 0.6)";
       ctx.shadowBlur = 10;
     }
 
-    // Modern arrow pointer
-    ctx.beginPath();
-    ctx.moveTo(centerX + radius - 5, centerY);
-    ctx.lineTo(centerX + radius + 30, centerY - 15);
-    ctx.lineTo(centerX + radius + 25, centerY);
-    ctx.lineTo(centerX + radius + 30, centerY + 15);
-    ctx.closePath();
+    // Cache pointer gradient for better performance
+    if (!pointerGradientCache.current || sizeChanged) {
+      const pointerGradient = ctx.createLinearGradient(
+        pointerX - 5, centerY,
+        pointerX + pointerOffsetX, centerY
+      );
+      pointerGradient.addColorStop(0, "#ff3333");
+      pointerGradient.addColorStop(0.5, "#ff0000");
+      pointerGradient.addColorStop(1, "#cc0000");
+      pointerGradientCache.current = pointerGradient;
+    }
 
-    // Gradient fill
-    const pointerGradient = ctx.createLinearGradient(
-      centerX + radius - 5, centerY,
-      centerX + radius + 30, centerY
-    );
-    pointerGradient.addColorStop(0, "#ff3333");
-    pointerGradient.addColorStop(0.5, "#ff0000");
-    pointerGradient.addColorStop(1, "#cc0000");
-
-    ctx.fillStyle = pointerGradient;
+    ctx.fillStyle = pointerGradientCache.current;
     ctx.fill();
 
-    // Single stroke operation: white outline
+    // Reset shadow efficiently
+    if (!prefersReducedMotion) {
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+    }
+
+    // Single stroke operation
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
     ctx.stroke();
-
-    ctx.restore();
-  }, [rotation, canvasCSSSize, preRenderWheel, prefersReducedMotion, wheelGeometry]);
+  }, [rotation, canvasCSSSize, drawWheelSegments, prefersReducedMotion, wheelGeometry]);
 
   useEffect(() => {
     drawWheel();
@@ -1172,7 +1272,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       ) {
         const speed = 1 - easeOut;
         const vol = Math.max(0.02, Math.min(0.1, 0.02 + (1 - speed) * 0.08));
-        playTickSound(vol);
+        playTickSound(vol).catch(() => {}); // Fire and forget async audio
         lastSegment = currentSegment;
         lastSoundTime = now;
       }
@@ -1216,7 +1316,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           setWinnerRhyme(rhyme);
           setShowWinnerModal(true);
           triggerConfetti();
-          playTadaSound();
+          playTadaSound().catch(() => {}); // Fire and forget async audio
         }
       }
     };
