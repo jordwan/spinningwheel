@@ -197,8 +197,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       let lastTime = 0;
 
       const animate = (currentTime: number) => {
-        // Throttle to ~120fps (8.33ms) for high refresh displays
-        if (currentTime - lastTime >= 8.33) {
+        // Throttle to 60fps (16.67ms) for smooth animation with lower CPU usage
+        if (currentTime - lastTime >= 16.67) {
           const t = currentTime / 1000;
           setSpeedIndicator((Math.sin(t * 1.5) + 1) / 2);
           lastTime = currentTime;
@@ -611,11 +611,20 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     const startTime = Date.now();
     let lastRotation = rotation;
     let lastSoundTime = 0;
+    let lastFrameTime = 0;
     const segmentSize = (2 * Math.PI) / wheelNames.length;
     let accRotation = 0;
 
     const animate = () => {
       const now = Date.now();
+
+      // Throttle to 60fps (16.67ms) for wheel spinning
+      if (now - lastFrameTime < 16.67) {
+        requestAnimationFrame(animate);
+        return;
+      }
+      lastFrameTime = now;
+
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / spinDuration, 1);
       const easeOut = 1 - Math.pow(1 - progress, 4);
@@ -744,6 +753,25 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           maxWidth: "95vw",
         }}
       >
+        <button
+          onClick={spin}
+          disabled={isSpinning || showBlank}
+          className={`
+            px-[clamp(14px,2.2vw,22px)]
+            py-[clamp(9px,1.8vw,14px)]
+            text-[clamp(16px,1.8vw,18px)]
+            font-bold text-white rounded-lg shadow-lg transition-all
+            min-w-[clamp(120px,24vw,156px)]
+            ${
+              isSpinning || showBlank
+                ? "bg-green-500 opacity-50"
+                : "bg-green-500 hover:bg-green-600 hover:scale-[1.02] active:scale-95 cursor-pointer"
+            }
+          `}
+        >
+          {isSpinning ? "Spinning..." : "SPIN!"}
+        </button>
+
         {onReset && (
           <button
             onClick={() => {
@@ -769,25 +797,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             Reset
           </button>
         )}
-
-        <button
-          onClick={spin}
-          disabled={isSpinning || showBlank}
-          className={`
-            px-[clamp(14px,2.2vw,22px)]
-            py-[clamp(9px,1.8vw,14px)]
-            text-[clamp(16px,1.8vw,18px)]
-            font-bold text-white rounded-lg shadow-lg transition-all
-            min-w-[clamp(120px,24vw,156px)]
-            ${
-              isSpinning || showBlank
-                ? "bg-green-500 opacity-50"
-                : "bg-green-500 hover:bg-green-600 hover:scale-[1.02] active:scale-95 cursor-pointer"
-            }
-          `}
-        >
-          {isSpinning ? "Spinning..." : "SPIN!"}
-        </button>
       </div>
 
       {/* Winner Modal */}

@@ -179,7 +179,7 @@ export default function Home() {
                   <div className="flex gap-3">
                     <button
                       onClick={() => setShowRandomCountInput(true)}
-                      className="flex-1 px-6 py-3 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 transition-colors cursor-pointer"
+                      className="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
                     >
                       Random
                     </button>
@@ -189,7 +189,7 @@ export default function Home() {
                       className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-colors ${
                         inputValue.trim() === ""
                           ? "bg-gray-300 text-gray-500"
-                          : "bg-blue-500 text-white hover:bg-blue-600 cursor-pointer"
+                          : "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
                       }`}
                     >
                       Enter
@@ -198,7 +198,7 @@ export default function Home() {
                 ) : (
                   <button
                     onClick={handleSubmitNames}
-                    className="w-full px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
+                    className="w-full px-6 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
                   >
                     Enter
                   </button>
@@ -234,7 +234,7 @@ export default function Home() {
               </div>
               <button
                 onClick={() => setShowMinNamesWarning(false)}
-                className="w-full px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition-colors cursor-pointer"
+                className="w-full px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
               >
                 Got it
               </button>
