@@ -17,6 +17,8 @@ export default function Home() {
   const [longNameWarningText, setLongNameWarningText] = useState("");
   const [isUsingCustomNames, setIsUsingCustomNames] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [duplicateWarningText, setDuplicateWarningText] = useState("");
 
   // Hydration guard - ensures client-side rendering
   useEffect(() => {
@@ -34,8 +36,8 @@ export default function Home() {
     updateViewportHeight();
 
     // Update on resize (handles address bar show/hide on mobile)
-    window.addEventListener("resize", updateViewportHeight);
-    window.addEventListener("orientationchange", updateViewportHeight);
+    window.addEventListener("resize", updateViewportHeight, { passive: true });
+    window.addEventListener("orientationchange", updateViewportHeight, { passive: true });
 
     return () => {
       window.removeEventListener("resize", updateViewportHeight);
@@ -149,10 +151,10 @@ export default function Home() {
 
       // Add visualViewport events for modern Firefox
       if (hasVisualViewport && window.visualViewport) {
-        window.visualViewport.addEventListener("resize", handleViewportRestore);
+        window.visualViewport.addEventListener("resize", handleViewportRestore, { passive: true });
       }
 
-      // Traditional events as fallback
+      // Traditional events as fallback (focusin/focusout can't be passive as they might need preventDefault)
       events.forEach((event) => {
         window.addEventListener(event, handleViewportRestore);
       });
@@ -202,7 +204,7 @@ export default function Home() {
     const body = document.body;
     const html = document.documentElement;
     const anyModalOpen =
-      showNameInput || showMinNamesWarning || showLongNameWarning;
+      showNameInput || showMinNamesWarning || showLongNameWarning || showDuplicateWarning;
 
     if (anyModalOpen) {
       body.style.overflow = "hidden";
@@ -218,7 +220,7 @@ export default function Home() {
       body.style.width = "";
       body.style.height = "";
     }
-  }, [showNameInput, showMinNamesWarning, showLongNameWarning]);
+  }, [showNameInput, showMinNamesWarning, showLongNameWarning, showDuplicateWarning]);
 
   // Validate name lengths
   const validateNameLengths = (namesList: string[]): boolean => {
@@ -254,21 +256,47 @@ export default function Home() {
       return;
     }
 
-    // Parse names - try comma-separated first, then space-separated if no commas
+    // Enhanced name parsing with better trimming and deduplication
     let names: string[];
+
+    const enhancedTrim = (name: string): string => {
+      return name
+        .trim()
+        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+        .replace(/[^\w\s\-\.]/g, '') // Remove special characters except hyphens and dots
+        .substring(0, 20); // Cap length at 20 characters
+    };
+
     if (inputValue.includes(",")) {
       // Use comma-separated parsing
       names = inputValue
         .split(",")
-        .map((name) => name.trim())
+        .map(enhancedTrim)
         .filter((name) => name.length > 0);
     } else {
       // Use space-separated parsing
       names = inputValue
         .split(/\s+/)
-        .map((name) => name.trim())
+        .map(enhancedTrim)
         .filter((name) => name.length > 0);
     }
+
+    // Remove duplicates (case-insensitive) and track them
+    const uniqueNames = names.filter((name, index, arr) =>
+      arr.findIndex(n => n.toLowerCase() === name.toLowerCase()) === index
+    );
+
+    // Show warning if duplicates were removed
+    const duplicatesRemoved = names.length - uniqueNames.length;
+    if (duplicatesRemoved > 0) {
+      setDuplicateWarningText(
+        `${duplicatesRemoved} duplicate ${duplicatesRemoved === 1 ? 'name was' : 'names were'} removed.`
+      );
+      setShowDuplicateWarning(true);
+    }
+
+    // Use deduplicated names
+    names = uniqueNames;
 
     if (names.length >= 2) {
       // Validate name lengths before accepting
@@ -426,6 +454,7 @@ export default function Home() {
                     autoCorrect="off"
                     autoCapitalize="none"
                     spellCheck={false}
+                    autoFocus={!showRandomCountInput}
                   />
                   <textarea
                     value={inputValue}
@@ -450,6 +479,7 @@ export default function Home() {
                     onChange={(e) => setRandomNameCount(e.target.value)}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center text-lg bg-white cursor-pointer"
                     style={{ touchAction: "manipulation" }}
+                    autoFocus={showRandomCountInput}
                   >
                     {Array.from({ length: 100 }, (_, i) => i + 2).map((num) => (
                       <option key={num} value={num}>
@@ -544,6 +574,7 @@ export default function Home() {
                   onClick={() => setShowMinNamesWarning(false)}
                   className="w-full px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
                   style={{ touchAction: "manipulation" }}
+                  autoFocus
                 >
                   Got it
                 </button>
@@ -589,6 +620,53 @@ export default function Home() {
                   onClick={() => setShowLongNameWarning(false)}
                   className="w-full px-4 py-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
                   style={{ touchAction: "manipulation" }}
+                  autoFocus
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Duplicate Names Warning Modal */}
+        {showDuplicateWarning && (
+          <>
+            <div className="fixed inset-0 backdrop-blur-[2px] z-[59]" />
+            <div className="fixed inset-0 flex items-center justify-center z-[60] p-4 pointer-events-none">
+              <div
+                className="bg-white rounded-2xl p-6 max-w-sm w-full pointer-events-auto text-center relative"
+                style={{
+                  boxShadow:
+                    "0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)",
+                }}
+              >
+                <div className="mb-4">
+                  <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-3">
+                    <svg
+                      className="w-6 h-6 text-blue-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Duplicates Removed
+                  </h3>
+                  <p className="text-sm text-gray-600">{duplicateWarningText}</p>
+                </div>
+                <button
+                  onClick={() => setShowDuplicateWarning(false)}
+                  className="w-full px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
+                  style={{ touchAction: "manipulation" }}
+                  autoFocus
                 >
                   Got it
                 </button>

@@ -8,7 +8,6 @@ import React, {
   useMemo,
   useLayoutEffect,
 } from "react";
-import confetti from "canvas-confetti";
 
 /** ========= CRYPTO RNG (minimal + reliable) ========= */
 const cryptoRandom = (): number => {
@@ -128,6 +127,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [isIOS, setIsIOS] = useState(false);
   const [isFirefox, setIsFirefox] = useState(false);
   const [deviceCapability, setDeviceCapability] = useState<'high' | 'medium' | 'low'>('medium');
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [ariaAnnouncement, setAriaAnnouncement] = useState<string>("");
 
   // Drag interaction state
   const [isDragging, setIsDragging] = useState(false);
@@ -135,6 +136,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [dragVelocity, setDragVelocity] = useState(0);
   const [lastDragTime, setLastDragTime] = useState(0);
   const momentumAnimationRef = useRef<number | null>(null);
+
+  // Offscreen canvas for pre-rendering
+  const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // RAF throttling for drag handlers
+  const dragUpdateRef = useRef<number | null>(null);
+  const pendingDragUpdate = useRef<{ clientX: number; clientY: number } | null>(null);
 
   /** ========= AUDIO (unchanged) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -250,6 +258,100 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     return result;
   }, [names, includeFreeSpins, showBlank]);
 
+  /** ========= Memoized wheel geometry calculations ========= */
+  const wheelGeometry = useMemo(() => {
+    if (!canvasCSSSize || wheelNames.length === 0) return null;
+
+    const centerX = canvasCSSSize / 2;
+    const centerY = canvasCSSSize / 2;
+    const radius = Math.min(centerX, centerY) - 18;
+    const sliceAngle = (2 * Math.PI) / wheelNames.length;
+
+    return {
+      centerX,
+      centerY,
+      radius,
+      sliceAngle,
+      maxTextWidth: getMaxTextWidth(radius, sliceAngle),
+      baseFontSize: Math.max(8, Math.min(16, canvasCSSSize / Math.max(30, wheelNames.length * 0.6)))
+    };
+  }, [canvasCSSSize, wheelNames.length]);
+
+  /** ========= Memoized text layout calculations ========= */
+  const textLayout = useMemo(() => {
+    if (!wheelGeometry || showBlank) return { uniformFontSize: 16, uniformDisplayTexts: [] };
+
+    const { maxTextWidth, baseFontSize } = wheelGeometry;
+
+    // Find the longest name (excluding RESPIN) and calculate optimal size for it
+    const regularNames = wheelNames.filter(name => name !== "RESPIN" && name !== "");
+    if (regularNames.length === 0) {
+      return { uniformFontSize: baseFontSize, uniformDisplayTexts: wheelNames };
+    }
+
+    // Test font sizes for all names and find the smallest size that fits all
+    let testFontSize = baseFontSize;
+    let bestFontSize = baseFontSize;
+    let bestDisplayTexts: string[] = [];
+
+    // Create a temporary canvas for text measurement
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) return { uniformFontSize: baseFontSize, uniformDisplayTexts: wheelNames };
+
+    while (testFontSize >= 6) {
+      let allFit = true;
+      const currentDisplayTexts: string[] = [];
+
+      for (const name of regularNames) {
+        let displayText = name;
+        const textWidth = measureTextWidth(tempCtx, displayText, testFontSize);
+
+        // If text doesn't fit, try truncating
+        if (textWidth > maxTextWidth) {
+          let maxChars = 15;
+          while (maxChars > 12) {
+            displayText = truncateText(name, maxChars);
+            const truncatedWidth = measureTextWidth(tempCtx, displayText, testFontSize);
+            if (truncatedWidth <= maxTextWidth) break;
+            maxChars -= 2;
+          }
+
+          // If still doesn't fit even after truncation, this font size won't work
+          if (measureTextWidth(tempCtx, displayText, testFontSize) > maxTextWidth) {
+            allFit = false;
+            break;
+          }
+        }
+        currentDisplayTexts.push(displayText);
+      }
+
+      if (allFit) {
+        bestFontSize = testFontSize;
+        // Create the full array including RESPIN entries
+        bestDisplayTexts = wheelNames.map(name => {
+          if (name === "RESPIN" || name === "") return name;
+          const index = regularNames.indexOf(name);
+          return index !== -1 ? currentDisplayTexts[index] : name;
+        });
+        break;
+      }
+
+      testFontSize -= 0.5;
+    }
+
+    // Fallback if no size worked
+    if (testFontSize < 6) {
+      bestFontSize = 6;
+      bestDisplayTexts = wheelNames.map(name => {
+        if (name === "RESPIN" || name === "") return name;
+        return truncateText(name, 14); // Aggressive truncation as fallback
+      });
+    }
+
+    return { uniformFontSize: bestFontSize, uniformDisplayTexts: bestDisplayTexts };
+  }, [wheelGeometry, wheelNames, showBlank]);
+
   /** ========= Fairness text ========= */
   useEffect(() => {
     if (showBlank) {
@@ -360,8 +462,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     if (rootRef.current) ro.observe(rootRef.current);
 
     const onResize = () => recomputeSize();
-    window.addEventListener("resize", onResize);
-    window.addEventListener("orientationchange", onResize);
+    window.addEventListener("resize", onResize, { passive: true });
+    window.addEventListener("orientationchange", onResize, { passive: true });
 
     // Force recalculation after a brief delay to ensure layout is settled
     const timer = setTimeout(() => recomputeSize(), 100);
@@ -440,11 +542,37 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     const isFirefoxBrowser = detectFirefox();
     setIsFirefox(isFirefoxBrowser);
 
-    // Simplified device capability detection with SSR safety
+    // Enhanced device capability and motion preference detection with SSR safety
     if (typeof window !== 'undefined') {
       const lowMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
       const cores = navigator.hardwareConcurrency || 4;
+
+      setPrefersReducedMotion(!!lowMotion);
       setDeviceCapability(lowMotion ? 'low' : (cores >= 8 ? 'high' : 'medium'));
+
+      // Listen for changes to motion preferences
+      const motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const handleMotionChange = (e: MediaQueryListEvent) => {
+        setPrefersReducedMotion(e.matches);
+        if (e.matches) {
+          setDeviceCapability('low');
+        }
+      };
+
+      if (motionMediaQuery.addEventListener) {
+        motionMediaQuery.addEventListener('change', handleMotionChange);
+      } else {
+        // Fallback for older browsers
+        motionMediaQuery.addListener(handleMotionChange);
+      }
+
+      return () => {
+        if (motionMediaQuery.removeEventListener) {
+          motionMediaQuery.removeEventListener('change', handleMotionChange);
+        } else {
+          motionMediaQuery.removeListener(handleMotionChange);
+        }
+      };
     }
   }, []);
 
@@ -480,7 +608,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     }
   }, [canDrag]);
 
-  const updateDrag = useCallback((clientX: number, clientY: number) => {
+  // RAF-throttled drag update for better performance
+  const performDragUpdate = useCallback((clientX: number, clientY: number) => {
     if (!isDragging || !canvasRef.current || lastDragAngle === null) return;
 
     const canvas = canvasRef.current;
@@ -504,8 +633,32 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     setLastDragTime(currentTime);
   }, [isDragging, lastDragAngle, lastDragTime]);
 
+  const updateDrag = useCallback((clientX: number, clientY: number) => {
+    // Store the latest coordinates
+    pendingDragUpdate.current = { clientX, clientY };
+
+    // Only schedule a new RAF if one isn't already pending
+    if (dragUpdateRef.current === null) {
+      dragUpdateRef.current = requestAnimationFrame(() => {
+        if (pendingDragUpdate.current) {
+          const { clientX: x, clientY: y } = pendingDragUpdate.current;
+          performDragUpdate(x, y);
+          pendingDragUpdate.current = null;
+        }
+        dragUpdateRef.current = null;
+      });
+    }
+  }, [performDragUpdate]);
+
   const endDrag = useCallback(() => {
     if (!isDragging) return;
+
+    // Cancel any pending drag updates
+    if (dragUpdateRef.current !== null) {
+      cancelAnimationFrame(dragUpdateRef.current);
+      dragUpdateRef.current = null;
+    }
+    pendingDragUpdate.current = null;
 
     setIsDragging(false);
     setLastDragAngle(null);
@@ -622,100 +775,36 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     []
   );
 
-  const drawWheel = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Pre-render wheel to offscreen canvas for performance
+  const preRenderWheel = useCallback(() => {
+    if (!wheelGeometry) return null;
 
-    const dpr = typeof window !== 'undefined' ? Math.max(1, window.devicePixelRatio || 1) : 1;
+    const dpr = typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio || 1) : 1; // Cap DPR at 2
     const css = canvasCSSSize;
 
-    canvas.style.width = `${css}px`;
-    canvas.style.height = `${css}px`;
-    canvas.width = Math.floor(css * dpr);
-    canvas.height = Math.floor(css * dpr);
+    // Create or reuse offscreen canvas
+    if (!offscreenCanvasRef.current) {
+      offscreenCanvasRef.current = document.createElement('canvas');
+    }
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const offscreenCanvas = offscreenCanvasRef.current;
+    offscreenCanvas.width = Math.floor(css * dpr);
+    offscreenCanvas.height = Math.floor(css * dpr);
+
+    const ctx = offscreenCanvas.getContext("2d");
+    if (!ctx) return null;
+
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const centerX = css / 2;
-    const centerY = css / 2;
-    const radius = Math.min(centerX, centerY) - 18;
+    const { centerX, centerY, radius, sliceAngle } = wheelGeometry;
+    const { uniformFontSize, uniformDisplayTexts } = textLayout;
 
     ctx.clearRect(0, 0, css, css);
 
-    const sliceAngle = (2 * Math.PI) / wheelNames.length;
-
-    // Calculate uniform font size for all names based on the longest name
-    let uniformFontSize = 16; // Default max size
-    let uniformDisplayTexts: string[] = [];
-
-    if (!showBlank) {
-      const maxWidth = getMaxTextWidth(radius, sliceAngle);
-      const baseFontSize = Math.max(8, Math.min(16, css / Math.max(30, wheelNames.length * 0.6)));
-
-      // Find the longest name (excluding RESPIN) and calculate optimal size for it
-      const regularNames = wheelNames.filter(name => name !== "RESPIN" && name !== "");
-      if (regularNames.length > 0) {
-        // Test font sizes for all names and find the smallest size that fits all
-        let testFontSize = baseFontSize;
-        let allNamesDisplayTexts: string[] = [];
-
-        while (testFontSize >= 6) {
-          let allFit = true;
-          allNamesDisplayTexts = [];
-
-          for (const name of regularNames) {
-            let displayText = name;
-            const textWidth = measureTextWidth(ctx, displayText, testFontSize);
-
-            // If text doesn't fit, try truncating
-            if (textWidth > maxWidth) {
-              let maxChars = 15;
-              while (maxChars > 12) {
-                displayText = truncateText(name, maxChars);
-                const truncatedWidth = measureTextWidth(ctx, displayText, testFontSize);
-                if (truncatedWidth <= maxWidth) break;
-                maxChars -= 2;
-              }
-
-              // If still doesn't fit even after truncation, this font size won't work
-              if (measureTextWidth(ctx, displayText, testFontSize) > maxWidth) {
-                allFit = false;
-                break;
-              }
-            }
-            allNamesDisplayTexts.push(displayText);
-          }
-
-          if (allFit) {
-            uniformFontSize = testFontSize;
-            // Create the full array including RESPIN entries
-            uniformDisplayTexts = wheelNames.map(name => {
-              if (name === "RESPIN" || name === "") return name;
-              const index = regularNames.indexOf(name);
-              return index !== -1 ? allNamesDisplayTexts[index] : name;
-            });
-            break;
-          }
-
-          testFontSize -= 0.5;
-        }
-
-        // Fallback if no size worked
-        if (testFontSize < 6) {
-          uniformFontSize = 6;
-          uniformDisplayTexts = wheelNames.map(name => {
-            if (name === "RESPIN" || name === "") return name;
-            return truncateText(name, 14); // Aggressive truncation as fallback
-          });
-        }
-      }
-    }
-
+    // Draw wheel segments (same logic as before, but without rotation)
     wheelNames.forEach((name, i) => {
-      const start = i * sliceAngle + rotation;
-      const end = (i + 1) * sliceAngle + rotation;
+      const start = i * sliceAngle;
+      const end = (i + 1) * sliceAngle;
       const midAngle = start + sliceAngle / 2;
 
       ctx.beginPath();
@@ -883,12 +972,48 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Pointer with modern arrow design
+    return offscreenCanvas;
+  }, [wheelGeometry, textLayout, canvasCSSSize, wheelNames, colors, showBlank]);
+
+  const drawWheel = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !wheelGeometry) return;
+
+    const dpr = typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio || 1) : 1; // Cap DPR at 2
+    const css = canvasCSSSize;
+
+    canvas.style.width = `${css}px`;
+    canvas.style.height = `${css}px`;
+    canvas.width = Math.floor(css * dpr);
+    canvas.height = Math.floor(css * dpr);
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const { centerX, centerY, radius } = wheelGeometry;
+
+    ctx.clearRect(0, 0, css, css);
+
+    // Use pre-rendered wheel for performance
+    const preRenderedWheel = preRenderWheel();
+    if (preRenderedWheel) {
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(rotation);
+      ctx.translate(-centerX, -centerY);
+      ctx.drawImage(preRenderedWheel, 0, 0, css, css);
+      ctx.restore();
+    }
+
+    // Draw pointer (always drawn on top, regardless of rendering method)
     ctx.save();
 
-    // Outer glow effect
-    ctx.shadowColor = "rgba(255, 0, 0, 0.6)";
-    ctx.shadowBlur = 10;
+    // Outer glow effect (respect reduced motion)
+    if (!prefersReducedMotion) {
+      ctx.shadowColor = "rgba(255, 0, 0, 0.6)";
+      ctx.shadowBlur = 10;
+    }
 
     // Modern arrow pointer
     ctx.beginPath();
@@ -916,35 +1041,48 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     ctx.stroke();
 
     ctx.restore();
-  }, [rotation, canvasCSSSize, wheelNames, colors, showBlank]);
+  }, [rotation, canvasCSSSize, preRenderWheel, prefersReducedMotion, wheelGeometry]);
 
   useEffect(() => {
     drawWheel();
   }, [drawWheel]);
 
   /** ========= Confetti ========= */
-  const triggerConfetti = () => {
-    const baseCount = 200;
-    // Scale particle count based on device capability
-    let scaleFactor = 1.0;
-    if (deviceCapability === 'low') scaleFactor = 0.3;
-    else if (deviceCapability === 'medium') scaleFactor = 0.6;
-    else scaleFactor = 1.0; // high capability
+  const triggerConfetti = async () => {
+    // Skip confetti entirely if user prefers reduced motion
+    if (prefersReducedMotion) {
+      return;
+    }
 
-    const count = baseCount * scaleFactor;
+    try {
+      // Lazy-load canvas-confetti only when needed
+      const { default: confetti } = await import('canvas-confetti');
 
-    const defaults = {
-      origin: { y: 0.7 },
-      zIndex: 9999,
-      disableForReducedMotion: true // Respect accessibility settings
-    } as const;
-    const fire = (r: number, o: confetti.Options) =>
-      confetti({ ...defaults, ...o, particleCount: Math.floor(count * r) });
-    fire(0.25, { spread: 26, startVelocity: 55 });
-    fire(0.2, { spread: 60 });
-    fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
-    fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
-    fire(0.1, { spread: 120, startVelocity: 45 });
+      const baseCount = 200;
+      // Scale particle count based on device capability
+      let scaleFactor = 1.0;
+      if (deviceCapability === 'low') scaleFactor = 0.3;
+      else if (deviceCapability === 'medium') scaleFactor = 0.6;
+      else scaleFactor = 1.0; // high capability
+
+      const count = baseCount * scaleFactor;
+
+      const defaults = {
+        origin: { y: 0.7 },
+        zIndex: 9999,
+        disableForReducedMotion: true // Respect accessibility settings
+      } as const;
+      const fire = (r: number, o: Parameters<typeof confetti>[0]) =>
+        confetti({ ...defaults, ...o, particleCount: Math.floor(count * r) });
+      fire(0.25, { spread: 26, startVelocity: 55 });
+      fire(0.2, { spread: 60 });
+      fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+      fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+      fire(0.1, { spread: 120, startVelocity: 45 });
+    } catch (error) {
+      // Gracefully handle failed confetti load
+      console.warn('Failed to load confetti:', error);
+    }
   };
 
   /** ========= Spin logic ========= */
@@ -978,6 +1116,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     setShowWinnerModal(false);
     setShowFairnessPopup(false);
     setLockedSpeed(speedIndicator);
+
+    // Enhanced aria announcement for spin start
+    setAriaAnnouncement(`Spinning wheel with ${wheelNames.length} options at ${Math.round(speedIndicator * 100)}% power`);
 
     const spinStrength = speedIndicator;
     const baseRotations = 3 + spinStrength * 10;
@@ -1041,6 +1182,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         const winner = wheelNames[selectedIndex];
         setSelectedName(winner);
 
+        // Enhanced aria announcement for result
+        if (winner === "RESPIN") {
+          setAriaAnnouncement("Free spin! The wheel landed on a respin. You get another turn.");
+        } else {
+          setAriaAnnouncement(`Winner selected: ${winner}. The wheel has stopped spinning.`);
+        }
+
         // Save last winner (but not RESPIN)
         if (winner !== "RESPIN") {
           setLastWinner(winner);
@@ -1081,12 +1229,18 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       onKeyDown={(e) => {
         if ((e.key === " " || e.key === "Enter") && !isSpinning && !showBlank) {
           e.preventDefault();
+          setAriaAnnouncement("Activating spin with keyboard");
           spin();
+        }
+      }}
+      onFocus={() => {
+        if (!showBlank) {
+          setAriaAnnouncement(`Spinning wheel ready with ${wheelNames.length} options. Press Space or Enter to spin.`);
         }
       }}
     >
       <div aria-live="polite" className="sr-only">
-        {isSpinning ? "Wheel spinning" : selectedName ? `Winner: ${selectedName}` : ""}
+        {ariaAnnouncement}
       </div>
       {/* Spin Power (≈50% width on mobile, larger on bigger screens) */}
       <div
@@ -1126,10 +1280,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             height: canvasCSSSize,
             cursor: canDrag ? (isDragging ? 'grabbing' : 'grab') : 'default',
             touchAction: 'none', // Prevent touch scroll stealing drags
-            // Remove problematic iOS 16 properties
+            // Remove problematic iOS 16 properties and respect motion preferences
             ...(isIOS16 ? {} : {
               transform: 'translateZ(0)', // Hardware acceleration
-              willChange: 'transform',     // Hint browser for optimization
+              willChange: prefersReducedMotion ? 'auto' : 'transform', // Hint browser for optimization, but respect motion preferences
             }),
             // Firefox-specific optimizations
             ...(isFirefox ? {
