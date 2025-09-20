@@ -744,28 +744,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           maxWidth: "95vw",
         }}
       >
-        <button
-          onClick={spin}
-          disabled={isSpinning || showBlank}
-          className={`
-            px-[clamp(14px,2.2vw,22px)]
-            py-[clamp(9px,1.8vw,14px)]
-            text-[clamp(16px,1.8vw,18px)]
-            font-bold text-white rounded-lg shadow-lg transition-all
-            min-w-[clamp(120px,24vw,156px)]
-            ${
-              isSpinning || showBlank
-                ? "bg-green-500 opacity-50"
-                : "bg-green-500 hover:bg-green-600 hover:scale-[1.02] active:scale-95 cursor-pointer"
-            }
-          `}
-        >
-          {isSpinning ? "Spinning..." : "SPIN!"}
-        </button>
-
         {onReset && (
           <button
-            onClick={onReset}
+            onClick={() => {
+              setShowWinnerModal(false); // Close winner modal first
+              setWinnerRhyme("");
+              onReset();
+            }}
             disabled={isSpinning || showBlank}
             className={`
               px-[clamp(12px,2vw,18px)]
@@ -784,12 +769,36 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             Reset
           </button>
         )}
+
+        <button
+          onClick={spin}
+          disabled={isSpinning || showBlank}
+          className={`
+            px-[clamp(14px,2.2vw,22px)]
+            py-[clamp(9px,1.8vw,14px)]
+            text-[clamp(16px,1.8vw,18px)]
+            font-bold text-white rounded-lg shadow-lg transition-all
+            min-w-[clamp(120px,24vw,156px)]
+            ${
+              isSpinning || showBlank
+                ? "bg-green-500 opacity-50"
+                : "bg-green-500 hover:bg-green-600 hover:scale-[1.02] active:scale-95 cursor-pointer"
+            }
+          `}
+        >
+          {isSpinning ? "Spinning..." : "SPIN!"}
+        </button>
       </div>
 
       {/* Winner Modal */}
       {showWinnerModal && selectedName && (
         <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 transform scale-100 animate-bounce-in pointer-events-auto text-center">
+          <div
+            className="bg-white rounded-2xl p-8 transform scale-100 animate-bounce-in pointer-events-auto text-center"
+            style={{
+              boxShadow: '0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)'
+            }}
+          >
             <h2 className="text-2xl font-bold text-gray-700 mb-2">
               {winnerRhyme}
             </h2>
