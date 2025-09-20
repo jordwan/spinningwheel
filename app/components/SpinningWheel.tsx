@@ -1035,7 +1035,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     let lastSoundTime = 0;
     let lastFrameTime = 0;
     const segmentSize = (2 * Math.PI) / wheelNames.length;
-    let accRotation = 0;
+    let lastSegment = -1;
 
     const animate = () => {
       const now = Date.now();
@@ -1057,18 +1057,19 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       const currentRotation = rotation + (finalRotation - rotation) * easeOut;
       setRotation(currentRotation);
 
-      const delta = Math.abs(currentRotation - lastRotation);
-      accRotation += delta;
+      // Calculate which segment is currently under the pointer
+      const normalizedRotation = ((currentRotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      const currentSegment = Math.floor(normalizedRotation / segmentSize);
 
       const minBetweenTicks = Math.max(50, 250 * (1 - (1 - progress)));
       if (
-        accRotation >= segmentSize &&
+        currentSegment !== lastSegment &&
         now - lastSoundTime >= minBetweenTicks
       ) {
         const speed = 1 - easeOut;
         const vol = Math.max(0.02, Math.min(0.1, 0.02 + (1 - speed) * 0.08));
         playTickSound(vol);
-        accRotation = 0;
+        lastSegment = currentSegment;
         lastSoundTime = now;
       }
 
