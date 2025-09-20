@@ -806,8 +806,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           ctx.font = `bold ${fs}px Arial`;
           ctx.strokeStyle = "#000";
           ctx.lineWidth = Math.max(1, fs / 8);
-          ctx.strokeText(text, radius - 20, fs / 3);
-          ctx.fillText(text, radius - 20, fs / 3);
+          const paddingFromEdge = 15; // Consistent with regular text
+          ctx.strokeText(text, radius - paddingFromEdge, fs / 3);
+          ctx.fillText(text, radius - paddingFromEdge, fs / 3);
         } else {
           // Calculate optimal font size and truncate text if needed
           const maxWidth = getMaxTextWidth(radius, sliceAngle);
@@ -836,11 +837,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           ctx.shadowOffsetX = 1;
           ctx.shadowOffsetY = 1;
 
-          // Better text positioning - center vertically and adjust horizontal position
-          const textWidth = measureTextWidth(ctx, displayText, fs);
-          const textPosition = Math.min(radius - 20, radius - textWidth / 2 - 10);
-
-          ctx.fillText(displayText, textPosition, fs / 3);
+          // Position text consistently from edge, regardless of length
+          // Use right alignment and position from edge for consistent layout
+          const paddingFromEdge = 15; // Consistent padding from wheel edge
+          ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
         }
         ctx.restore();
       }
