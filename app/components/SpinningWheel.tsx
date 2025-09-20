@@ -59,57 +59,62 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const ensureAudio = useCallback(() => {
     if (typeof window === "undefined") return null;
 
-    if (!audioCtxRef.current) {
-      const Ctx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext })
-          .webkitAudioContext;
-      audioCtxRef.current = new Ctx();
-    }
-
-    if (!clickBufferRef.current && audioCtxRef.current) {
-      const ctx = audioCtxRef.current;
-      const duration = 0.008,
-        sr = ctx.sampleRate;
-      const frames = Math.max(1, Math.floor(duration * sr));
-      const buffer = ctx.createBuffer(1, frames, sr);
-      const data = buffer.getChannelData(0);
-      const freq = 2000;
-      for (let i = 0; i < frames; i++) {
-        const t = i / sr;
-        const env = Math.exp(-t * 150);
-        data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.3;
+    try {
+      if (!audioCtxRef.current) {
+        const Ctx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
+        audioCtxRef.current = new Ctx();
       }
-      clickBufferRef.current = buffer;
-    }
 
-    if (!tadaBufferRef.current && audioCtxRef.current) {
-      const ctx = audioCtxRef.current;
-      const duration = 0.8,
-        sr = ctx.sampleRate;
-      const frames = Math.max(1, Math.floor(duration * sr));
-      const tadaBuffer = ctx.createBuffer(1, frames, sr);
-      const tadaData = tadaBuffer.getChannelData(0);
-      const frequencies = [261.63, 329.63, 392.0];
-      for (let i = 0; i < frames; i++) {
-        const t = i / sr;
-        const p = t / duration;
-        const env = p < 0.1 ? p / 0.1 : p < 0.6 ? 1 : (1 - p) / 0.4;
-        let sample = 0;
-        frequencies.forEach((f, idx) => {
-          const ns = idx * 0.15,
-            ne = ns + 0.4;
-          if (t >= ns && t <= ne) {
-            const np = (t - ns) / (ne - ns);
-            const nenv = Math.sin(Math.PI * np);
-            sample += Math.sin(2 * Math.PI * f * t) * nenv * 0.3;
-          }
-        });
-        tadaData[i] = sample * env * 0.4;
+      if (!clickBufferRef.current && audioCtxRef.current) {
+        const ctx = audioCtxRef.current;
+        const duration = 0.008,
+          sr = ctx.sampleRate;
+        const frames = Math.max(1, Math.floor(duration * sr));
+        const buffer = ctx.createBuffer(1, frames, sr);
+        const data = buffer.getChannelData(0);
+        const freq = 2000;
+        for (let i = 0; i < frames; i++) {
+          const t = i / sr;
+          const env = Math.exp(-t * 150);
+          data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.3;
+        }
+        clickBufferRef.current = buffer;
       }
-      tadaBufferRef.current = tadaBuffer;
+
+      if (!tadaBufferRef.current && audioCtxRef.current) {
+        const ctx = audioCtxRef.current;
+        const duration = 0.8,
+          sr = ctx.sampleRate;
+        const frames = Math.max(1, Math.floor(duration * sr));
+        const tadaBuffer = ctx.createBuffer(1, frames, sr);
+        const tadaData = tadaBuffer.getChannelData(0);
+        const frequencies = [261.63, 329.63, 392.0];
+        for (let i = 0; i < frames; i++) {
+          const t = i / sr;
+          const p = t / duration;
+          const env = p < 0.1 ? p / 0.1 : p < 0.6 ? 1 : (1 - p) / 0.4;
+          let sample = 0;
+          frequencies.forEach((f, idx) => {
+            const ns = idx * 0.15,
+              ne = ns + 0.4;
+            if (t >= ns && t <= ne) {
+              const np = (t - ns) / (ne - ns);
+              const nenv = Math.sin(Math.PI * np);
+              sample += Math.sin(2 * Math.PI * f * t) * nenv * 0.3;
+            }
+          });
+          tadaData[i] = sample * env * 0.4;
+        }
+        tadaBufferRef.current = tadaBuffer;
+      }
+      return audioCtxRef.current;
+    } catch (error) {
+      console.warn("Audio initialization failed:", error);
+      return null;
     }
-    return audioCtxRef.current;
   }, []);
 
   const playTickSound = (v = 0.1) => {
@@ -267,6 +272,20 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       window.removeEventListener("orientationchange", onResize);
     };
   }, [recomputeSize, wheelNames.length]); // Add dependency on names count
+
+  /** ========= Audio Context Cleanup ========= */
+  useEffect(() => {
+    return () => {
+      // Cleanup audio context on unmount
+      if (audioCtxRef.current) {
+        try {
+          audioCtxRef.current.close();
+        } catch (error) {
+          console.warn("Error closing audio context:", error);
+        }
+      }
+    };
+  }, []);
 
   /** ========= iOS 16 Detection ========= */
   useEffect(() => {

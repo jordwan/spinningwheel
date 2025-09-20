@@ -12,7 +12,6 @@ export default function Home() {
   const [teamName, setTeamName] = useState("");
   const [randomNameCount, setRandomNameCount] = useState("6");
   const [showRandomCountInput, setShowRandomCountInput] = useState(false);
-  const [includeFreeSpins] = useState(false);
 
   const generateRandomNames = (count: number = 10) => {
     return getRandomNames(count);
@@ -225,7 +224,7 @@ export default function Home() {
           <div className="flex-1 w-full max-w-4xl mx-auto">
             <SpinningWheel
               names={wheelNames.length > 0 ? wheelNames : undefined}
-              includeFreeSpins={includeFreeSpins}
+              includeFreeSpins={false}
               showBlank={showNameInput}
               onReset={() => {
                 // Track reset action

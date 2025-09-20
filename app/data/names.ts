@@ -1524,6 +1524,16 @@ export const names = [
   "Isaiah",
 ];
 
+// Fisher-Yates shuffle for true randomness
+function fisherYatesShuffle<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 // Function to get random names from the collection
 export function getRandomNames(count: number = 10): string[] {
   if (count >= names.length) {
@@ -1531,7 +1541,7 @@ export function getRandomNames(count: number = 10): string[] {
   }
 
   // Shuffle the array and take the first 'count' items
-  const shuffled = [...names].sort(() => Math.random() - 0.5);
+  const shuffled = fisherYatesShuffle(names);
   return shuffled.slice(0, count);
 }
 
@@ -1554,7 +1564,7 @@ export function getNamesByOrigin(origin: string, count: number = 50): string[] {
   if (origin in originMappings) {
     const [start, end] = originMappings[origin];
     const subset = names.slice(start, end);
-    const shuffled = [...subset].sort(() => Math.random() - 0.5);
+    const shuffled = fisherYatesShuffle(subset);
     return shuffled.slice(0, Math.min(count, subset.length));
   }
 
