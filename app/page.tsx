@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import SpinningWheel from "./components/SpinningWheel";
 import { getRandomNames } from "./data/names";
@@ -13,6 +13,48 @@ export default function Home() {
   const [randomNameCount, setRandomNameCount] = useState("6");
   const [showRandomCountInput, setShowRandomCountInput] = useState(false);
   const [showMinNamesWarning, setShowMinNamesWarning] = useState(false);
+
+  // Handle dynamic viewport height for mobile devices
+  useEffect(() => {
+    const updateViewportHeight = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    // Set initial value
+    updateViewportHeight();
+
+    // Update on resize (handles address bar show/hide on mobile)
+    window.addEventListener('resize', updateViewportHeight);
+    window.addEventListener('orientationchange', updateViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', updateViewportHeight);
+      window.removeEventListener('orientationchange', updateViewportHeight);
+    };
+  }, []);
+
+  // Prevent body scroll when modals are open
+  useEffect(() => {
+    const body = document.body;
+    const html = document.documentElement;
+
+    if (showNameInput || showMinNamesWarning) {
+      // Lock scrolling when any modal is open
+      body.style.overflow = 'hidden';
+      html.style.overflow = 'hidden';
+      body.style.position = 'fixed';
+      body.style.width = '100%';
+      body.style.height = '100%';
+    } else {
+      // Restore normal state
+      body.style.overflow = 'hidden'; // Keep as hidden for our no-scroll app
+      html.style.overflow = 'hidden';
+      body.style.position = 'fixed';
+      body.style.width = '100%';
+      body.style.height = '100%';
+    }
+  }, [showNameInput, showMinNamesWarning]);
 
   const generateRandomNames = (count: number = 10) => {
     return getRandomNames(count);
@@ -71,12 +113,15 @@ export default function Home() {
 
   return (
     <div
-      className="h-screen w-screen overflow-hidden relative"
+      className="w-screen overflow-hidden relative fixed inset-0"
       style={{
+        height: 'calc(var(--vh, 1vh) * 100)',
         boxShadow: `
           inset 0 0 40px rgba(255, 255, 255, 0.15),
           inset 0 0 80px rgba(255, 255, 255, 0.08)
         `,
+        touchAction: 'none',
+        overscrollBehavior: 'none',
       }}
     >
       {/* Optimized blurred background image */}
@@ -118,6 +163,7 @@ export default function Home() {
                 }}
                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
                 aria-label="Close"
+                style={{ touchAction: 'manipulation' }}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -154,6 +200,11 @@ export default function Home() {
                     onChange={(e) => setTeamName(e.target.value)}
                     placeholder="Team name (optional)"
                     className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                    style={{ touchAction: 'manipulation' }}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                   />
                   <textarea
                     value={inputValue}
@@ -161,6 +212,11 @@ export default function Home() {
                     onKeyPress={handleKeyPress}
                     placeholder="example: tom, jerry, bart, cindy..."
                     className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
+                    style={{ touchAction: 'manipulation' }}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                   />
                 </>
               ) : (
@@ -172,6 +228,7 @@ export default function Home() {
                     value={randomNameCount}
                     onChange={(e) => setRandomNameCount(e.target.value)}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center text-lg bg-white cursor-pointer"
+                    style={{ touchAction: 'manipulation' }}
                   >
                     {Array.from({ length: 100 }, (_, i) => i + 2).map((num) => (
                       <option key={num} value={num}>
@@ -187,6 +244,7 @@ export default function Home() {
                     <button
                       onClick={() => setShowRandomCountInput(true)}
                       className="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
+                      style={{ touchAction: 'manipulation' }}
                     >
                       Random
                     </button>
@@ -198,6 +256,7 @@ export default function Home() {
                           ? "bg-gray-300 text-gray-500"
                           : "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
                       }`}
+                      style={{ touchAction: 'manipulation' }}
                     >
                       Enter
                     </button>
@@ -206,6 +265,7 @@ export default function Home() {
                   <button
                     onClick={handleSubmitNames}
                     className="w-full px-6 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
+                    style={{ touchAction: 'manipulation' }}
                   >
                     Enter
                   </button>
@@ -242,6 +302,7 @@ export default function Home() {
               <button
                 onClick={() => setShowMinNamesWarning(false)}
                 className="w-full px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
+                style={{ touchAction: 'manipulation' }}
               >
                 Got it
               </button>

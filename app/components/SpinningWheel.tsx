@@ -223,7 +223,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     if (typeof window === "undefined") return;
 
     const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    // Use dynamic viewport height instead of window.innerHeight for better mobile support
+    const vh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--vh').replace('px', '')) * 100 || window.innerHeight;
 
     // Conservative fallbacks so first pass doesn't oversize the wheel:
     const speedH = Math.max(speedRef.current?.offsetHeight ?? 0, 72);
@@ -866,6 +867,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
                 : "bg-green-500 hover:bg-green-600 hover:scale-[1.02] active:scale-95 cursor-pointer"
             }
           `}
+          style={{ touchAction: 'manipulation' }}
         >
           {isSpinning ? "Spinning..." : "SPIN!"}
         </button>
@@ -891,6 +893,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
                   : "bg-blue-500 hover:bg-blue-600 cursor-pointer"
               }
             `}
+            style={{ touchAction: 'manipulation' }}
           >
             Reset
           </button>
@@ -918,6 +921,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
                 setWinnerRhyme("");
               }}
               className="min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              style={{ touchAction: 'manipulation' }}
             >
               Close
             </button>
@@ -1044,6 +1048,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             <button
               onClick={() => setShowFairnessPopup(false)}
               className="mt-4 px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg hover:from-blue-600 hover:to-purple-600 transition-all transform hover:scale-105 font-semibold"
+              style={{ touchAction: 'manipulation' }}
             >
               Got it!
             </button>
@@ -1080,6 +1085,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
               }
             }}
             className="text-[clamp(10px,1.6vw,12px)] text-white/70 hover:text-white underline"
+            style={{ touchAction: 'manipulation' }}
           >
             fairness
           </button>
