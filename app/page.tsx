@@ -37,6 +37,43 @@ export default function Home() {
     };
   }, []);
 
+  // Universal viewport fix for keyboard issues (iOS 16 Firefox and others)
+  useEffect(() => {
+    // Force viewport recalculation when name input modal closes
+    if (!showNameInput) {
+      // Small delay to ensure keyboard is fully dismissed
+      const timer = setTimeout(() => {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+
+        // Force a layout recalculation
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [showNameInput]);
+
+  // Additional defensive viewport handling during modal interactions
+  useEffect(() => {
+    if (showNameInput) {
+      // Add extra resize listener during modal interaction
+      const handleViewportRestore = () => {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+      };
+
+      // Listen for focus/blur events that might indicate keyboard state
+      window.addEventListener('focusin', handleViewportRestore);
+      window.addEventListener('focusout', handleViewportRestore);
+
+      return () => {
+        window.removeEventListener('focusin', handleViewportRestore);
+        window.removeEventListener('focusout', handleViewportRestore);
+      };
+    }
+  }, [showNameInput]);
+
   // Prevent body scroll when modals are open
   useEffect(() => {
     const body = document.body;
