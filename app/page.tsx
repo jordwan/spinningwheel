@@ -79,18 +79,25 @@ export default function Home() {
         `,
       }}
     >
-      {/* Blurred background image */}
+      {/* Optimized blurred background image */}
       <div
-        className="absolute inset-0"
+        className="fixed inset-0 w-full h-full"
         style={{
-          backgroundImage: "url('/bkgddT.png')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          filter: "blur(3px)",
           zIndex: -1,
+          minHeight: "100vh",
+          minWidth: "100vw"
         }}
-      />
+      >
+        <Image
+          src="/bkgddT.png"
+          alt="Spinning wheel background"
+          fill
+          priority
+          className="object-cover object-center blur-[3px]"
+          sizes="100vw"
+          quality={85}
+        />
+      </div>
 
       {/* Content overlay - not blurred */}
       <div className="relative z-10">

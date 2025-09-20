@@ -375,8 +375,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       }
 
       // Device memory (if available)
-      if ('deviceMemory' in navigator && (navigator as any).deviceMemory) {
-        const memory = (navigator as any).deviceMemory;
+      // Note: deviceMemory is experimental API, not in standard Navigator type
+      interface NavigatorWithMemory extends Navigator {
+        deviceMemory?: number;
+      }
+      const navigatorWithMemory = navigator as NavigatorWithMemory;
+
+      if ('deviceMemory' in navigator && navigatorWithMemory.deviceMemory) {
+        const memory = navigatorWithMemory.deviceMemory;
         if (memory >= 8) score += 2;
         else if (memory >= 4) score += 1;
         else score -= 1;
