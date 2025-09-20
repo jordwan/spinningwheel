@@ -47,6 +47,59 @@ const normalizeAngleDifference = (angleDiff: number): number => {
   return angleDiff;
 };
 
+/** ========= TEXT UTILITIES ========= */
+const truncateText = (text: string, maxLength: number): string => {
+  if (text.length <= maxLength) return text;
+
+  // Try to break at word boundaries
+  const truncated = text.slice(0, maxLength - 3);
+  const lastSpaceIndex = truncated.lastIndexOf(' ');
+
+  if (lastSpaceIndex > maxLength * 0.6) {
+    // Break at word boundary if it's not too early
+    return truncated.slice(0, lastSpaceIndex) + '...';
+  }
+
+  // Break at character boundary
+  return truncated + '...';
+};
+
+const measureTextWidth = (ctx: CanvasRenderingContext2D, text: string, fontSize: number): number => {
+  ctx.save();
+  ctx.font = `bold ${fontSize}px Arial`;
+  const metrics = ctx.measureText(text);
+  ctx.restore();
+  return metrics.width;
+};
+
+const calculateOptimalFontSize = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  minSize: number = 6,
+  maxSize: number = 16
+): number => {
+  let fontSize = maxSize;
+
+  while (fontSize >= minSize) {
+    const textWidth = measureTextWidth(ctx, text, fontSize);
+    if (textWidth <= maxWidth) {
+      return fontSize;
+    }
+    fontSize -= 0.5;
+  }
+
+  return minSize;
+};
+
+const getMaxTextWidth = (radius: number, sliceAngle: number): number => {
+  // Calculate maximum text width that fits within the segment
+  // Use 70% of the radius and consider the angular constraints
+  const maxRadialWidth = radius * 0.7;
+  const maxAngularWidth = radius * sliceAngle * 0.8; // Arc length constraint
+  return Math.min(maxRadialWidth, maxAngularWidth, radius - 30); // 30px padding from edge
+};
+
 interface SpinningWheelProps {
   names?: string[];
   onReset?: () => void;
@@ -742,26 +795,50 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         ctx.textAlign = "right";
 
         if (name === "RESPIN") {
+          const text = "FREE SPIN";
+          const maxWidth = getMaxTextWidth(radius, sliceAngle);
+          const baseFontSize = Math.max(6, Math.min(14, css / Math.max(35, wheelNames.length * 1.2)));
+          const fs = calculateOptimalFontSize(ctx, text, maxWidth, 6, baseFontSize);
+
           ctx.fillStyle = "#ffff00";
-          const fs = Math.max(
-            6,
-            Math.min(14, css / Math.max(35, wheelNames.length * 1.2))
-          );
           ctx.font = `bold ${fs}px Arial`;
           ctx.strokeStyle = "#000";
           ctx.lineWidth = Math.max(1, fs / 8);
-          ctx.strokeText("FREE SPIN", radius - 10, fs / 3);
-          ctx.fillText("FREE SPIN", radius - 10, fs / 3);
+          ctx.strokeText(text, radius - 20, fs / 3);
+          ctx.fillText(text, radius - 20, fs / 3);
         } else {
+          // Calculate optimal font size and truncate text if needed
+          const maxWidth = getMaxTextWidth(radius, sliceAngle);
+          const baseFontSize = Math.max(8, Math.min(16, css / Math.max(30, wheelNames.length * 0.6)));
+
+          // First try with original text
+          let displayText = name;
+          let fs = calculateOptimalFontSize(ctx, displayText, maxWidth, 6, baseFontSize);
+
+          // If font size is too small, try truncating the text
+          if (fs <= 7 && name.length > 15) {
+            // Calculate max characters that fit
+            let maxChars = 15;
+            while (maxChars > 8) {
+              displayText = truncateText(name, maxChars);
+              fs = calculateOptimalFontSize(ctx, displayText, maxWidth, 6, baseFontSize);
+              if (fs > 7) break;
+              maxChars -= 2;
+            }
+          }
+
           ctx.fillStyle = "#fff";
-          const fs = Math.max(
-            8,
-            Math.min(16, css / Math.max(30, wheelNames.length * 0.6))
-          );
           ctx.font = `bold ${fs}px Arial`;
-          ctx.shadowColor = "rgba(0,0,0,0.5)";
-          ctx.shadowBlur = 4;
-          ctx.fillText(name, radius - 10, fs / 3);
+          ctx.shadowColor = "rgba(0,0,0,0.7)";
+          ctx.shadowBlur = Math.max(2, fs / 4);
+          ctx.shadowOffsetX = 1;
+          ctx.shadowOffsetY = 1;
+
+          // Better text positioning - center vertically and adjust horizontal position
+          const textWidth = measureTextWidth(ctx, displayText, fs);
+          const textPosition = Math.min(radius - 20, radius - textWidth / 2 - 10);
+
+          ctx.fillText(displayText, textPosition, fs / 3);
         }
         ctx.restore();
       }

@@ -13,6 +13,8 @@ export default function Home() {
   const [randomNameCount, setRandomNameCount] = useState("6");
   const [showRandomCountInput, setShowRandomCountInput] = useState(false);
   const [showMinNamesWarning, setShowMinNamesWarning] = useState(false);
+  const [showLongNameWarning, setShowLongNameWarning] = useState(false);
+  const [longNameWarningText, setLongNameWarningText] = useState("");
 
   // Handle dynamic viewport height for mobile devices
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function Home() {
     const body = document.body;
     const html = document.documentElement;
 
-    if (showNameInput || showMinNamesWarning) {
+    if (showNameInput || showMinNamesWarning || showLongNameWarning) {
       // Lock scrolling when any modal is open
       body.style.overflow = 'hidden';
       html.style.overflow = 'hidden';
@@ -54,7 +56,23 @@ export default function Home() {
       body.style.width = '100%';
       body.style.height = '100%';
     }
-  }, [showNameInput, showMinNamesWarning]);
+  }, [showNameInput, showMinNamesWarning, showLongNameWarning]);
+
+  // Validate name lengths
+  const validateNameLengths = (namesList: string[]): boolean => {
+    const maxLength = 20; // Reasonable limit for display
+    const longNames = namesList.filter(name => name.length > maxLength);
+
+    if (longNames.length > 0) {
+      const longNamesText = longNames.length === 1
+        ? `"${longNames[0]}" is too long`
+        : `${longNames.length} names are too long`;
+      setLongNameWarningText(`${longNamesText}. Please keep names under ${maxLength} characters.`);
+      setShowLongNameWarning(true);
+      return false;
+    }
+    return true;
+  };
 
   const generateRandomNames = (count: number = 10) => {
     return getRandomNames(count);
@@ -87,12 +105,15 @@ export default function Home() {
     }
 
     if (names.length >= 2) {
-      setWheelNames(names);
-      setShowNameInput(false);
+      // Validate name lengths before accepting
+      if (validateNameLengths(names)) {
+        setWheelNames(names);
+        setShowNameInput(false);
 
-      // Update document title with team name
-      if (teamName) {
-        document.title = `${teamName} - iWxeel`;
+        // Update document title with team name
+        if (teamName) {
+          document.title = `${teamName} - iWxeel`;
+        }
       }
     } else if (names.length === 1) {
       // Show styled warning modal
@@ -302,6 +323,42 @@ export default function Home() {
               <button
                 onClick={() => setShowMinNamesWarning(false)}
                 className="w-full px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
+                style={{ touchAction: 'manipulation' }}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+          </>
+        )}
+
+        {/* Long Names Warning Modal */}
+        {showLongNameWarning && (
+          <>
+            <div className="fixed inset-0 backdrop-blur-[2px] z-[59]" />
+            <div className="fixed inset-0 flex items-center justify-center z-[60] p-4 pointer-events-none">
+              <div
+                className="bg-white rounded-2xl p-6 max-w-sm w-full pointer-events-auto text-center relative"
+                style={{
+                  boxShadow: '0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)'
+                }}
+              >
+              <div className="mb-4">
+                <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-orange-100 mb-3">
+                  <svg className="w-6 h-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Names Too Long
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {longNameWarningText}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowLongNameWarning(false)}
+                className="w-full px-4 py-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
                 style={{ touchAction: 'manipulation' }}
               >
                 Got it
