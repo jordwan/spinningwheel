@@ -16,24 +16,30 @@ export default function Home() {
   const [showLongNameWarning, setShowLongNameWarning] = useState(false);
   const [longNameWarningText, setLongNameWarningText] = useState("");
   const [isUsingCustomNames, setIsUsingCustomNames] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Hydration guard - ensures client-side rendering
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Handle dynamic viewport height for mobile devices
   useEffect(() => {
     const updateViewportHeight = () => {
       const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
+      document.documentElement.style.setProperty("--vh", `${vh}px`);
     };
 
     // Set initial value
     updateViewportHeight();
 
     // Update on resize (handles address bar show/hide on mobile)
-    window.addEventListener('resize', updateViewportHeight);
-    window.addEventListener('orientationchange', updateViewportHeight);
+    window.addEventListener("resize", updateViewportHeight);
+    window.addEventListener("orientationchange", updateViewportHeight);
 
     return () => {
-      window.removeEventListener('resize', updateViewportHeight);
-      window.removeEventListener('orientationchange', updateViewportHeight);
+      window.removeEventListener("resize", updateViewportHeight);
+      window.removeEventListener("orientationchange", updateViewportHeight);
     };
   }, []);
 
@@ -44,7 +50,8 @@ export default function Home() {
   // Detect Firefox and capabilities on mount
   useEffect(() => {
     const detectFirefox = () => {
-      if (typeof window === 'undefined') return { isFirefox: false, version: 0 };
+      if (typeof window === "undefined")
+        return { isFirefox: false, version: 0 };
 
       const userAgent = navigator.userAgent;
       const firefoxMatch = userAgent.match(/Firefox\/(\d+)/);
@@ -59,12 +66,14 @@ export default function Home() {
 
     const { isFirefox: firefoxDetected, version } = detectFirefox();
     setIsFirefox(firefoxDetected);
-    const hasViewportAPI = 'visualViewport' in window;
+    const hasViewportAPI = "visualViewport" in window;
     setHasVisualViewport(hasViewportAPI);
 
     // Debug logging for troubleshooting
     if (firefoxDetected) {
-      console.log(`Firefox ${version} detected, visualViewport support: ${hasViewportAPI}`);
+      console.log(
+        `Firefox ${version} detected, visualViewport support: ${hasViewportAPI}`
+      );
     }
   }, []);
 
@@ -77,20 +86,23 @@ export default function Home() {
 
       const timer = setTimeout(() => {
         const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
+        document.documentElement.style.setProperty("--vh", `${vh}px`);
 
         // Firefox-specific additional custom property
         if (isFirefox) {
-          document.documentElement.style.setProperty('--firefox-vh', `${vh}px`);
+          document.documentElement.style.setProperty("--firefox-vh", `${vh}px`);
         }
 
         // Force a layout recalculation
-        window.dispatchEvent(new Event('resize'));
+        window.dispatchEvent(new Event("resize"));
 
         // Additional Firefox-specific viewport restore
         if (isFirefox && window.visualViewport) {
           const visualVh = window.visualViewport.height * 0.01;
-          document.documentElement.style.setProperty('--visual-vh', `${visualVh}px`);
+          document.documentElement.style.setProperty(
+            "--visual-vh",
+            `${visualVh}px`
+          );
         }
       }, delay);
 
@@ -106,33 +118,42 @@ export default function Home() {
       const handleViewportRestore = () => {
         // Debounce to prevent excessive calls
         clearTimeout(viewportRestoreTimeout);
-        viewportRestoreTimeout = setTimeout(() => {
-          const vh = window.innerHeight * 0.01;
-          document.documentElement.style.setProperty('--vh', `${vh}px`);
+        viewportRestoreTimeout = setTimeout(
+          () => {
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty("--vh", `${vh}px`);
 
-          // Firefox-specific handling
-          if (isFirefox) {
-            document.documentElement.style.setProperty('--firefox-vh', `${vh}px`);
+            // Firefox-specific handling
+            if (isFirefox) {
+              document.documentElement.style.setProperty(
+                "--firefox-vh",
+                `${vh}px`
+              );
 
-            // Use visualViewport API if available
-            if (hasVisualViewport && window.visualViewport) {
-              const visualVh = window.visualViewport.height * 0.01;
-              document.documentElement.style.setProperty('--visual-vh', `${visualVh}px`);
+              // Use visualViewport API if available
+              if (hasVisualViewport && window.visualViewport) {
+                const visualVh = window.visualViewport.height * 0.01;
+                document.documentElement.style.setProperty(
+                  "--visual-vh",
+                  `${visualVh}px`
+                );
+              }
             }
-          }
-        }, isFirefox ? 50 : 16); // Firefox needs slight debouncing
+          },
+          isFirefox ? 50 : 16
+        ); // Firefox needs slight debouncing
       };
 
       // Enhanced event handling for Firefox
-      const events = ['focusin', 'focusout'];
+      const events = ["focusin", "focusout"];
 
       // Add visualViewport events for modern Firefox
       if (hasVisualViewport && window.visualViewport) {
-        window.visualViewport.addEventListener('resize', handleViewportRestore);
+        window.visualViewport.addEventListener("resize", handleViewportRestore);
       }
 
       // Traditional events as fallback
-      events.forEach(event => {
+      events.forEach((event) => {
         window.addEventListener(event, handleViewportRestore);
       });
 
@@ -151,16 +172,21 @@ export default function Home() {
         }
       };
 
-      const firefoxInterval = isFirefox ? setInterval(firefoxKeyboardDetector, 100) : null;
+      const firefoxInterval = isFirefox
+        ? setInterval(firefoxKeyboardDetector, 100)
+        : null;
 
       return () => {
         clearTimeout(viewportRestoreTimeout);
 
         if (hasVisualViewport && window.visualViewport) {
-          window.visualViewport.removeEventListener('resize', handleViewportRestore);
+          window.visualViewport.removeEventListener(
+            "resize",
+            handleViewportRestore
+          );
         }
 
-        events.forEach(event => {
+        events.forEach((event) => {
           window.removeEventListener(event, handleViewportRestore);
         });
 
@@ -175,34 +201,38 @@ export default function Home() {
   useEffect(() => {
     const body = document.body;
     const html = document.documentElement;
+    const anyModalOpen =
+      showNameInput || showMinNamesWarning || showLongNameWarning;
 
-    if (showNameInput || showMinNamesWarning || showLongNameWarning) {
-      // Lock scrolling when any modal is open
-      body.style.overflow = 'hidden';
-      html.style.overflow = 'hidden';
-      body.style.position = 'fixed';
-      body.style.width = '100%';
-      body.style.height = '100%';
+    if (anyModalOpen) {
+      body.style.overflow = "hidden";
+      html.style.overflow = "hidden";
+      body.style.position = "fixed";
+      body.style.width = "100%";
+      body.style.height = "100%";
     } else {
-      // Restore normal state
-      body.style.overflow = 'hidden'; // Keep as hidden for our no-scroll app
-      html.style.overflow = 'hidden';
-      body.style.position = 'fixed';
-      body.style.width = '100%';
-      body.style.height = '100%';
+      // Revert fully to defaults
+      body.style.overflow = "";
+      html.style.overflow = "";
+      body.style.position = "";
+      body.style.width = "";
+      body.style.height = "";
     }
   }, [showNameInput, showMinNamesWarning, showLongNameWarning]);
 
   // Validate name lengths
   const validateNameLengths = (namesList: string[]): boolean => {
     const maxLength = 20; // Reasonable limit for display
-    const longNames = namesList.filter(name => name.length > maxLength);
+    const longNames = namesList.filter((name) => name.length > maxLength);
 
     if (longNames.length > 0) {
-      const longNamesText = longNames.length === 1
-        ? `"${longNames[0]}" is too long`
-        : `${longNames.length} names are too long`;
-      setLongNameWarningText(`${longNamesText}. Please keep names under ${maxLength} characters.`);
+      const longNamesText =
+        longNames.length === 1
+          ? `"${longNames[0]}" is too long`
+          : `${longNames.length} names are too long`;
+      setLongNameWarningText(
+        `${longNamesText}. Please keep names under ${maxLength} characters.`
+      );
       setShowLongNameWarning(true);
       return false;
     }
@@ -249,7 +279,7 @@ export default function Home() {
 
         // Update document title with team name
         if (teamName) {
-          document.title = `${teamName} - iWxeel`;
+          document.title = `${teamName} - iWheeli.com`;
         }
       }
     } else if (names.length === 1) {
@@ -269,25 +299,50 @@ export default function Home() {
     }
   };
 
+  // Prevent hydration mismatches by only rendering after client mount
+  if (!mounted) {
+    return (
+      <div className="w-screen overflow-hidden relative min-h-[100svh]">
+        {/* Same background image as main app */}
+        <div
+          className="fixed inset-0 w-full h-full"
+          style={{
+            zIndex: -1,
+            minHeight: "100vh",
+            minWidth: "100vw"
+          }}
+        >
+          <Image
+            src="/bkgddT.png"
+            alt="Spinning wheel background"
+            fill
+            priority
+            className="object-cover object-center blur-[3px]"
+            sizes="100vw"
+            quality={85}
+          />
+        </div>
+
+        {/* Subtle loading indicator over background */}
+        <div className="relative z-10 flex items-center justify-center h-screen">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg px-6 py-3">
+            <div className="animate-pulse text-white text-lg">Loading...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="w-screen overflow-hidden relative fixed inset-0"
+      className="w-screen overflow-hidden relative min-h-[100svh]"
       style={{
-        height: isFirefox
-          ? 'calc(var(--firefox-vh, var(--vh, 1vh)) * 100)'
-          : 'calc(var(--vh, 1vh) * 100)',
         boxShadow: `
           inset 0 0 40px rgba(255, 255, 255, 0.15),
           inset 0 0 80px rgba(255, 255, 255, 0.08)
         `,
-        touchAction: 'none',
-        overscrollBehavior: 'none',
-        // Firefox-specific viewport adjustments
-        ...(isFirefox && {
-          minHeight: hasVisualViewport
-            ? 'calc(var(--visual-vh, var(--firefox-vh, var(--vh, 1vh))) * 100)'
-            : 'calc(var(--firefox-vh, var(--vh, 1vh)) * 100)',
-        }),
+        touchAction: "none",
+        overscrollBehavior: "none",
       }}
     >
       {/* Optimized blurred background image */}
@@ -329,7 +384,7 @@ export default function Home() {
                 }}
                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
                 aria-label="Close"
-                style={{ touchAction: 'manipulation' }}
+                style={{ touchAction: "manipulation" }}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -366,10 +421,10 @@ export default function Home() {
                     onChange={(e) => setTeamName(e.target.value)}
                     placeholder="Team name (optional)"
                     className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                    style={{ touchAction: 'manipulation' }}
+                    style={{ touchAction: "manipulation" }}
                     autoComplete="off"
                     autoCorrect="off"
-                    autoCapitalize="off"
+                    autoCapitalize="none"
                     spellCheck={false}
                   />
                   <textarea
@@ -378,10 +433,10 @@ export default function Home() {
                     onKeyPress={handleKeyPress}
                     placeholder="example: tom, jerry, bart, cindy..."
                     className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
-                    style={{ touchAction: 'manipulation' }}
+                    style={{ touchAction: "manipulation" }}
                     autoComplete="off"
                     autoCorrect="off"
-                    autoCapitalize="off"
+                    autoCapitalize="none"
                     spellCheck={false}
                   />
                 </>
@@ -394,7 +449,7 @@ export default function Home() {
                     value={randomNameCount}
                     onChange={(e) => setRandomNameCount(e.target.value)}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center text-lg bg-white cursor-pointer"
-                    style={{ touchAction: 'manipulation' }}
+                    style={{ touchAction: "manipulation" }}
                   >
                     {Array.from({ length: 100 }, (_, i) => i + 2).map((num) => (
                       <option key={num} value={num}>
@@ -419,7 +474,7 @@ export default function Home() {
                         }
                       }}
                       className="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
-                      style={{ touchAction: 'manipulation' }}
+                      style={{ touchAction: "manipulation" }}
                     >
                       {inputValue.trim() !== "" ? "Clear" : "Random"}
                     </button>
@@ -431,7 +486,7 @@ export default function Home() {
                           ? "bg-gray-300 text-gray-500"
                           : "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
                       }`}
-                      style={{ touchAction: 'manipulation' }}
+                      style={{ touchAction: "manipulation" }}
                     >
                       Enter
                     </button>
@@ -440,7 +495,7 @@ export default function Home() {
                   <button
                     onClick={handleSubmitNames}
                     className="w-full px-6 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
-                    style={{ touchAction: 'manipulation' }}
+                    style={{ touchAction: "manipulation" }}
                   >
                     Enter
                   </button>
@@ -458,31 +513,42 @@ export default function Home() {
               <div
                 className="bg-white rounded-2xl p-6 max-w-sm w-full pointer-events-auto text-center relative"
                 style={{
-                  boxShadow: '0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)'
+                  boxShadow:
+                    "0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)",
                 }}
               >
-              <div className="mb-4">
-                <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-yellow-100 mb-3">
-                  <svg className="w-6 h-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
+                <div className="mb-4">
+                  <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-yellow-100 mb-3">
+                    <svg
+                      className="w-6 h-6 text-yellow-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Need More Names
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Please enter at least 2 names to spin the wheel
+                  </p>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Need More Names
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Please enter at least 2 names to spin the wheel
-                </p>
+                <button
+                  onClick={() => setShowMinNamesWarning(false)}
+                  className="w-full px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
+                  style={{ touchAction: "manipulation" }}
+                >
+                  Got it
+                </button>
               </div>
-              <button
-                onClick={() => setShowMinNamesWarning(false)}
-                className="w-full px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
-                style={{ touchAction: 'manipulation' }}
-              >
-                Got it
-              </button>
             </div>
-          </div>
           </>
         )}
 
@@ -494,31 +560,40 @@ export default function Home() {
               <div
                 className="bg-white rounded-2xl p-6 max-w-sm w-full pointer-events-auto text-center relative"
                 style={{
-                  boxShadow: '0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)'
+                  boxShadow:
+                    "0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)",
                 }}
               >
-              <div className="mb-4">
-                <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-orange-100 mb-3">
-                  <svg className="w-6 h-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
+                <div className="mb-4">
+                  <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-orange-100 mb-3">
+                    <svg
+                      className="w-6 h-6 text-orange-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Names Too Long
+                  </h3>
+                  <p className="text-sm text-gray-600">{longNameWarningText}</p>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Names Too Long
-                </h3>
-                <p className="text-sm text-gray-600">
-                  {longNameWarningText}
-                </p>
+                <button
+                  onClick={() => setShowLongNameWarning(false)}
+                  className="w-full px-4 py-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
+                  style={{ touchAction: "manipulation" }}
+                >
+                  Got it
+                </button>
               </div>
-              <button
-                onClick={() => setShowLongNameWarning(false)}
-                className="w-full px-4 py-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
-                style={{ touchAction: 'manipulation' }}
-              >
-                Got it
-              </button>
             </div>
-          </div>
           </>
         )}
 
@@ -527,7 +602,8 @@ export default function Home() {
             <div
               className="relative w-48 h-16 sm:w-56 sm:h-18 lg:w-64 lg:h-20"
               style={{
-                filter: 'drop-shadow(0 0 15px rgba(255, 255, 255, 0.25)) drop-shadow(0 0 30px rgba(255, 255, 255, 0.15))',
+                filter:
+                  "drop-shadow(0 0 15px rgba(255, 255, 255, 0.25)) drop-shadow(0 0 30px rgba(255, 255, 255, 0.15))",
               }}
             >
               <Image
@@ -546,10 +622,10 @@ export default function Home() {
               showBlank={showNameInput}
               onReset={() => {
                 // Track reset action
-                if (typeof window !== 'undefined' && window.gtag) {
-                  window.gtag('event', 'wheel_reset', {
-                    event_category: 'engagement',
-                    event_label: 'reset_wheel'
+                if (typeof window !== "undefined" && window.gtag) {
+                  window.gtag("event", "wheel_reset", {
+                    event_category: "engagement",
+                    event_label: "reset_wheel",
                   });
                 }
                 setShowNameInput(true);

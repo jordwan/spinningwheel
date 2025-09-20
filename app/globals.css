@@ -40,19 +40,18 @@ html {
   /* Firefox-specific viewport properties */
   --firefox-vh: 100vh;
   --visual-vh: 100vh;
-  height: 100%;
-  overflow: hidden;
+  /* Allow normal document flow */
+  margin: 0;
+  padding: 0;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
-  /* Prevent scrolling completely */
-  overflow: hidden;
-  position: fixed;
-  width: 100%;
-  height: 100%;
+  /* Allow normal document flow - positioning controlled by page component */
+  margin: 0;
+  padding: 0;
   /* Prevent iOS bounce/rubber band effect */
   overscroll-behavior: none;
   /* Allow touch gestures by default - specific elements will override */

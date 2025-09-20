@@ -352,11 +352,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     // Initial pass + observers (so when controls gain height, we recalc)
     recomputeSize();
 
-    let roRaf = 0;
-    const ro = new ResizeObserver(() => {
-      cancelAnimationFrame(roRaf);
-      roRaf = requestAnimationFrame(recomputeSize);
-    });
+    const ro = new ResizeObserver(() => recomputeSize());
     if (speedRef.current) ro.observe(speedRef.current);
     if (controlsRef.current) ro.observe(controlsRef.current);
     if (footerRef.current) ro.observe(footerRef.current);
@@ -372,7 +368,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
     return () => {
       clearTimeout(timer);
-      cancelAnimationFrame(roRaf);
       ro.disconnect();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
@@ -445,7 +440,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     const isFirefoxBrowser = detectFirefox();
     setIsFirefox(isFirefoxBrowser);
 
-    // Simplified device capability detection (client-side only)
+    // Simplified device capability detection with SSR safety
     if (typeof window !== 'undefined') {
       const lowMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
       const cores = navigator.hardwareConcurrency || 4;
@@ -629,9 +624,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || typeof window === 'undefined') return;
+    if (!canvas) return;
 
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const dpr = typeof window !== 'undefined' ? Math.max(1, window.devicePixelRatio || 1) : 1;
     const css = canvasCSSSize;
 
     canvas.style.width = `${css}px`;
@@ -659,51 +654,62 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       const maxWidth = getMaxTextWidth(radius, sliceAngle);
       const baseFontSize = Math.max(8, Math.min(16, css / Math.max(30, wheelNames.length * 0.6)));
 
-      // Order-preserving build: filter regular names while maintaining their order
-      const regularNamesInOrder = wheelNames.filter(n => n !== "RESPIN" && n !== "");
-
-      if (regularNamesInOrder.length > 0) {
+      // Find the longest name (excluding RESPIN) and calculate optimal size for it
+      const regularNames = wheelNames.filter(name => name !== "RESPIN" && name !== "");
+      if (regularNames.length > 0) {
+        // Test font sizes for all names and find the smallest size that fits all
         let testFontSize = baseFontSize;
-        let perNameDisplay: string[] = [];
+        let allNamesDisplayTexts: string[] = [];
 
         while (testFontSize >= 6) {
           let allFit = true;
-          perNameDisplay = [];
+          allNamesDisplayTexts = [];
 
-          for (const name of regularNamesInOrder) {
-            let display = name;
-            if (measureTextWidth(ctx, display, testFontSize) > maxWidth) {
+          for (const name of regularNames) {
+            let displayText = name;
+            const textWidth = measureTextWidth(ctx, displayText, testFontSize);
+
+            // If text doesn't fit, try truncating
+            if (textWidth > maxWidth) {
               let maxChars = 15;
               while (maxChars > 12) {
-                display = truncateText(name, maxChars);
-                if (measureTextWidth(ctx, display, testFontSize) <= maxWidth) break;
+                displayText = truncateText(name, maxChars);
+                const truncatedWidth = measureTextWidth(ctx, displayText, testFontSize);
+                if (truncatedWidth <= maxWidth) break;
                 maxChars -= 2;
               }
-              if (measureTextWidth(ctx, display, testFontSize) > maxWidth) {
+
+              // If still doesn't fit even after truncation, this font size won't work
+              if (measureTextWidth(ctx, displayText, testFontSize) > maxWidth) {
                 allFit = false;
                 break;
               }
             }
-            perNameDisplay.push(display);
+            allNamesDisplayTexts.push(displayText);
           }
 
           if (allFit) {
             uniformFontSize = testFontSize;
+            // Create the full array including RESPIN entries
+            uniformDisplayTexts = wheelNames.map(name => {
+              if (name === "RESPIN" || name === "") return name;
+              const index = regularNames.indexOf(name);
+              return index !== -1 ? allNamesDisplayTexts[index] : name;
+            });
             break;
           }
+
           testFontSize -= 0.5;
         }
 
+        // Fallback if no size worked
         if (testFontSize < 6) {
           uniformFontSize = 6;
-          perNameDisplay = regularNamesInOrder.map(n => truncateText(n, 14));
+          uniformDisplayTexts = wheelNames.map(name => {
+            if (name === "RESPIN" || name === "") return name;
+            return truncateText(name, 14); // Aggressive truncation as fallback
+          });
         }
-
-        // Map back to wheelNames preserving order for duplicates
-        let ri = 0;
-        uniformDisplayTexts = wheelNames.map(n =>
-          (n === "RESPIN" || n === "") ? n : perNameDisplay[ri++]
-        );
       }
     }
 
@@ -913,10 +919,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   }, [rotation, canvasCSSSize, wheelNames, colors, showBlank]);
 
   useEffect(() => {
-    // Only draw on client-side to prevent hydration issues
-    if (typeof window !== 'undefined') {
-      drawWheel();
-    }
+    drawWheel();
   }, [drawWheel]);
 
   /** ========= Confetti ========= */
