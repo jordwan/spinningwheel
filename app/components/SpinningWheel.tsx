@@ -50,7 +50,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
   const [lastWinner, setLastWinner] = useState<string>("");
   const [isIOS16, setIsIOS16] = useState(false);
-  const [isOlderBrowser, setIsOlderBrowser] = useState(false);
+  const [deviceCapability, setDeviceCapability] = useState<'high' | 'medium' | 'low'>('medium');
 
   /** ========= AUDIO (unchanged) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -198,8 +198,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       let lastTime = 0;
 
       const animate = (currentTime: number) => {
-        // Throttle to 60fps (16.67ms) for smooth animation with lower CPU usage
-        if (currentTime - lastTime >= 16.67) {
+        // Adaptive frame rate based on device capability
+        // High capability: 8.33ms (120fps), Medium/Low: 16.67ms (60fps)
+        const throttleMs = deviceCapability === 'high' ? 8.33 : 16.67;
+
+        if (currentTime - lastTime >= throttleMs) {
           const t = currentTime / 1000;
           setSpeedIndicator((Math.sin(t * 1.5) + 1) / 2);
           lastTime = currentTime;
@@ -213,7 +216,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         cancelAnimationFrame(animationId);
       };
     }
-  }, [isSpinning]);
+  }, [isSpinning, deviceCapability]);
 
   /** ========= Responsive sizing with ResizeObserver ========= */
   const recomputeSize = useCallback(() => {
@@ -308,34 +311,84 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       return false;
     };
 
-    setIsIOS16(detectIOS16());
+    const isIOS16 = detectIOS16();
+    setIsIOS16(isIOS16);
 
-    // Detect older browsers for performance optimization
-    const detectOlderBrowser = () => {
-      if (typeof window === 'undefined') return false;
+    // Enhanced device capability detection
+    const detectDeviceCapability = (): 'high' | 'medium' | 'low' => {
+      if (typeof window === 'undefined') return 'medium';
 
       const userAgent = window.navigator.userAgent;
+      let score = 0;
 
-      // Chrome < 80 (released Feb 2020)
+      // Browser version scoring
       const chromeMatch = userAgent.match(/Chrome\/(\d+)/);
-      if (chromeMatch && parseInt(chromeMatch[1]) < 80) return true;
+      if (chromeMatch) {
+        const version = parseInt(chromeMatch[1]);
+        if (version >= 100) score += 3;
+        else if (version >= 80) score += 2;
+        else score += 0;
+      }
 
-      // Safari < 14 (released Sep 2020)
       const safariMatch = userAgent.match(/Version\/(\d+).*Safari/);
-      if (safariMatch && parseInt(safariMatch[1]) < 14) return true;
+      if (safariMatch) {
+        const version = parseInt(safariMatch[1]);
+        if (version >= 16) score += 3;
+        else if (version >= 14) score += 2;
+        else score += 0;
+      }
 
-      // Firefox < 75 (released Apr 2020)
       const firefoxMatch = userAgent.match(/Firefox\/(\d+)/);
-      if (firefoxMatch && parseInt(firefoxMatch[1]) < 75) return true;
+      if (firefoxMatch) {
+        const version = parseInt(firefoxMatch[1]);
+        if (version >= 100) score += 3;
+        else if (version >= 75) score += 2;
+        else score += 0;
+      }
 
-      // Edge < 80 (released Feb 2020)
-      const edgeMatch = userAgent.match(/Edg\/(\d+)/);
-      if (edgeMatch && parseInt(edgeMatch[1]) < 80) return true;
+      // OS version scoring
+      if (/iPad|iPhone|iPod/.test(userAgent)) {
+        const iosMatch = userAgent.match(/OS (\d+)_(\d+)/);
+        if (iosMatch) {
+          const majorVersion = parseInt(iosMatch[1]);
+          if (majorVersion >= 17) score += 2;
+          else if (majorVersion === 16) score -= 1; // iOS 16 performance issues
+          else score -= 2;
+        }
+      }
 
-      return false;
+      if (/Android/.test(userAgent)) {
+        const androidMatch = userAgent.match(/Android (\d+)/);
+        if (androidMatch) {
+          const version = parseInt(androidMatch[1]);
+          if (version >= 12) score += 2;
+          else if (version >= 10) score += 1;
+          else score -= 1;
+        }
+      }
+
+      // Hardware indicators
+      if (navigator.hardwareConcurrency) {
+        if (navigator.hardwareConcurrency >= 8) score += 2;
+        else if (navigator.hardwareConcurrency >= 4) score += 1;
+        else score -= 1;
+      }
+
+      // Device memory (if available)
+      if ('deviceMemory' in navigator && (navigator as any).deviceMemory) {
+        const memory = (navigator as any).deviceMemory;
+        if (memory >= 8) score += 2;
+        else if (memory >= 4) score += 1;
+        else score -= 1;
+      }
+
+      // Determine capability based on score
+      if (score >= 7) return 'high';
+      if (score >= 3) return 'medium';
+      return 'low';
     };
 
-    setIsOlderBrowser(detectOlderBrowser());
+    setDeviceCapability(detectDeviceCapability());
   }, []);
 
   /** ========= Draw wheel (HiDPI, labels, pointer) ========= */
@@ -580,8 +633,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   /** ========= Confetti ========= */
   const triggerConfetti = () => {
     const baseCount = 200;
-    // Reduce particle count by 50% for older browsers
-    const scaleFactor = isOlderBrowser ? 0.5 : 1.0;
+    // Scale particle count based on device capability
+    let scaleFactor = 1.0;
+    if (deviceCapability === 'low') scaleFactor = 0.3;
+    else if (deviceCapability === 'medium') scaleFactor = 0.6;
+    else scaleFactor = 1.0; // high capability
+
     const count = baseCount * scaleFactor;
 
     const defaults = {
@@ -650,8 +707,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     const animate = () => {
       const now = Date.now();
 
-      // Throttle to 60fps (16.67ms) for wheel spinning
-      if (now - lastFrameTime < 16.67) {
+      // Adaptive frame rate based on device capability
+      // High capability: 8.33ms (120fps), Medium/Low: 16.67ms (60fps)
+      const throttleMs = deviceCapability === 'high' ? 8.33 : 16.67;
+
+      if (now - lastFrameTime < throttleMs) {
         requestAnimationFrame(animate);
         return;
       }
