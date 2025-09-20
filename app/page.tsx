@@ -15,6 +15,7 @@ export default function Home() {
   const [showMinNamesWarning, setShowMinNamesWarning] = useState(false);
   const [showLongNameWarning, setShowLongNameWarning] = useState(false);
   const [longNameWarningText, setLongNameWarningText] = useState("");
+  const [isUsingCustomNames, setIsUsingCustomNames] = useState(false);
 
   // Handle dynamic viewport height for mobile devices
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function Home() {
     if (showRandomCountInput) {
       const count = parseInt(randomNameCount) || 10;
       setWheelNames(generateRandomNames(count));
+      setIsUsingCustomNames(false); // Track that we're using random names
       setShowNameInput(false);
       setShowRandomCountInput(false);
       return;
@@ -108,6 +110,7 @@ export default function Home() {
       // Validate name lengths before accepting
       if (validateNameLengths(names)) {
         setWheelNames(names);
+        setIsUsingCustomNames(true); // Track that we're using custom names
         setShowNameInput(false);
 
         // Update document title with team name
@@ -263,11 +266,20 @@ export default function Home() {
                 {!showRandomCountInput ? (
                   <div className="flex gap-3">
                     <button
-                      onClick={() => setShowRandomCountInput(true)}
+                      onClick={() => {
+                        if (inputValue.trim() !== "") {
+                          // Clear input and team name
+                          setInputValue("");
+                          setTeamName("");
+                        } else {
+                          // Show random count input
+                          setShowRandomCountInput(true);
+                        }
+                      }}
                       className="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
                       style={{ touchAction: 'manipulation' }}
                     >
-                      Random
+                      {inputValue.trim() !== "" ? "Clear" : "Random"}
                     </button>
                     <button
                       onClick={handleSubmitNames}
@@ -399,7 +411,10 @@ export default function Home() {
                   });
                 }
                 setShowNameInput(true);
-                setInputValue("");
+                // Only clear inputValue if we weren't using custom names
+                if (!isUsingCustomNames) {
+                  setInputValue("");
+                }
                 setTeamName("");
                 setShowRandomCountInput(false);
                 document.title = "iWheeli.com";

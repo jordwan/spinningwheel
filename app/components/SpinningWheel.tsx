@@ -714,7 +714,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             // If text doesn't fit, try truncating
             if (textWidth > maxWidth) {
               let maxChars = 15;
-              while (maxChars > 8) {
+              while (maxChars > 12) {
                 displayText = truncateText(name, maxChars);
                 const truncatedWidth = measureTextWidth(ctx, displayText, testFontSize);
                 if (truncatedWidth <= maxWidth) break;
@@ -749,7 +749,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           uniformFontSize = 6;
           uniformDisplayTexts = wheelNames.map(name => {
             if (name === "RESPIN" || name === "") return name;
-            return truncateText(name, 10); // Aggressive truncation as fallback
+            return truncateText(name, 14); // Aggressive truncation as fallback
           });
         }
       }
