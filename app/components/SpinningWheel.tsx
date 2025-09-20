@@ -1236,17 +1236,30 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
       {/* Winner Modal */}
       {showWinnerModal && selectedName && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none p-4">
           <div
-            className="bg-white rounded-2xl p-8 transform scale-100 animate-bounce-in pointer-events-auto text-center"
+            className="bg-white rounded-2xl p-6 sm:p-8 transform scale-100 animate-bounce-in pointer-events-auto text-center max-w-[90vw] w-full max-w-md"
             style={{
               boxShadow: '0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)'
             }}
           >
-            <h2 className="text-2xl font-bold text-gray-700 mb-2">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-2 leading-tight">
               {winnerRhyme}
             </h2>
-            <p className="text-5xl font-bold text-green-600 animate-pulse mb-6">
+            <p
+              className={`font-bold text-green-600 animate-pulse mb-6 leading-tight break-words ${
+                selectedName.length > 15
+                  ? 'text-2xl sm:text-3xl'
+                  : selectedName.length > 10
+                  ? 'text-3xl sm:text-4xl'
+                  : 'text-4xl sm:text-5xl'
+              }`}
+              style={{
+                wordBreak: 'break-word',
+                overflowWrap: 'break-word',
+                hyphens: 'auto'
+              }}
+            >
               {selectedName}
             </p>
             <button
