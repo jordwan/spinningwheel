@@ -1198,10 +1198,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           setAriaAnnouncement(`Winner selected: ${winner}. The wheel has stopped spinning.`);
         }
 
-        // Save last winner (but not RESPIN)
-        if (winner !== "RESPIN") {
-          setLastWinner(winner);
-        }
+        // Note: lastWinner will be set when user closes the winner modal
 
         // Track winner selection
         if (typeof window !== 'undefined' && window.gtag) {
@@ -1375,6 +1372,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         {onReset && (
           <button
             onClick={() => {
+              // Save last winner when user resets (acknowledging the win)
+              if (selectedName && selectedName !== "RESPIN") {
+                setLastWinner(selectedName);
+              }
               setShowWinnerModal(false); // Close winner modal first
               setWinnerRhyme("");
               onReset();
@@ -1418,11 +1419,28 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
       {/* Winner Modal */}
       {showWinnerModal && selectedName && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none p-4">
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50 pointer-events-auto p-4"
+          onClick={(e) => {
+            // Close modal when clicking backdrop
+            if (e.target === e.currentTarget) {
+              // Save last winner when user acknowledges the win by clicking backdrop
+              if (selectedName && selectedName !== "RESPIN") {
+                setLastWinner(selectedName);
+              }
+              setShowWinnerModal(false);
+              setWinnerRhyme("");
+            }
+          }}
+        >
           <div
             className="bg-white rounded-2xl p-6 sm:p-8 transform scale-100 animate-bounce-in pointer-events-auto text-center max-w-[90vw] w-full max-w-md"
             style={{
               boxShadow: '0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)'
+            }}
+            onClick={(e) => {
+              // Prevent modal from closing when clicking inside the modal content
+              e.stopPropagation();
             }}
           >
             <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-2 leading-tight">
@@ -1446,6 +1464,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             </p>
             <button
               onClick={() => {
+                // Save last winner when user acknowledges the win
+                if (selectedName && selectedName !== "RESPIN") {
+                  setLastWinner(selectedName);
+                }
                 setShowWinnerModal(false);
                 setWinnerRhyme("");
               }}
