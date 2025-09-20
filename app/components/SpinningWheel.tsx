@@ -129,6 +129,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
   const [lastWinner, setLastWinner] = useState<string>("");
   const [isIOS16, setIsIOS16] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isFirefox, setIsFirefox] = useState(false);
   const [deviceCapability, setDeviceCapability] = useState<'high' | 'medium' | 'low'>('medium');
 
   // Drag interaction state
@@ -411,6 +413,24 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
     const isIOS16 = detectIOS16();
     setIsIOS16(isIOS16);
+
+    // General iOS detection for opacity fixes
+    const detectGeneralIOS = () => {
+      if (typeof window === 'undefined') return false;
+      return /iPad|iPhone|iPod/.test(window.navigator.userAgent);
+    };
+
+    const isIOSDevice = detectGeneralIOS();
+    setIsIOS(isIOSDevice);
+
+    // Firefox detection for zoom-related layout fixes
+    const detectFirefox = () => {
+      if (typeof window === 'undefined') return false;
+      return /Firefox/.test(window.navigator.userAgent);
+    };
+
+    const isFirefoxBrowser = detectFirefox();
+    setIsFirefox(isFirefoxBrowser);
 
     // Enhanced device capability detection
     const detectDeviceCapability = (): 'high' | 'medium' | 'low' => {
@@ -1181,7 +1201,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center mx-auto mb-4"
         style={{
           width: `${canvasCSSSize}px`,
-          maxWidth: "95vw",
+          maxWidth: isFirefox ? "600px" : "95vw",
           // iOS 16 layout fixes
           ...(isIOS16 ? {
             display: '-webkit-box',
@@ -1195,11 +1215,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           onClick={spin}
           disabled={isSpinning || showBlank}
           className={`
-            px-[clamp(14px,2.2vw,22px)]
-            py-[clamp(9px,1.8vw,14px)]
-            text-[clamp(16px,1.8vw,18px)]
+            ${isFirefox
+              ? "px-4 py-2 text-base min-w-[140px]"
+              : "px-[clamp(14px,2.2vw,22px)] py-[clamp(9px,1.8vw,14px)] text-[clamp(16px,1.8vw,18px)] min-w-[clamp(120px,24vw,156px)]"
+            }
             font-bold text-white rounded-lg shadow-lg transition-all
-            min-w-[clamp(120px,24vw,156px)]
             ${
               isSpinning || showBlank
                 ? "bg-green-500"
@@ -1210,6 +1230,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             touchAction: 'manipulation',
             opacity: (isSpinning || showBlank) ? '0.5' : '1',
             pointerEvents: (isSpinning || showBlank) ? 'none' : 'auto',
+            // iOS opacity fixes
+            ...(isIOS && (isSpinning || showBlank) ? {
+              WebkitOpacity: '0.5',
+              filter: 'opacity(0.5)',
+              backgroundColor: isSpinning || showBlank ? 'rgba(34, 197, 94, 0.5)' : undefined
+            } : {}),
             // iOS 16 button fixes
             ...(isIOS16 ? {
               WebkitAppearance: 'none',
@@ -1230,12 +1256,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             }}
             disabled={isSpinning || showBlank}
             className={`
-              px-[clamp(12px,2vw,18px)]
-              py-[clamp(8px,1.6vw,12px)]
-              text-[clamp(12px,1.6vw,14px)]
+              ${isFirefox
+                ? "px-3 py-2 text-sm min-w-[90px]"
+                : "px-[clamp(12px,2vw,18px)] py-[clamp(8px,1.6vw,12px)] text-[clamp(12px,1.6vw,14px)] min-w-[clamp(80px,18vw,110px)]"
+              }
               font-bold text-white rounded-lg shadow-lg
               transition-all hover:scale-[1.02] active:scale-95
-              min-w-[clamp(80px,18vw,110px)]
               ${
                 isSpinning || showBlank
                   ? "bg-blue-500"
@@ -1246,6 +1272,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
               touchAction: 'manipulation',
               opacity: (isSpinning || showBlank) ? '0.5' : '1',
               pointerEvents: (isSpinning || showBlank) ? 'none' : 'auto',
+              // iOS opacity fixes
+              ...(isIOS && (isSpinning || showBlank) ? {
+                WebkitOpacity: '0.5',
+                filter: 'opacity(0.5)',
+                backgroundColor: isSpinning || showBlank ? 'rgba(59, 130, 246, 0.5)' : undefined
+              } : {}),
               // iOS 16 button fixes
               ...(isIOS16 ? {
                 WebkitAppearance: 'none',
