@@ -37,42 +37,139 @@ export default function Home() {
     };
   }, []);
 
-  // Universal viewport fix for keyboard issues (iOS 16 Firefox and others)
+  // Enhanced Firefox and browser detection
+  const [isFirefox, setIsFirefox] = useState(false);
+  const [hasVisualViewport, setHasVisualViewport] = useState(false);
+
+  // Detect Firefox and capabilities on mount
+  useEffect(() => {
+    const detectFirefox = () => {
+      if (typeof window === 'undefined') return { isFirefox: false, version: 0 };
+
+      const userAgent = navigator.userAgent;
+      const firefoxMatch = userAgent.match(/Firefox\/(\d+)/);
+
+      if (firefoxMatch) {
+        const version = parseInt(firefoxMatch[1]);
+        return { isFirefox: true, version };
+      }
+
+      return { isFirefox: false, version: 0 };
+    };
+
+    const { isFirefox: firefoxDetected, version } = detectFirefox();
+    setIsFirefox(firefoxDetected);
+    const hasViewportAPI = 'visualViewport' in window;
+    setHasVisualViewport(hasViewportAPI);
+
+    // Debug logging for troubleshooting
+    if (firefoxDetected) {
+      console.log(`Firefox ${version} detected, visualViewport support: ${hasViewportAPI}`);
+    }
+  }, []);
+
+  // Enhanced viewport fix for keyboard issues (iOS 16, Firefox and others)
   useEffect(() => {
     // Force viewport recalculation when name input modal closes
     if (!showNameInput) {
-      // Small delay to ensure keyboard is fully dismissed
+      // Firefox needs longer delay for consistent keyboard dismissal
+      const delay = isFirefox ? 200 : 100;
+
       const timer = setTimeout(() => {
         const vh = window.innerHeight * 0.01;
         document.documentElement.style.setProperty('--vh', `${vh}px`);
 
+        // Firefox-specific additional custom property
+        if (isFirefox) {
+          document.documentElement.style.setProperty('--firefox-vh', `${vh}px`);
+        }
+
         // Force a layout recalculation
         window.dispatchEvent(new Event('resize'));
-      }, 100);
+
+        // Additional Firefox-specific viewport restore
+        if (isFirefox && window.visualViewport) {
+          const visualVh = window.visualViewport.height * 0.01;
+          document.documentElement.style.setProperty('--visual-vh', `${visualVh}px`);
+        }
+      }, delay);
 
       return () => clearTimeout(timer);
     }
-  }, [showNameInput]);
+  }, [showNameInput, isFirefox]);
 
-  // Additional defensive viewport handling during modal interactions
+  // Advanced viewport handling during modal interactions with Firefox support
   useEffect(() => {
     if (showNameInput) {
-      // Add extra resize listener during modal interaction
+      let viewportRestoreTimeout: NodeJS.Timeout;
+
       const handleViewportRestore = () => {
-        const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
+        // Debounce to prevent excessive calls
+        clearTimeout(viewportRestoreTimeout);
+        viewportRestoreTimeout = setTimeout(() => {
+          const vh = window.innerHeight * 0.01;
+          document.documentElement.style.setProperty('--vh', `${vh}px`);
+
+          // Firefox-specific handling
+          if (isFirefox) {
+            document.documentElement.style.setProperty('--firefox-vh', `${vh}px`);
+
+            // Use visualViewport API if available
+            if (hasVisualViewport && window.visualViewport) {
+              const visualVh = window.visualViewport.height * 0.01;
+              document.documentElement.style.setProperty('--visual-vh', `${visualVh}px`);
+            }
+          }
+        }, isFirefox ? 50 : 16); // Firefox needs slight debouncing
       };
 
-      // Listen for focus/blur events that might indicate keyboard state
-      window.addEventListener('focusin', handleViewportRestore);
-      window.addEventListener('focusout', handleViewportRestore);
+      // Enhanced event handling for Firefox
+      const events = ['focusin', 'focusout'];
+
+      // Add visualViewport events for modern Firefox
+      if (hasVisualViewport && window.visualViewport) {
+        window.visualViewport.addEventListener('resize', handleViewportRestore);
+      }
+
+      // Traditional events as fallback
+      events.forEach(event => {
+        window.addEventListener(event, handleViewportRestore);
+      });
+
+      // Firefox-specific keyboard detection fallback
+      let lastWindowHeight = window.innerHeight;
+      const firefoxKeyboardDetector = () => {
+        if (isFirefox) {
+          const currentHeight = window.innerHeight;
+          const heightDiff = Math.abs(currentHeight - lastWindowHeight);
+
+          // If significant height change, likely keyboard show/hide
+          if (heightDiff > 150) {
+            handleViewportRestore();
+            lastWindowHeight = currentHeight;
+          }
+        }
+      };
+
+      const firefoxInterval = isFirefox ? setInterval(firefoxKeyboardDetector, 100) : null;
 
       return () => {
-        window.removeEventListener('focusin', handleViewportRestore);
-        window.removeEventListener('focusout', handleViewportRestore);
+        clearTimeout(viewportRestoreTimeout);
+
+        if (hasVisualViewport && window.visualViewport) {
+          window.visualViewport.removeEventListener('resize', handleViewportRestore);
+        }
+
+        events.forEach(event => {
+          window.removeEventListener(event, handleViewportRestore);
+        });
+
+        if (firefoxInterval) {
+          clearInterval(firefoxInterval);
+        }
       };
     }
-  }, [showNameInput]);
+  }, [showNameInput, isFirefox, hasVisualViewport]);
 
   // Prevent body scroll when modals are open
   useEffect(() => {
@@ -176,13 +273,21 @@ export default function Home() {
     <div
       className="w-screen overflow-hidden relative fixed inset-0"
       style={{
-        height: 'calc(var(--vh, 1vh) * 100)',
+        height: isFirefox
+          ? 'calc(var(--firefox-vh, var(--vh, 1vh)) * 100)'
+          : 'calc(var(--vh, 1vh) * 100)',
         boxShadow: `
           inset 0 0 40px rgba(255, 255, 255, 0.15),
           inset 0 0 80px rgba(255, 255, 255, 0.08)
         `,
         touchAction: 'none',
         overscrollBehavior: 'none',
+        // Firefox-specific viewport adjustments
+        ...(isFirefox && {
+          minHeight: hasVisualViewport
+            ? 'calc(var(--visual-vh, var(--firefox-vh, var(--vh, 1vh))) * 100)'
+            : 'calc(var(--firefox-vh, var(--vh, 1vh)) * 100)',
+        }),
       }}
     >
       {/* Optimized blurred background image */}

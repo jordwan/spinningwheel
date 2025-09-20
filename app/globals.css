@@ -37,6 +37,9 @@ html {
   overscroll-behavior: none;
   /* Use dynamic viewport height for better mobile support */
   --vh: 100vh;
+  /* Firefox-specific viewport properties */
+  --firefox-vh: 100vh;
+  --visual-vh: 100vh;
   height: 100%;
   overflow: hidden;
 }
@@ -77,5 +80,41 @@ body {
 
 .animate-bounce-in {
   animation: bounce-in 0.5s ease-out;
+}
+
+/* Firefox-specific improvements */
+@-moz-document url-prefix() {
+  /* Improve Firefox input field behavior */
+  input, textarea, select {
+    line-height: normal;
+    box-sizing: border-box;
+  }
+
+  /* Firefox canvas optimization */
+  canvas {
+    image-rendering: optimizeQuality;
+    image-rendering: -moz-crisp-edges;
+  }
+
+  /* Firefox button improvements */
+  button {
+    -moz-appearance: none;
+    appearance: none;
+    border: none;
+    outline: none;
+  }
+
+  /* Firefox modal backdrop optimization */
+  .fixed.inset-0 {
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+}
+
+/* Modern Firefox with visualViewport support */
+@supports (height: 100dvh) {
+  .firefox-viewport-fallback {
+    height: calc(var(--visual-vh, var(--firefox-vh, var(--vh, 100dvh))));
+  }
 }
 

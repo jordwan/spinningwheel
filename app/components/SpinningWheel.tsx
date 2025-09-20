@@ -311,8 +311,20 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     if (typeof window === "undefined") return;
 
     const vw = window.innerWidth;
-    // Use dynamic viewport height instead of window.innerHeight for better mobile support
-    const vh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--vh').replace('px', '')) * 100 || window.innerHeight;
+    // Enhanced viewport height calculation with Firefox support
+    let vh: number;
+
+    if (isFirefox) {
+      // Try Firefox-specific viewport first, then fallback
+      const firefoxVh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--firefox-vh').replace('px', '')) * 100;
+      const visualVh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--visual-vh').replace('px', '')) * 100;
+      const standardVh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--vh').replace('px', '')) * 100;
+
+      vh = firefoxVh || visualVh || standardVh || window.innerHeight;
+    } else {
+      // Use standard dynamic viewport height for non-Firefox browsers
+      vh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--vh').replace('px', '')) * 100 || window.innerHeight;
+    }
 
     // Conservative fallbacks so first pass doesn't oversize the wheel:
     const speedH = Math.max(speedRef.current?.offsetHeight ?? 0, 72);
@@ -338,7 +350,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     target = Math.max(minSize, Math.min(maxSize, target));
 
     setCanvasCSSSize(target);
-  }, []);
+  }, [isFirefox]);
 
   useLayoutEffect(() => {
     // Initial pass + observers (so when controls gain height, we recalc)
@@ -1185,6 +1197,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
               transform: 'translateZ(0)', // Hardware acceleration
               willChange: 'transform',     // Hint browser for optimization
             }),
+            // Firefox-specific optimizations
+            ...(isFirefox ? {
+              imageRendering: 'auto',
+              WebkitBackfaceVisibility: 'hidden',
+              backfaceVisibility: 'hidden',
+              // Enhanced performance for Firefox
+              contain: 'layout style paint',
+            } : {}),
           }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
@@ -1209,6 +1229,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             WebkitBoxAlign: 'center',
             WebkitBoxOrient: 'horizontal'
           } : {}),
+          // Firefox-specific layout improvements
+          ...(isFirefox ? {
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 'clamp(8px, 1.2vw, 12px)',
+            justifyContent: 'center',
+            alignItems: 'center'
+          } : {}),
         }}
       >
         <button
@@ -1216,7 +1244,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           disabled={isSpinning || showBlank}
           className={`
             ${isFirefox
-              ? "px-4 py-2 text-base min-w-[140px]"
+              ? "px-4 py-3 text-base min-w-[140px] max-w-[200px]"
               : "px-[clamp(14px,2.2vw,22px)] py-[clamp(9px,1.8vw,14px)] text-[clamp(16px,1.8vw,18px)] min-w-[clamp(120px,24vw,156px)]"
             }
             font-bold text-white rounded-lg shadow-lg transition-all
@@ -1257,7 +1285,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             disabled={isSpinning || showBlank}
             className={`
               ${isFirefox
-                ? "px-3 py-2 text-sm min-w-[90px]"
+                ? "px-3 py-3 text-sm min-w-[90px] max-w-[140px]"
                 : "px-[clamp(12px,2vw,18px)] py-[clamp(8px,1.6vw,12px)] text-[clamp(12px,1.6vw,14px)] min-w-[clamp(80px,18vw,110px)]"
               }
               font-bold text-white rounded-lg shadow-lg
