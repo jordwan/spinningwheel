@@ -60,10 +60,10 @@ const truncateText = (text: string, maxLength: number): string => {
 };
 
 const measureTextWidth = (ctx: CanvasRenderingContext2D, text: string, fontSize: number): number => {
-  const oldFont = ctx.font;
+  ctx.save();
   ctx.font = `bold ${fontSize}px Arial`;
   const metrics = ctx.measureText(text);
-  ctx.font = oldFont;
+  ctx.restore();
   return metrics.width;
 };
 
@@ -445,10 +445,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     const isFirefoxBrowser = detectFirefox();
     setIsFirefox(isFirefoxBrowser);
 
-    // Simplified device capability detection
-    const lowMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    const cores = navigator.hardwareConcurrency || 4;
-    setDeviceCapability(lowMotion ? 'low' : (cores >= 8 ? 'high' : 'medium'));
+    // Simplified device capability detection (client-side only)
+    if (typeof window !== 'undefined') {
+      const lowMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      const cores = navigator.hardwareConcurrency || 4;
+      setDeviceCapability(lowMotion ? 'low' : (cores >= 8 ? 'high' : 'medium'));
+    }
   }, []);
 
   /** ========= DRAG INTERACTION HANDLERS ========= */
@@ -627,7 +629,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || typeof window === 'undefined') return;
 
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const css = canvasCSSSize;
@@ -832,17 +834,22 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           const displayText = uniformDisplayTexts[i] || name;
           const fs = uniformFontSize;
 
-          ctx.font = `bold ${fs}px Arial`;
-          const paddingFromEdge = 15; // Consistent padding from wheel edge
-
-          // Dark outline stroke for better contrast
-          ctx.strokeStyle = "rgba(0,0,0,0.7)";
-          ctx.lineWidth = Math.max(1, fs / 8);
-          ctx.strokeText(displayText, radius - paddingFromEdge, fs / 3);
-
-          // Fill text with white
           ctx.fillStyle = "#fff";
+          ctx.font = `bold ${fs}px Arial`;
+          ctx.shadowColor = "rgba(0,0,0,0.7)";
+          ctx.shadowBlur = Math.max(2, fs / 4);
+          ctx.shadowOffsetX = 1;
+          ctx.shadowOffsetY = 1;
+
+          // Position text consistently from edge, regardless of length
+          const paddingFromEdge = 15; // Consistent padding from wheel edge
           ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
+
+          // Reset shadow properties to prevent context pollution
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
         }
         ctx.restore();
       }
@@ -906,7 +913,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   }, [rotation, canvasCSSSize, wheelNames, colors, showBlank]);
 
   useEffect(() => {
-    drawWheel();
+    // Only draw on client-side to prevent hydration issues
+    if (typeof window !== 'undefined') {
+      drawWheel();
+    }
   }, [drawWheel]);
 
   /** ========= Confetti ========= */
