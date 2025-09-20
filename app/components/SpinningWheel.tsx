@@ -32,11 +32,7 @@ const getAngleFromPoint = (centerX: number, centerY: number, pointX: number, poi
 
 const getCanvasCoordinates = (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
   const rect = canvas.getBoundingClientRect();
-  // Convert to canvas coordinate space (not including device pixel ratio)
-  return {
-    x: (clientX - rect.left) * (canvas.offsetWidth / rect.width),
-    y: (clientY - rect.top) * (canvas.offsetHeight / rect.height)
-  };
+  return { x: clientX - rect.left, y: clientY - rect.top };
 };
 
 const normalizeAngleDifference = (angleDiff: number): number => {
@@ -64,10 +60,10 @@ const truncateText = (text: string, maxLength: number): string => {
 };
 
 const measureTextWidth = (ctx: CanvasRenderingContext2D, text: string, fontSize: number): number => {
-  ctx.save();
+  const oldFont = ctx.font;
   ctx.font = `bold ${fontSize}px Arial`;
   const metrics = ctx.measureText(text);
-  ctx.restore();
+  ctx.font = oldFont;
   return metrics.width;
 };
 
@@ -340,8 +336,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
     let target = Math.min(availableW, availableH);
 
-    // Desktop guard: never let the wheel exceed ~56% of viewport height
-    const vhCap = Math.floor(vh * (vw >= 1024 ? 0.56 : 0.62));
+    // Desktop guard: allow slightly bigger wheel on XL screens
+    const vhCap = Math.floor(vh * (vw >= 1280 ? 0.62 : vw >= 1024 ? 0.58 : 0.62));
     target = Math.min(target, vhCap);
 
     // Global clamps - keep consistent sizes
@@ -356,7 +352,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     // Initial pass + observers (so when controls gain height, we recalc)
     recomputeSize();
 
-    const ro = new ResizeObserver(() => recomputeSize());
+    let roRaf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(roRaf);
+      roRaf = requestAnimationFrame(recomputeSize);
+    });
     if (speedRef.current) ro.observe(speedRef.current);
     if (controlsRef.current) ro.observe(controlsRef.current);
     if (footerRef.current) ro.observe(footerRef.current);
@@ -372,6 +372,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
     return () => {
       clearTimeout(timer);
+      cancelAnimationFrame(roRaf);
       ro.disconnect();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
@@ -382,7 +383,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   useEffect(() => {
     return () => {
       // Cleanup audio context on unmount
-      if (audioCtxRef.current) {
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
         try {
           audioCtxRef.current.close();
         } catch (error) {
@@ -444,87 +445,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     const isFirefoxBrowser = detectFirefox();
     setIsFirefox(isFirefoxBrowser);
 
-    // Enhanced device capability detection
-    const detectDeviceCapability = (): 'high' | 'medium' | 'low' => {
-      if (typeof window === 'undefined') return 'medium';
-
-      const userAgent = window.navigator.userAgent;
-      let score = 0;
-
-      // Browser version scoring
-      const chromeMatch = userAgent.match(/Chrome\/(\d+)/);
-      if (chromeMatch) {
-        const version = parseInt(chromeMatch[1]);
-        if (version >= 100) score += 3;
-        else if (version >= 80) score += 2;
-        else score += 0;
-      }
-
-      const safariMatch = userAgent.match(/Version\/(\d+).*Safari/);
-      if (safariMatch) {
-        const version = parseInt(safariMatch[1]);
-        if (version >= 16) score += 3;
-        else if (version >= 14) score += 2;
-        else score += 0;
-      }
-
-      const firefoxMatch = userAgent.match(/Firefox\/(\d+)/);
-      if (firefoxMatch) {
-        const version = parseInt(firefoxMatch[1]);
-        if (version >= 100) score += 3;
-        else if (version >= 75) score += 2;
-        else score += 0;
-      }
-
-      // OS version scoring
-      if (/iPad|iPhone|iPod/.test(userAgent)) {
-        const iosMatch = userAgent.match(/OS (\d+)_(\d+)/);
-        if (iosMatch) {
-          const majorVersion = parseInt(iosMatch[1]);
-          if (majorVersion >= 17) score += 2;
-          else if (majorVersion === 16) score -= 1; // iOS 16 performance issues
-          else score -= 2;
-        }
-      }
-
-      if (/Android/.test(userAgent)) {
-        const androidMatch = userAgent.match(/Android (\d+)/);
-        if (androidMatch) {
-          const version = parseInt(androidMatch[1]);
-          if (version >= 12) score += 2;
-          else if (version >= 10) score += 1;
-          else score -= 1;
-        }
-      }
-
-      // Hardware indicators
-      if (navigator.hardwareConcurrency) {
-        if (navigator.hardwareConcurrency >= 8) score += 2;
-        else if (navigator.hardwareConcurrency >= 4) score += 1;
-        else score -= 1;
-      }
-
-      // Device memory (if available)
-      // Note: deviceMemory is experimental API, not in standard Navigator type
-      interface NavigatorWithMemory extends Navigator {
-        deviceMemory?: number;
-      }
-      const navigatorWithMemory = navigator as NavigatorWithMemory;
-
-      if ('deviceMemory' in navigator && navigatorWithMemory.deviceMemory) {
-        const memory = navigatorWithMemory.deviceMemory;
-        if (memory >= 8) score += 2;
-        else if (memory >= 4) score += 1;
-        else score -= 1;
-      }
-
-      // Determine capability based on score
-      if (score >= 7) return 'high';
-      if (score >= 3) return 'medium';
-      return 'low';
-    };
-
-    setDeviceCapability(detectDeviceCapability());
+    // Simplified device capability detection
+    const lowMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const cores = navigator.hardwareConcurrency || 4;
+    setDeviceCapability(lowMotion ? 'low' : (cores >= 8 ? 'high' : 'medium'));
   }, []);
 
   /** ========= DRAG INTERACTION HANDLERS ========= */
@@ -535,9 +459,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     if (!canDrag || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
     const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
-    const centerX = canvas.offsetWidth / 2;
-    const centerY = canvas.offsetHeight / 2;
 
     // Check if click/touch is within wheel area
     const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
@@ -562,9 +487,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     if (!isDragging || !canvasRef.current || lastDragAngle === null) return;
 
     const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
     const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
-    const centerX = canvas.offsetWidth / 2;
-    const centerY = canvas.offsetHeight / 2;
 
     const currentAngle = getAngleFromPoint(centerX, centerY, x, y);
     const angleDiff = normalizeAngleDifference(currentAngle - lastDragAngle);
@@ -591,13 +517,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     if (Math.abs(dragVelocity) > 0.5) {
       let currentVelocity = dragVelocity;
       const friction = 0.95; // Friction coefficient
+      let prev = performance.now();
 
-      const animateMomentum = () => {
-        currentVelocity *= friction;
+      const animateMomentum = (now: number) => {
+        const dt = (now - prev) / 1000; // Delta time in seconds
+        prev = now;
+        currentVelocity *= Math.pow(friction, dt * 60); // Normalized to 60fps equivalent
 
         // Continue if velocity is significant
         if (Math.abs(currentVelocity) > 0.01 && canDrag) {
-          setRotation(prev => prev + currentVelocity / 60); // 60 FPS assumption
+          setRotation(r => r + currentVelocity * dt);
           momentumAnimationRef.current = requestAnimationFrame(animateMomentum);
         } else {
           momentumAnimationRef.current = null;
@@ -728,62 +657,51 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       const maxWidth = getMaxTextWidth(radius, sliceAngle);
       const baseFontSize = Math.max(8, Math.min(16, css / Math.max(30, wheelNames.length * 0.6)));
 
-      // Find the longest name (excluding RESPIN) and calculate optimal size for it
-      const regularNames = wheelNames.filter(name => name !== "RESPIN" && name !== "");
-      if (regularNames.length > 0) {
-        // Test font sizes for all names and find the smallest size that fits all
+      // Order-preserving build: filter regular names while maintaining their order
+      const regularNamesInOrder = wheelNames.filter(n => n !== "RESPIN" && n !== "");
+
+      if (regularNamesInOrder.length > 0) {
         let testFontSize = baseFontSize;
-        let allNamesDisplayTexts: string[] = [];
+        let perNameDisplay: string[] = [];
 
         while (testFontSize >= 6) {
           let allFit = true;
-          allNamesDisplayTexts = [];
+          perNameDisplay = [];
 
-          for (const name of regularNames) {
-            let displayText = name;
-            const textWidth = measureTextWidth(ctx, displayText, testFontSize);
-
-            // If text doesn't fit, try truncating
-            if (textWidth > maxWidth) {
+          for (const name of regularNamesInOrder) {
+            let display = name;
+            if (measureTextWidth(ctx, display, testFontSize) > maxWidth) {
               let maxChars = 15;
               while (maxChars > 12) {
-                displayText = truncateText(name, maxChars);
-                const truncatedWidth = measureTextWidth(ctx, displayText, testFontSize);
-                if (truncatedWidth <= maxWidth) break;
+                display = truncateText(name, maxChars);
+                if (measureTextWidth(ctx, display, testFontSize) <= maxWidth) break;
                 maxChars -= 2;
               }
-
-              // If still doesn't fit even after truncation, this font size won't work
-              if (measureTextWidth(ctx, displayText, testFontSize) > maxWidth) {
+              if (measureTextWidth(ctx, display, testFontSize) > maxWidth) {
                 allFit = false;
                 break;
               }
             }
-            allNamesDisplayTexts.push(displayText);
+            perNameDisplay.push(display);
           }
 
           if (allFit) {
             uniformFontSize = testFontSize;
-            // Create the full array including RESPIN entries
-            uniformDisplayTexts = wheelNames.map(name => {
-              if (name === "RESPIN" || name === "") return name;
-              const index = regularNames.indexOf(name);
-              return index !== -1 ? allNamesDisplayTexts[index] : name;
-            });
             break;
           }
-
           testFontSize -= 0.5;
         }
 
-        // Fallback if no size worked
         if (testFontSize < 6) {
           uniformFontSize = 6;
-          uniformDisplayTexts = wheelNames.map(name => {
-            if (name === "RESPIN" || name === "") return name;
-            return truncateText(name, 14); // Aggressive truncation as fallback
-          });
+          perNameDisplay = regularNamesInOrder.map(n => truncateText(n, 14));
         }
+
+        // Map back to wheelNames preserving order for duplicates
+        let ri = 0;
+        uniformDisplayTexts = wheelNames.map(n =>
+          (n === "RESPIN" || n === "") ? n : perNameDisplay[ri++]
+        );
       }
     }
 
@@ -879,7 +797,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Inner glow
+        // Inner glow (optimized - use existing clipped path)
         ctx.save();
         ctx.clip();
         ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
@@ -902,27 +820,28 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           const baseFontSize = Math.max(6, Math.min(14, css / Math.max(35, wheelNames.length * 1.2)));
           const fs = calculateOptimalFontSize(ctx, text, maxWidth, 6, baseFontSize);
 
-          ctx.fillStyle = "#ffff00";
           ctx.font = `bold ${fs}px Arial`;
           ctx.strokeStyle = "#000";
           ctx.lineWidth = Math.max(1, fs / 8);
           const paddingFromEdge = 15; // Consistent with regular text
           ctx.strokeText(text, radius - paddingFromEdge, fs / 3);
+          ctx.fillStyle = "#ffff00";
           ctx.fillText(text, radius - paddingFromEdge, fs / 3);
         } else {
           // Use pre-calculated uniform font size and display text
           const displayText = uniformDisplayTexts[i] || name;
           const fs = uniformFontSize;
 
-          ctx.fillStyle = "#fff";
           ctx.font = `bold ${fs}px Arial`;
-          ctx.shadowColor = "rgba(0,0,0,0.7)";
-          ctx.shadowBlur = Math.max(2, fs / 4);
-          ctx.shadowOffsetX = 1;
-          ctx.shadowOffsetY = 1;
-
-          // Position text consistently from edge, regardless of length
           const paddingFromEdge = 15; // Consistent padding from wheel edge
+
+          // Dark outline stroke for better contrast
+          ctx.strokeStyle = "rgba(0,0,0,0.7)";
+          ctx.lineWidth = Math.max(1, fs / 8);
+          ctx.strokeText(displayText, radius - paddingFromEdge, fs / 3);
+
+          // Fill text with white
+          ctx.fillStyle = "#fff";
           ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
         }
         ctx.restore();
@@ -978,14 +897,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     ctx.fillStyle = pointerGradient;
     ctx.fill();
 
-    // White highlight
+    // Single stroke operation: white outline
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Dark edge
-    ctx.strokeStyle = "#660000";
-    ctx.lineWidth = 1;
     ctx.stroke();
 
     ctx.restore();
@@ -1041,12 +955,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     // Track wheel spin event
     if (typeof window !== 'undefined' && window.gtag) {
       window.gtag('event', 'wheel_spin', {
-        event_category: 'engagement',
-        event_label: 'spin_wheel',
-        custom_map: {
-          'segments': wheelNames.length,
-          'spin_power': speedIndicator
-        }
+        segments: wheelNames.length,
+        spin_power: speedIndicator
       });
     }
 
@@ -1092,7 +1002,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       const normalizedRotation = ((currentRotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
       const currentSegment = Math.floor(normalizedRotation / segmentSize);
 
-      const minBetweenTicks = Math.max(50, 250 * (1 - (1 - progress)));
+      const minBetweenTicks = 50 + 200 * progress; // 50ms → 250ms
       if (
         currentSegment !== lastSegment &&
         now - lastSoundTime >= minBetweenTicks
@@ -1126,13 +1036,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         // Track winner selection
         if (typeof window !== 'undefined' && window.gtag) {
           window.gtag('event', 'wheel_result', {
-            event_category: 'engagement',
-            event_label: winner === "RESPIN" ? 'free_spin' : 'winner_selected',
-            custom_map: {
-              'result': winner,
-              'segments': wheelNames.length,
-              'is_respin': winner === "RESPIN"
-            }
+            result: winner,
+            segments: wheelNames.length,
+            is_respin: winner === "RESPIN"
           });
         }
 
@@ -1153,7 +1059,22 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
   /** ========= UI ========= */
   return (
-    <div ref={rootRef} className="flex flex-col items-center w-full h-full">
+    <div
+      ref={rootRef}
+      className="flex flex-col items-center w-full h-full"
+      role="application"
+      aria-label="Spinning wheel"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if ((e.key === " " || e.key === "Enter") && !isSpinning && !showBlank) {
+          e.preventDefault();
+          spin();
+        }
+      }}
+    >
+      <div aria-live="polite" className="sr-only">
+        {isSpinning ? "Wheel spinning" : selectedName ? `Winner: ${selectedName}` : ""}
+      </div>
       {/* Spin Power (≈50% width on mobile, larger on bigger screens) */}
       <div
         ref={speedRef}
@@ -1191,7 +1112,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             width: canvasCSSSize,
             height: canvasCSSSize,
             cursor: canDrag ? (isDragging ? 'grabbing' : 'grab') : 'default',
-            touchAction: 'pan-x pan-y', // Allow touch gestures for dragging
+            touchAction: 'none', // Prevent touch scroll stealing drags
             // Remove problematic iOS 16 properties
             ...(isIOS16 ? {} : {
               transform: 'translateZ(0)', // Hardware acceleration
