@@ -688,6 +688,73 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
     const sliceAngle = (2 * Math.PI) / wheelNames.length;
 
+    // Calculate uniform font size for all names based on the longest name
+    let uniformFontSize = 16; // Default max size
+    let uniformDisplayTexts: string[] = [];
+
+    if (!showBlank) {
+      const maxWidth = getMaxTextWidth(radius, sliceAngle);
+      const baseFontSize = Math.max(8, Math.min(16, css / Math.max(30, wheelNames.length * 0.6)));
+
+      // Find the longest name (excluding RESPIN) and calculate optimal size for it
+      const regularNames = wheelNames.filter(name => name !== "RESPIN" && name !== "");
+      if (regularNames.length > 0) {
+        // Test font sizes for all names and find the smallest size that fits all
+        let testFontSize = baseFontSize;
+        let allNamesDisplayTexts: string[] = [];
+
+        while (testFontSize >= 6) {
+          let allFit = true;
+          allNamesDisplayTexts = [];
+
+          for (const name of regularNames) {
+            let displayText = name;
+            const textWidth = measureTextWidth(ctx, displayText, testFontSize);
+
+            // If text doesn't fit, try truncating
+            if (textWidth > maxWidth) {
+              let maxChars = 15;
+              while (maxChars > 8) {
+                displayText = truncateText(name, maxChars);
+                const truncatedWidth = measureTextWidth(ctx, displayText, testFontSize);
+                if (truncatedWidth <= maxWidth) break;
+                maxChars -= 2;
+              }
+
+              // If still doesn't fit even after truncation, this font size won't work
+              if (measureTextWidth(ctx, displayText, testFontSize) > maxWidth) {
+                allFit = false;
+                break;
+              }
+            }
+            allNamesDisplayTexts.push(displayText);
+          }
+
+          if (allFit) {
+            uniformFontSize = testFontSize;
+            // Create the full array including RESPIN entries
+            uniformDisplayTexts = wheelNames.map(name => {
+              if (name === "RESPIN" || name === "") return name;
+              const index = regularNames.indexOf(name);
+              return index !== -1 ? allNamesDisplayTexts[index] : name;
+            });
+            break;
+          }
+
+          testFontSize -= 0.5;
+        }
+
+        // Fallback if no size worked
+        if (testFontSize < 6) {
+          uniformFontSize = 6;
+          uniformDisplayTexts = wheelNames.map(name => {
+            if (name === "RESPIN" || name === "") return name;
+            return truncateText(name, 10); // Aggressive truncation as fallback
+          });
+        }
+      }
+    }
+
     wheelNames.forEach((name, i) => {
       const start = i * sliceAngle + rotation;
       const end = (i + 1) * sliceAngle + rotation;
@@ -798,6 +865,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
         if (name === "RESPIN") {
           const text = "FREE SPIN";
+          // Use separate font size calculation for RESPIN to maintain its distinct appearance
           const maxWidth = getMaxTextWidth(radius, sliceAngle);
           const baseFontSize = Math.max(6, Math.min(14, css / Math.max(35, wheelNames.length * 1.2)));
           const fs = calculateOptimalFontSize(ctx, text, maxWidth, 6, baseFontSize);
@@ -810,25 +878,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           ctx.strokeText(text, radius - paddingFromEdge, fs / 3);
           ctx.fillText(text, radius - paddingFromEdge, fs / 3);
         } else {
-          // Calculate optimal font size and truncate text if needed
-          const maxWidth = getMaxTextWidth(radius, sliceAngle);
-          const baseFontSize = Math.max(8, Math.min(16, css / Math.max(30, wheelNames.length * 0.6)));
-
-          // First try with original text
-          let displayText = name;
-          let fs = calculateOptimalFontSize(ctx, displayText, maxWidth, 6, baseFontSize);
-
-          // If font size is too small, try truncating the text
-          if (fs <= 7 && name.length > 15) {
-            // Calculate max characters that fit
-            let maxChars = 15;
-            while (maxChars > 8) {
-              displayText = truncateText(name, maxChars);
-              fs = calculateOptimalFontSize(ctx, displayText, maxWidth, 6, baseFontSize);
-              if (fs > 7) break;
-              maxChars -= 2;
-            }
-          }
+          // Use pre-calculated uniform font size and display text
+          const displayText = uniformDisplayTexts[i] || name;
+          const fs = uniformFontSize;
 
           ctx.fillStyle = "#fff";
           ctx.font = `bold ${fs}px Arial`;
@@ -838,7 +890,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           ctx.shadowOffsetY = 1;
 
           // Position text consistently from edge, regardless of length
-          // Use right alignment and position from edge for consistent layout
           const paddingFromEdge = 15; // Consistent padding from wheel edge
           ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
         }
