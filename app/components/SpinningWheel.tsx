@@ -49,6 +49,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [fairnessText, setFairnessText] = useState("");
   const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
   const [lastWinner, setLastWinner] = useState<string>("");
+  const [isIOS16, setIsIOS16] = useState(false);
 
   /** ========= AUDIO (unchanged) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -266,6 +267,29 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       window.removeEventListener("orientationchange", onResize);
     };
   }, [recomputeSize, wheelNames.length]); // Add dependency on names count
+
+  /** ========= iOS 16 Detection ========= */
+  useEffect(() => {
+    const detectIOS16 = () => {
+      if (typeof window === 'undefined') return false;
+
+      const userAgent = window.navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(userAgent);
+
+      if (!isIOS) return false;
+
+      // Extract iOS version from user agent
+      const versionMatch = userAgent.match(/OS (\d+)_(\d+)/);
+      if (versionMatch) {
+        const majorVersion = parseInt(versionMatch[1]);
+        return majorVersion === 16;
+      }
+
+      return false;
+    };
+
+    setIsIOS16(detectIOS16());
+  }, []);
 
   /** ========= Draw wheel (HiDPI, labels, pointer) ========= */
   const colors = useMemo(
@@ -683,8 +707,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           style={{
             width: canvasCSSSize,
             height: canvasCSSSize,
-            transform: 'translateZ(0)', // Hardware acceleration
-            willChange: 'transform',     // Hint browser for optimization
+            // Remove problematic iOS 16 properties
+            ...(isIOS16 ? {} : {
+              transform: 'translateZ(0)', // Hardware acceleration
+              willChange: 'transform',     // Hint browser for optimization
+            }),
           }}
         />
       </div>

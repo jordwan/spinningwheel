@@ -67,7 +67,15 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden relative animate-glow-pulse">
+    <div
+      className="h-screen w-screen overflow-hidden relative"
+      style={{
+        boxShadow: `
+          inset 0 0 40px rgba(255, 255, 255, 0.15),
+          inset 0 0 80px rgba(255, 255, 255, 0.08)
+        `,
+      }}
+    >
       {/* Blurred background image */}
       <div
         className="absolute inset-0"
