@@ -12,7 +12,7 @@ export default function Home() {
   const [teamName, setTeamName] = useState("");
   const [randomNameCount, setRandomNameCount] = useState("6");
   const [showRandomCountInput, setShowRandomCountInput] = useState(false);
-  const [includeFreeSpins, setIncludeFreeSpins] = useState(true);
+  const [includeFreeSpins] = useState(false);
 
   const generateRandomNames = (count: number = 10) => {
     return getRandomNames(count);
@@ -47,21 +47,22 @@ export default function Home() {
     if (names.length > 0) {
       setWheelNames(names);
       setShowNameInput(false);
-    } else {
-      // If no input, show the random count input
-      setShowRandomCountInput(true);
-    }
 
-    // Update document title with team name
-    if (teamName) {
-      document.title = `${teamName} - iWxeel`;
+      // Update document title with team name
+      if (teamName) {
+        document.title = `${teamName} - iWxeel`;
+      }
     }
+    // Removed the else clause that would show random count input
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmitNames();
+      // Only submit if there's input or we're on the random count screen
+      if (inputValue.trim() !== "" || showRandomCountInput) {
+        handleSubmitNames();
+      }
     }
   };
 
@@ -82,17 +83,19 @@ export default function Home() {
 
       {/* Content overlay - not blurred */}
       <div className="relative z-10">
-        {/* Name Input Popup (no overlay) */}
+        {/* Name Input Popup (overlay on top of wheel) */}
         {showNameInput && (
           <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
             <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full pointer-events-auto text-center relative">
               {/* Close button */}
               <button
                 onClick={() => {
-                  if (inputValue.trim() === "") {
-                    setShowRandomCountInput(true);
+                  if (showRandomCountInput) {
+                    // Go back to custom names input
+                    setShowRandomCountInput(false);
                   } else {
-                    handleSubmitNames();
+                    // On custom names screen, X button goes to random selector
+                    setShowRandomCountInput(true);
                   }
                 }}
                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
@@ -122,7 +125,7 @@ export default function Home() {
                 <span className="text-sm text-gray-500">
                   {showRandomCountInput
                     ? "Choose between 2-101 names"
-                    : "Enter comma separated names. Leave blank and hit enter for random."}
+                    : "Enter comma separated names or use random"}
                 </span>
               </p>
               {!showRandomCountInput ? (
@@ -143,49 +146,52 @@ export default function Home() {
                   />
                 </>
               ) : (
-                <div className="flex gap-3">
-                  <div className="flex-[5]">
-                    <label className="block text-center text-gray-600 mb-2 text-sm">
-                      Select number of names
-                    </label>
-                    <select
-                      value={randomNameCount}
-                      onChange={(e) => setRandomNameCount(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center text-lg bg-white cursor-pointer"
-                    >
-                      {Array.from({ length: 100 }, (_, i) => i + 2).map((num) => (
-                        <option key={num} value={num}>
-                          {num} names
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="flex flex-col items-center">
-                      <input
-                        type="checkbox"
-                        id="includeFreeSpins"
-                        checked={includeFreeSpins}
-                        onChange={(e) => setIncludeFreeSpins(e.target.checked)}
-                        className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
-                      />
-                      <label
-                        htmlFor="includeFreeSpins"
-                        className="mt-2 text-xs font-medium text-gray-600 cursor-pointer text-center leading-tight"
-                      >
-                        Free<br/>Spins
-                      </label>
-                    </div>
-                  </div>
+                <div>
+                  <label className="block text-center text-gray-600 mb-2 text-sm">
+                    Select number of names
+                  </label>
+                  <select
+                    value={randomNameCount}
+                    onChange={(e) => setRandomNameCount(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center text-lg bg-white cursor-pointer"
+                  >
+                    {Array.from({ length: 100 }, (_, i) => i + 2).map((num) => (
+                      <option key={num} value={num}>
+                        {num} names
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
               <div className="mt-6">
-                <button
-                  onClick={handleSubmitNames}
-                  className="w-full px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                  Enter
-                </button>
+                {!showRandomCountInput ? (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowRandomCountInput(true)}
+                      className="flex-1 px-6 py-3 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 transition-colors cursor-pointer"
+                    >
+                      Random
+                    </button>
+                    <button
+                      onClick={handleSubmitNames}
+                      disabled={inputValue.trim() === ""}
+                      className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-colors ${
+                        inputValue.trim() === ""
+                          ? "bg-gray-300 text-gray-500"
+                          : "bg-blue-500 text-white hover:bg-blue-600 cursor-pointer"
+                      }`}
+                    >
+                      Enter
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleSubmitNames}
+                    className="w-full px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
+                  >
+                    Enter
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -204,26 +210,25 @@ export default function Home() {
             </div>
           </div>
           <div className="flex-1 w-full max-w-4xl mx-auto">
-            {!showNameInput && (
-              <SpinningWheel
-                names={wheelNames}
-                includeFreeSpins={includeFreeSpins}
-                onReset={() => {
-                  // Track reset action
-                  if (typeof window !== 'undefined' && window.gtag) {
-                    window.gtag('event', 'wheel_reset', {
-                      event_category: 'engagement',
-                      event_label: 'reset_wheel'
-                    });
-                  }
-                  setShowNameInput(true);
-                  setInputValue("");
-                  setTeamName("");
-                  setShowRandomCountInput(false);
-                  document.title = "iWheeli.com";
-                }}
-              />
-            )}
+            <SpinningWheel
+              names={wheelNames.length > 0 ? wheelNames : undefined}
+              includeFreeSpins={includeFreeSpins}
+              showBlank={showNameInput}
+              onReset={() => {
+                // Track reset action
+                if (typeof window !== 'undefined' && window.gtag) {
+                  window.gtag('event', 'wheel_reset', {
+                    event_category: 'engagement',
+                    event_label: 'reset_wheel'
+                  });
+                }
+                setShowNameInput(true);
+                setInputValue("");
+                setTeamName("");
+                setShowRandomCountInput(false);
+                document.title = "iWheeli.com";
+              }}
+            />
           </div>
         </main>
       </div>

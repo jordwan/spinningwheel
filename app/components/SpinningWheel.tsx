@@ -24,9 +24,10 @@ interface SpinningWheelProps {
   names?: string[];
   onReset?: () => void;
   includeFreeSpins?: boolean;
+  showBlank?: boolean;
 }
 
-const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFreeSpins = true }) => {
+const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFreeSpins = true, showBlank = false }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Layout refs
@@ -47,6 +48,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [showFairnessPopup, setShowFairnessPopup] = useState(false);
   const [fairnessText, setFairnessText] = useState("");
   const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
+  const [lastWinner, setLastWinner] = useState<string>("");
 
   /** ========= AUDIO (unchanged) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -134,6 +136,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
   /** ========= Names + RESPIN placement ========= */
   const wheelNames = useMemo(() => {
+    // If showing blank state, use empty placeholder names
+    if (showBlank) {
+      const placeholderCount = 8;
+      return Array(placeholderCount).fill("");
+    }
+
     const base =
       names && names.length
         ? names
@@ -149,10 +157,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     result.splice(0, 0, "RESPIN");
     result.splice(mid, 0, "RESPIN");
     return result;
-  }, [names, includeFreeSpins]);
+  }, [names, includeFreeSpins, showBlank]);
 
   /** ========= Fairness text ========= */
   useEffect(() => {
+    if (showBlank) {
+      setFairnessText("");
+      setLastWinner(""); // Clear last winner when showing blank wheel
+      return;
+    }
+
     const total = wheelNames.length;
     const respinCount = wheelNames.filter((n) => n === "RESPIN").length;
 
@@ -168,7 +182,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         ).toFixed(2)}% chance`
       );
     }
-  }, [wheelNames, includeFreeSpins]);
+  }, [wheelNames, includeFreeSpins, showBlank]);
 
   /** ========= Idle speed indicator with RAF for smooth animation ========= */
   useEffect(() => {
@@ -302,7 +316,30 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       ctx.arc(centerX, centerY, radius, start, end);
       ctx.closePath();
 
-      if (name === "RESPIN") {
+      if (showBlank) {
+        // Simple gradient for blank segments
+        const g = ctx.createRadialGradient(
+          centerX + Math.cos(midAngle) * radius * 0.5,
+          centerY + Math.sin(midAngle) * radius * 0.5,
+          0,
+          centerX,
+          centerY,
+          radius
+        );
+        const baseColor = colors[i % colors.length];
+        const cleanColor = baseColor.slice(0, 7);
+        // More muted colors for blank state
+        g.addColorStop(0, cleanColor + "33");
+        g.addColorStop(0.85, cleanColor + "22");
+        g.addColorStop(1, cleanColor + "11");
+        ctx.fillStyle = g;
+        ctx.fill();
+
+        // Lighter border for blank state
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      } else if (name === "RESPIN") {
         // Metallic black gradient for RESPIN
         const g = ctx.createRadialGradient(
           centerX + Math.cos(midAngle) * radius * 0.5,
@@ -370,35 +407,37 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         ctx.restore();
       }
 
-      // Labels
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.rotate(start + sliceAngle / 2);
-      ctx.textAlign = "right";
+      // Labels (skip for blank segments)
+      if (!showBlank) {
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(start + sliceAngle / 2);
+        ctx.textAlign = "right";
 
-      if (name === "RESPIN") {
-        ctx.fillStyle = "#ffff00";
-        const fs = Math.max(
-          6,
-          Math.min(14, css / Math.max(35, wheelNames.length * 1.2))
-        );
-        ctx.font = `bold ${fs}px Arial`;
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = Math.max(1, fs / 8);
-        ctx.strokeText("FREE SPIN", radius - 10, fs / 3);
-        ctx.fillText("FREE SPIN", radius - 10, fs / 3);
-      } else {
-        ctx.fillStyle = "#fff";
-        const fs = Math.max(
-          8,
-          Math.min(16, css / Math.max(30, wheelNames.length * 0.6))
-        );
-        ctx.font = `bold ${fs}px Arial`;
-        ctx.shadowColor = "rgba(0,0,0,0.5)";
-        ctx.shadowBlur = 4;
-        ctx.fillText(name, radius - 10, fs / 3);
+        if (name === "RESPIN") {
+          ctx.fillStyle = "#ffff00";
+          const fs = Math.max(
+            6,
+            Math.min(14, css / Math.max(35, wheelNames.length * 1.2))
+          );
+          ctx.font = `bold ${fs}px Arial`;
+          ctx.strokeStyle = "#000";
+          ctx.lineWidth = Math.max(1, fs / 8);
+          ctx.strokeText("FREE SPIN", radius - 10, fs / 3);
+          ctx.fillText("FREE SPIN", radius - 10, fs / 3);
+        } else {
+          ctx.fillStyle = "#fff";
+          const fs = Math.max(
+            8,
+            Math.min(16, css / Math.max(30, wheelNames.length * 0.6))
+          );
+          ctx.font = `bold ${fs}px Arial`;
+          ctx.shadowColor = "rgba(0,0,0,0.5)";
+          ctx.shadowBlur = 4;
+          ctx.fillText(name, radius - 10, fs / 3);
+        }
+        ctx.restore();
       }
-      ctx.restore();
     });
 
     // Center cap with metallic gradient
@@ -461,7 +500,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     ctx.stroke();
 
     ctx.restore();
-  }, [rotation, canvasCSSSize, wheelNames, colors]);
+  }, [rotation, canvasCSSSize, wheelNames, colors, showBlank]);
 
   useEffect(() => {
     drawWheel();
@@ -500,7 +539,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   ];
 
   const spin = () => {
-    if (isSpinning) return;
+    if (isSpinning || showBlank) return;
 
     // Track wheel spin event
     if (typeof window !== 'undefined' && window.gtag) {
@@ -572,6 +611,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         const winner = wheelNames[selectedIndex];
         setSelectedName(winner);
 
+        // Save last winner (but not RESPIN)
+        if (winner !== "RESPIN") {
+          setLastWinner(winner);
+        }
+
         // Track winner selection
         if (typeof window !== 'undefined' && window.gtag) {
           window.gtag('event', 'wheel_result', {
@@ -586,14 +630,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         }
 
         if (winner !== "RESPIN") {
-          setTimeout(() => {
-            const rhyme =
-              winnerRhymes[Math.floor(cryptoRandom() * winnerRhymes.length)];
-            setWinnerRhyme(rhyme);
-            setShowWinnerModal(true);
-            triggerConfetti();
-            playTadaSound();
-          }, 100);
+          // Show winner immediately
+          const rhyme =
+            winnerRhymes[Math.floor(cryptoRandom() * winnerRhymes.length)];
+          setWinnerRhyme(rhyme);
+          setShowWinnerModal(true);
+          triggerConfetti();
+          playTadaSound();
         }
       }
     };
@@ -657,7 +700,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       >
         <button
           onClick={spin}
-          disabled={isSpinning}
+          disabled={isSpinning || showBlank}
           className={`
             px-[clamp(14px,2.2vw,22px)]
             py-[clamp(9px,1.8vw,14px)]
@@ -665,9 +708,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             font-bold text-white rounded-lg shadow-lg transition-all
             min-w-[clamp(120px,24vw,156px)]
             ${
-              isSpinning
-                ? "bg-gray-500 cursor-not-allowed"
-                : "bg-green-500 hover:bg-green-600 hover:scale-[1.02] active:scale-95"
+              isSpinning || showBlank
+                ? "bg-green-500 opacity-50"
+                : "bg-green-500 hover:bg-green-600 hover:scale-[1.02] active:scale-95 cursor-pointer"
             }
           `}
         >
@@ -677,14 +720,20 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         {onReset && (
           <button
             onClick={onReset}
-            className="
+            disabled={isSpinning || showBlank}
+            className={`
               px-[clamp(12px,2vw,18px)]
               py-[clamp(8px,1.6vw,12px)]
               text-[clamp(12px,1.6vw,14px)]
-              font-bold text-white bg-blue-500 rounded-lg shadow-lg
-              hover:bg-blue-600 transition-all hover:scale-[1.02] active:scale-95
+              font-bold text-white rounded-lg shadow-lg
+              transition-all hover:scale-[1.02] active:scale-95
               min-w-[clamp(80px,18vw,110px)]
-            "
+              ${
+                isSpinning || showBlank
+                  ? "bg-blue-500 opacity-50"
+                  : "bg-blue-500 hover:bg-blue-600 cursor-pointer"
+              }
+            `}
           >
             Reset
           </button>
@@ -842,11 +891,18 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
       {/* Footer */}
       <div ref={footerRef} className="w-full text-center">
-        {fairnessText && (
-          <div className="text-center mb-1">
-            <span className="text-[clamp(10px,1.6vw,12px)] text-white/70 whitespace-nowrap">
-              {fairnessText}
-            </span>
+        {(fairnessText || lastWinner) && (
+          <div className="text-center mb-1 flex flex-col items-center gap-1">
+            {fairnessText && (
+              <span className="text-[clamp(10px,1.6vw,12px)] text-white/70 whitespace-nowrap">
+                {fairnessText}
+              </span>
+            )}
+            {lastWinner && (
+              <span className="text-[clamp(10px,1.6vw,12px)] text-white/70">
+                Last winner: <span className="text-white font-semibold">{lastWinner}</span>
+              </span>
+            )}
           </div>
         )}
         <div className="text-center">
