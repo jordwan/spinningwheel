@@ -1031,7 +1031,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       rotation + Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
 
     const startTime = Date.now();
-    let lastRotation = rotation;
     let lastSoundTime = 0;
     let lastFrameTime = 0;
     const segmentSize = (2 * Math.PI) / wheelNames.length;
@@ -1072,8 +1071,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         lastSegment = currentSegment;
         lastSoundTime = now;
       }
-
-      lastRotation = currentRotation;
 
       if (progress < 1) {
         requestAnimationFrame(animate);
@@ -1185,6 +1182,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         style={{
           width: `${canvasCSSSize}px`,
           maxWidth: "95vw",
+          // iOS 16 layout fixes
+          ...(isIOS16 ? {
+            display: '-webkit-box',
+            WebkitBoxPack: 'center',
+            WebkitBoxAlign: 'center',
+            WebkitBoxOrient: 'horizontal'
+          } : {}),
         }}
       >
         <button
@@ -1198,11 +1202,21 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             min-w-[clamp(120px,24vw,156px)]
             ${
               isSpinning || showBlank
-                ? "bg-green-500 opacity-50"
+                ? "bg-green-500"
                 : "bg-green-500 hover:bg-green-600 hover:scale-[1.02] active:scale-95 cursor-pointer"
             }
           `}
-          style={{ touchAction: 'manipulation' }}
+          style={{
+            touchAction: 'manipulation',
+            opacity: (isSpinning || showBlank) ? '0.5' : '1',
+            pointerEvents: (isSpinning || showBlank) ? 'none' : 'auto',
+            // iOS 16 button fixes
+            ...(isIOS16 ? {
+              WebkitAppearance: 'none',
+              border: 'none',
+              outline: 'none'
+            } : {})
+          }}
         >
           {isSpinning ? "Spinning..." : "SPIN!"}
         </button>
@@ -1224,11 +1238,21 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
               min-w-[clamp(80px,18vw,110px)]
               ${
                 isSpinning || showBlank
-                  ? "bg-blue-500 opacity-50"
+                  ? "bg-blue-500"
                   : "bg-blue-500 hover:bg-blue-600 cursor-pointer"
               }
             `}
-            style={{ touchAction: 'manipulation' }}
+            style={{
+              touchAction: 'manipulation',
+              opacity: (isSpinning || showBlank) ? '0.5' : '1',
+              pointerEvents: (isSpinning || showBlank) ? 'none' : 'auto',
+              // iOS 16 button fixes
+              ...(isIOS16 ? {
+                WebkitAppearance: 'none',
+                border: 'none',
+                outline: 'none'
+              } : {})
+            }}
           >
             Reset
           </button>
