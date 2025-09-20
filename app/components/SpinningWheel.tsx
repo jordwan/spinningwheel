@@ -20,6 +20,33 @@ const cryptoRandom = (): number => {
   return Math.random();
 };
 
+/** ========= DRAG UTILITIES ========= */
+const getAngleFromPoint = (centerX: number, centerY: number, pointX: number, pointY: number): number => {
+  const deltaX = pointX - centerX;
+  const deltaY = pointY - centerY;
+  let angle = Math.atan2(deltaY, deltaX);
+  // Convert to 0-2π range
+  if (angle < 0) angle += Math.PI * 2;
+  return angle;
+};
+
+const getCanvasCoordinates = (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY
+  };
+};
+
+const normalizeAngleDifference = (angleDiff: number): number => {
+  // Normalize angle difference to [-π, π] for shortest rotation path
+  while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+  while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+  return angleDiff;
+};
+
 interface SpinningWheelProps {
   names?: string[];
   onReset?: () => void;
@@ -51,6 +78,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [lastWinner, setLastWinner] = useState<string>("");
   const [isIOS16, setIsIOS16] = useState(false);
   const [deviceCapability, setDeviceCapability] = useState<'high' | 'medium' | 'low'>('medium');
+
+  // Drag interaction state
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastDragAngle, setLastDragAngle] = useState<number | null>(null);
+  const [dragVelocity, setDragVelocity] = useState(0);
+  const [lastDragTime, setLastDragTime] = useState(0);
+  const momentumAnimationRef = useRef<number | null>(null);
 
   /** ========= AUDIO (unchanged) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -292,6 +326,17 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     };
   }, []);
 
+  /** ========= Drag Animation Cleanup ========= */
+  useEffect(() => {
+    return () => {
+      // Cleanup momentum animation on unmount
+      if (momentumAnimationRef.current) {
+        cancelAnimationFrame(momentumAnimationRef.current);
+        momentumAnimationRef.current = null;
+      }
+    };
+  }, []);
+
   /** ========= iOS 16 Detection ========= */
   useEffect(() => {
     const detectIOS16 = () => {
@@ -397,6 +442,157 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
     setDeviceCapability(detectDeviceCapability());
   }, []);
+
+  /** ========= DRAG INTERACTION HANDLERS ========= */
+  const canDrag = !isSpinning && !showWinnerModal && !showBlank;
+
+  const startDrag = useCallback((clientX: number, clientY: number) => {
+    if (!canDrag || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
+    const centerX = canvas.width / (window.devicePixelRatio || 1) / 2;
+    const centerY = canvas.height / (window.devicePixelRatio || 1) / 2;
+
+    // Check if click/touch is within wheel area
+    const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+    const wheelRadius = Math.min(centerX, centerY) - 18;
+
+    if (distance <= wheelRadius) {
+      const angle = getAngleFromPoint(centerX, centerY, x, y);
+      setIsDragging(true);
+      setLastDragAngle(angle);
+      setDragVelocity(0);
+      setLastDragTime(Date.now());
+
+      // Cancel any existing momentum
+      if (momentumAnimationRef.current) {
+        cancelAnimationFrame(momentumAnimationRef.current);
+        momentumAnimationRef.current = null;
+      }
+    }
+  }, [canDrag]);
+
+  const updateDrag = useCallback((clientX: number, clientY: number) => {
+    if (!isDragging || !canvasRef.current || lastDragAngle === null) return;
+
+    const canvas = canvasRef.current;
+    const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
+    const centerX = canvas.width / (window.devicePixelRatio || 1) / 2;
+    const centerY = canvas.height / (window.devicePixelRatio || 1) / 2;
+
+    const currentAngle = getAngleFromPoint(centerX, centerY, x, y);
+    const angleDiff = normalizeAngleDifference(currentAngle - lastDragAngle);
+
+    // Calculate velocity for momentum
+    const currentTime = Date.now();
+    const timeDiff = currentTime - lastDragTime;
+    if (timeDiff > 0) {
+      setDragVelocity(angleDiff / timeDiff * 1000); // radians per second
+    }
+
+    setRotation(prev => prev + angleDiff);
+    setLastDragAngle(currentAngle);
+    setLastDragTime(currentTime);
+  }, [isDragging, lastDragAngle, lastDragTime]);
+
+  const endDrag = useCallback(() => {
+    if (!isDragging) return;
+
+    setIsDragging(false);
+    setLastDragAngle(null);
+
+    // Start momentum animation if there's significant velocity
+    if (Math.abs(dragVelocity) > 0.5) {
+      let currentVelocity = dragVelocity;
+      const friction = 0.95; // Friction coefficient
+
+      const animateMomentum = () => {
+        currentVelocity *= friction;
+
+        // Continue if velocity is significant
+        if (Math.abs(currentVelocity) > 0.01 && canDrag) {
+          setRotation(prev => prev + currentVelocity / 60); // 60 FPS assumption
+          momentumAnimationRef.current = requestAnimationFrame(animateMomentum);
+        } else {
+          momentumAnimationRef.current = null;
+          setDragVelocity(0);
+        }
+      };
+
+      momentumAnimationRef.current = requestAnimationFrame(animateMomentum);
+    }
+  }, [isDragging, dragVelocity, canDrag]);
+
+  // Mouse event handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    startDrag(e.clientX, e.clientY);
+  }, [startDrag]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    updateDrag(e.clientX, e.clientY);
+  }, [updateDrag]);
+
+  const handleMouseUp = useCallback(() => {
+    endDrag();
+  }, [endDrag]);
+
+  // Touch event handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      startDrag(touch.clientX, touch.clientY);
+    }
+  }, [startDrag]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      updateDrag(touch.clientX, touch.clientY);
+    }
+  }, [updateDrag]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    endDrag();
+  }, [endDrag]);
+
+  // Global mouse event handlers for smooth dragging
+  useEffect(() => {
+    if (isDragging) {
+      const handleGlobalMouseMove = (e: MouseEvent) => {
+        updateDrag(e.clientX, e.clientY);
+      };
+
+      const handleGlobalMouseUp = () => {
+        endDrag();
+      };
+
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+
+      return () => {
+        document.removeEventListener('mousemove', handleGlobalMouseMove);
+        document.removeEventListener('mouseup', handleGlobalMouseUp);
+      };
+    }
+  }, [isDragging, updateDrag, endDrag]);
+
+  // Cancel drag when entering restricted states
+  useEffect(() => {
+    if (!canDrag && isDragging) {
+      setIsDragging(false);
+      setLastDragAngle(null);
+      setDragVelocity(0);
+      if (momentumAnimationRef.current) {
+        cancelAnimationFrame(momentumAnimationRef.current);
+        momentumAnimationRef.current = null;
+      }
+    }
+  }, [canDrag, isDragging]);
 
   /** ========= Draw wheel (HiDPI, labels, pointer) ========= */
   const colors = useMemo(
@@ -834,12 +1030,20 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           style={{
             width: canvasCSSSize,
             height: canvasCSSSize,
+            cursor: canDrag ? (isDragging ? 'grabbing' : 'grab') : 'default',
+            touchAction: 'none', // Handle touch events manually
             // Remove problematic iOS 16 properties
             ...(isIOS16 ? {} : {
               transform: 'translateZ(0)', // Hardware acceleration
               willChange: 'transform',     // Hint browser for optimization
             }),
           }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={isDragging ? handleMouseMove : undefined}
+          onMouseUp={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         />
       </div>
 
