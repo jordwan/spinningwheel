@@ -558,7 +558,7 @@ export default function Home() {
                     value={localInputValue}
                     onChange={(e) => handleInputChange(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    placeholder="example: tom, jerry, bart, cindy..."
+                    placeholder="example: mike, cindy, jamal, wayne..."
                     className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
                     style={{ touchAction: "manipulation" }}
                     autoComplete="off"
@@ -591,9 +591,9 @@ export default function Home() {
                             // Check for non-numeric characters on desktop
                             if (value && !/^\d*$/.test(value)) {
                               // Flash a visual warning
-                              e.target.style.borderColor = 'red';
+                              e.target.style.borderColor = "red";
                               setTimeout(() => {
-                                e.target.style.borderColor = '#3b82f6';
+                                e.target.style.borderColor = "#3b82f6";
                               }, 500);
                               return;
                             }
