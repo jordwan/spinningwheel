@@ -116,12 +116,25 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   // Performance management
   const [performanceMode, setPerformanceMode] = useState<'optimal' | 'balanced' | 'performance'>('optimal');
 
-  /** ========= AUDIO (optimized for async) ========= */
+  /** ========= AUDIO (optimized with node pooling) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
   const clickBufferRef = useRef<AudioBuffer | null>(null);
   const tadaBufferRef = useRef<AudioBuffer | null>(null);
   const audioInitPromiseRef = useRef<Promise<void> | null>(null);
   const isAudioInitializingRef = useRef<boolean>(false);
+
+  // Audio node pool for efficient click sounds
+  const audioPoolRef = useRef<{
+    sources: AudioBufferSourceNode[];
+    gains: GainNode[];
+    currentIndex: number;
+    poolSize: number;
+  }>({
+    sources: [],
+    gains: [],
+    currentIndex: 0,
+    poolSize: 8
+  });
 
   // Create audio context only (fast operation)
   const getAudioContext = useCallback(() => {
@@ -156,31 +169,26 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       if (!clickBufferRef.current) {
         await new Promise<void>(resolve => {
           setTimeout(() => {
-            const duration = 0.012; // Slightly longer for more distinctive sound
+            const duration = 0.008; // Shorter for efficiency while maintaining quality
             const sr = ctx.sampleRate;
             const frames = Math.max(1, Math.floor(duration * sr));
             const buffer = ctx.createBuffer(1, frames, sr);
             const data = buffer.getChannelData(0);
 
-            // Create a more distinctive "tick" sound with harmonic content
+            // Create a crisp "tick" sound optimized for rapid playback
             for (let i = 0; i < frames; i++) {
               const t = i / sr;
-              const env = Math.exp(-t * 120); // Slightly slower decay
+              const env = Math.exp(-t * 150); // Fast decay for crisp sound
 
-              // Fundamental frequency with harmonics for richer sound
+              // Simplified harmonic content for efficiency
               const fundamental = 1800;
               const harmonic2 = fundamental * 2;
-              const harmonic3 = fundamental * 3;
 
               let sample = 0;
-              sample += Math.sin(2 * Math.PI * fundamental * t) * 0.6; // Main tone
-              sample += Math.sin(2 * Math.PI * harmonic2 * t) * 0.2;   // Second harmonic
-              sample += Math.sin(2 * Math.PI * harmonic3 * t) * 0.1;   // Third harmonic
+              sample += Math.sin(2 * Math.PI * fundamental * t) * 0.7; // Main tone
+              sample += Math.sin(2 * Math.PI * harmonic2 * t) * 0.25;  // Second harmonic
 
-              // Add slight noise for more realistic click
-              sample += (Math.random() - 0.5) * 0.05;
-
-              data[i] = sample * env * 0.25;
+              data[i] = sample * env * 0.2;
             }
 
             clickBufferRef.current = buffer;
@@ -260,6 +268,29 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     return ctx;
   }, [getAudioContext, createAudioBuffersAsync]);
 
+  // Initialize audio pool
+  const initializeAudioPool = useCallback((ctx: AudioContext) => {
+    const pool = audioPoolRef.current;
+
+    // Clear existing pool
+    pool.sources.forEach(source => {
+      try { source.disconnect(); } catch {}
+    });
+    pool.gains.forEach(gain => {
+      try { gain.disconnect(); } catch {}
+    });
+
+    pool.sources = [];
+    pool.gains = [];
+
+    // Create new pool
+    for (let i = 0; i < pool.poolSize; i++) {
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+      pool.gains.push(gain);
+    }
+  }, []);
+
   const playTickSound = useCallback(async (v = 0.1) => {
     try {
       const ctx = await ensureAudio();
@@ -269,16 +300,34 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         await ctx.resume().catch(() => {});
       }
 
+      // Initialize pool if needed
+      const pool = audioPoolRef.current;
+      if (pool.gains.length === 0) {
+        initializeAudioPool(ctx);
+      }
+
+      // Get next available node from pool
+      const gain = pool.gains[pool.currentIndex];
+      pool.currentIndex = (pool.currentIndex + 1) % pool.poolSize;
+
+      // Set volume
+      gain.gain.value = Math.max(0.01, Math.min(0.12, v));
+
+      // Create new source (these are lightweight and disposable)
       const src = ctx.createBufferSource();
       src.buffer = clickBufferRef.current;
-      const gain = ctx.createGain();
-      gain.gain.value = Math.max(0.01, Math.min(0.15, v));
-      src.connect(gain).connect(ctx.destination);
+      src.connect(gain);
+
+      // Auto-cleanup after sound finishes
+      src.onended = () => {
+        try { src.disconnect(); } catch {}
+      };
+
       src.start();
     } catch {
       // Silently fail for audio errors
     }
-  }, [ensureAudio]);
+  }, [ensureAudio, initializeAudioPool]);
 
   const playTadaSound = useCallback(async (v = 0.3) => {
     try {
@@ -518,6 +567,18 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       pointerGradientCache.current = null;
       lastCanvasSize.current = { width: 0, height: 0 };
       segmentGradientsCache.current.clear();
+
+      // Clear audio pool
+      const pool = audioPoolRef.current;
+      pool.sources.forEach(source => {
+        try { source.disconnect(); } catch {}
+      });
+      pool.gains.forEach(gain => {
+        try { gain.disconnect(); } catch {}
+      });
+      pool.sources = [];
+      pool.gains = [];
+      pool.currentIndex = 0;
     };
   }, []);
 
@@ -1260,7 +1321,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       rotation + Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
 
     const startTime = Date.now();
-    let lastSoundTime = 0;
     let lastFrameTime = 0;
     const segmentSize = (2 * Math.PI) / wheelNames.length;
     let lastSegment = -1;
@@ -1289,50 +1349,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       const normalized = (2 * Math.PI - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
       const currentSegment = Math.floor(normalized / segmentSize);
 
-      // Smart click sound system to prevent audio glitches with many segments
+      // Play click sound on every segment crossing with optimized audio system
       if (currentSegment !== lastSegment) {
         // Calculate speed-based volume (louder when faster)
         const speed = 1 - easeOut;
         const vol = Math.max(0.01, Math.min(0.08, 0.01 + speed * 0.07));
 
-        // Smart skipping logic based on segment count and spin speed
-        const segmentCount = wheelNames.length;
-        let shouldPlayClick = true;
-
-        if (segmentCount >= 15) {
-          // For many segments, implement smart skipping
-          if (speed > 0.7) {
-            // Very fast spinning: skip 3 out of 4 clicks
-            shouldPlayClick = (currentSegment % 4) === 0;
-          } else if (speed > 0.4) {
-            // Fast spinning: skip every other click
-            shouldPlayClick = (currentSegment % 2) === 0;
-          } else if (speed > 0.2) {
-            // Medium spinning: skip every 3rd click
-            shouldPlayClick = (currentSegment % 3) !== 0;
-          }
-          // Slow spinning: play all clicks
-        } else if (segmentCount >= 10) {
-          // For moderate segment counts, lighter skipping
-          if (speed > 0.8) {
-            // Very fast: skip every other
-            shouldPlayClick = (currentSegment % 2) === 0;
-          } else if (speed > 0.5) {
-            // Fast: skip every 3rd
-            shouldPlayClick = (currentSegment % 3) !== 0;
-          }
-          // Otherwise play all clicks
-        }
-        // For <= 9 segments: always play all clicks
-
-        // Minimum interval to prevent audio system overload
-        const minInterval = segmentCount >= 20 ? 25 : 16; // Longer interval for very high segment counts
-
-        if (shouldPlayClick && now - lastSoundTime >= minInterval) {
-          playTickSound(vol).catch(() => {}); // Fire and forget async audio
-          lastSoundTime = now;
-        }
-
+        playTickSound(vol).catch(() => {}); // Use pooled audio system
         lastSegment = currentSegment;
       }
 
