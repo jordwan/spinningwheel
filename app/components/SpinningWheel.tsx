@@ -1436,8 +1436,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     const spinStrength = speedIndicator;
     const baseRotations = 2.5 + spinStrength * 5; // 2.5 to 7.5 rotations
     const spinDuration = 10000; // Fixed 10 second duration for all speeds
-    const finalRotation =
-      rotation + Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
+
+    // TRUE RANDOM: Select winner independently of current wheel position
+    const randomWinnerIndex = Math.floor(cryptoRandom() * wheelNames.length);
+    const segmentAngle = (2 * Math.PI) / wheelNames.length;
+    const targetAngle = randomWinnerIndex * segmentAngle;
+
+    // Calculate final rotation to land on the randomly selected segment
+    // Add full rotations + random offset within the winning segment for visual appeal
+    const extraRotations = Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
+    const finalRotation = rotation + extraRotations + (targetAngle - (rotation % (2 * Math.PI)));
 
     const startTime = Date.now();
     let lastFrameTime = 0;
@@ -1485,13 +1493,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         setIsSpinning(false);
         setLockedSpeed(null);
 
-        // Calculate winner immediately
-        const normalized =
-          (2 * Math.PI - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
-        const selectedIndex = Math.floor(
-          normalized / ((2 * Math.PI) / wheelNames.length)
-        );
-        const winner = wheelNames[selectedIndex];
+        // Use the pre-selected random winner (truly random, independent of wheel position)
+        const winner = wheelNames[randomWinnerIndex];
         setSelectedName(winner);
 
         if (winner !== "RESPIN") {
