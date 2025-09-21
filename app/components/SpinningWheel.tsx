@@ -1437,20 +1437,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     const baseRotations = 2.5 + spinStrength * 5; // 2.5 to 7.5 rotations
     const spinDuration = 10000; // Fixed 10 second duration for all speeds
 
-    // TRUE RANDOM: Select winner independently of current wheel position
-    const randomWinnerIndex = Math.floor(cryptoRandom() * wheelNames.length);
-    const segmentAngle = (2 * Math.PI) / wheelNames.length;
-
-    // Calculate the middle of the target segment (where we want the pointer to land)
-    const targetSegmentMiddle = randomWinnerIndex * segmentAngle + segmentAngle / 2;
-
-    // The pointer is at angle 0 (right side), so we need to rotate until
-    // the target segment middle aligns with the pointer position
-    const targetRotation = (2 * Math.PI) - targetSegmentMiddle;
-
-    // Add full rotations for visual effect
-    const extraRotations = Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
-    const finalRotation = rotation + extraRotations + targetRotation;
+    // Simple random spin - let wheel land wherever it naturally stops
+    const finalRotation = rotation + Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
 
     const startTime = Date.now();
     let lastFrameTime = 0;
@@ -1498,8 +1486,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         setIsSpinning(false);
         setLockedSpeed(null);
 
-        // Use the pre-selected random winner (truly random, independent of wheel position)
-        const winner = wheelNames[randomWinnerIndex];
+        // Calculate winner based on where the wheel actually stopped
+        const normalizedRotation = (2 * Math.PI - (finalRotation % (2 * Math.PI))) % (2 * Math.PI);
+        const selectedIndex = Math.floor(normalizedRotation / segmentSize);
+        const winner = wheelNames[selectedIndex % wheelNames.length];
         setSelectedName(winner);
 
         if (winner !== "RESPIN") {
