@@ -2003,21 +2003,24 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               </div>
             )}
             {/* Always show last winner line to prevent layout shifts */}
-            <div className="text-[clamp(8px,1.2vw,10px)] text-white/70 px-1 truncate max-w-full">
-              Last winner:{" "}
-              {winnerHistory.length > 0 ? (
-                <span className="text-white font-semibold">
-                  {winnerHistory[winnerHistory.length - 1]}
-                  {winnerHistory.length > 1 && (
-                    <span className="text-white/50 font-normal">
-                      {" ← "}
-                      {winnerHistory.slice(0, -1).reverse().slice(0, 24).join(" ← ")}
-                      {winnerHistory.length > 25 && " ..."}
-                    </span>
-                  )}
-                </span>
-              ) : (
-                <span className="text-white/40 italic">—</span>
+            <div className="relative flex justify-center items-center text-[clamp(8px,1.2vw,10px)] text-white/70 px-1">
+              {/* Centered main winner display */}
+              <div className="text-center">
+                Last winner:{" "}
+                {winnerHistory.length > 0 ? (
+                  <span className="text-white font-semibold">
+                    {winnerHistory[winnerHistory.length - 1]}
+                  </span>
+                ) : (
+                  <span className="text-white/40 italic">—</span>
+                )}
+              </div>
+              {/* History extending to the right */}
+              {winnerHistory.length > 1 && (
+                <div className="absolute left-1/2 ml-2 text-white/50 font-normal whitespace-nowrap overflow-hidden" style={{maxWidth: '40%'}}>
+                  ← {winnerHistory.slice(0, -1).reverse().slice(0, 24).join(" ← ")}
+                  {winnerHistory.length > 25 && " ..."}
+                </div>
               )}
             </div>
           </div>
