@@ -109,7 +109,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   const [showFairnessPopup, setShowFairnessPopup] = useState(false);
   const [fairnessText, setFairnessText] = useState("");
   const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
-  const [lastWinner, setLastWinner] = useState<string>("");
+  const [winnerHistory, setWinnerHistory] = useState<string[]>([]);
   const [isIOS16, setIsIOS16] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isFirefox, setIsFirefox] = useState(false);
@@ -391,7 +391,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   useEffect(() => {
     if (showBlank) {
       setFairnessText("");
-      setLastWinner(""); // Clear last winner when showing blank wheel
+      setWinnerHistory([]); // Clear winner history when resetting
       return;
     }
 
@@ -538,7 +538,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     // Recalculate layout when footer content changes (e.g., lastWinner appears)
     const timer = setTimeout(() => recomputeSize(), 50);
     return () => clearTimeout(timer);
-  }, [lastWinner, fairnessText, recomputeSize]);
+  }, [winnerHistory, fairnessText, recomputeSize]);
 
   /** ========= Audio Context Cleanup ========= */
   useEffect(() => {
@@ -1705,9 +1705,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         {onReset && (
           <button
             onClick={() => {
-              // Save last winner when user resets (acknowledging the win)
+              // Save winner when user resets (acknowledging the win)
               if (selectedName && selectedName !== "RESPIN") {
-                setLastWinner(selectedName);
+                setWinnerHistory(prev => [...prev, selectedName]);
               }
               setShowWinnerModal(false); // Close winner modal first
               setWinnerRhyme("");
@@ -1765,9 +1765,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           onClick={(e) => {
             // Close modal when clicking backdrop
             if (e.target === e.currentTarget) {
-              // Save last winner when user acknowledges the win by clicking backdrop
+              // Save winner when user acknowledges the win by clicking backdrop
               if (selectedName && selectedName !== "RESPIN") {
-                setLastWinner(selectedName);
+                setWinnerHistory(prev => [...prev, selectedName]);
               }
               setShowWinnerModal(false);
               setWinnerRhyme("");
@@ -1806,9 +1806,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             </p>
             <button
               onClick={() => {
-                // Save last winner when user acknowledges the win
+                // Save winner when user acknowledges the win
                 if (selectedName && selectedName !== "RESPIN") {
-                  setLastWinner(selectedName);
+                  setWinnerHistory(prev => [...prev, selectedName]);
                 }
                 setShowWinnerModal(false);
                 setWinnerRhyme("");
@@ -2002,8 +2002,17 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             {/* Always show last winner line to prevent layout shifts */}
             <div className="text-[clamp(8px,1.2vw,10px)] text-white/70 px-1 truncate max-w-full">
               Last winner:{" "}
-              {lastWinner ? (
-                <span className="text-white font-semibold">{lastWinner}</span>
+              {winnerHistory.length > 0 ? (
+                <span className="text-white font-semibold">
+                  {winnerHistory[winnerHistory.length - 1]}
+                  {winnerHistory.length > 1 && (
+                    <span className="text-white/50 font-normal">
+                      {" ← "}
+                      {winnerHistory.slice(0, -1).reverse().slice(0, 3).join(" ← ")}
+                      {winnerHistory.length > 4 && " ..."}
+                    </span>
+                  )}
+                </span>
               ) : (
                 <span className="text-white/40 italic">—</span>
               )}
