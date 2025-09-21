@@ -37,16 +37,17 @@ export default function Home() {
     const checkIsMobile = () => {
       if (typeof window !== "undefined") {
         // Check for touch capability and screen size
-        const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const hasTouch =
+          "ontouchstart" in window || navigator.maxTouchPoints > 0;
         const isSmallScreen = window.innerWidth <= 1024; // Consider tablets as mobile for keyboard behavior
         setIsMobileDevice(hasTouch && isSmallScreen);
       }
     };
 
     checkIsMobile();
-    window.addEventListener('resize', checkIsMobile);
+    window.addEventListener("resize", checkIsMobile);
 
-    return () => window.removeEventListener('resize', checkIsMobile);
+    return () => window.removeEventListener("resize", checkIsMobile);
   }, []);
 
   // Handle dynamic viewport height for mobile devices
@@ -61,7 +62,9 @@ export default function Home() {
 
     // Update on resize (handles address bar show/hide on mobile)
     window.addEventListener("resize", updateViewportHeight, { passive: true });
-    window.addEventListener("orientationchange", updateViewportHeight, { passive: true });
+    window.addEventListener("orientationchange", updateViewportHeight, {
+      passive: true,
+    });
 
     return () => {
       window.removeEventListener("resize", updateViewportHeight);
@@ -187,7 +190,11 @@ export default function Home() {
 
       // Add visualViewport events for modern Firefox
       if (hasVisualViewport && window.visualViewport) {
-        window.visualViewport.addEventListener("resize", handleViewportRestore, { passive: true });
+        window.visualViewport.addEventListener(
+          "resize",
+          handleViewportRestore,
+          { passive: true }
+        );
       }
 
       // Traditional events as fallback (focusin/focusout can't be passive as they might need preventDefault)
@@ -240,7 +247,10 @@ export default function Home() {
     const body = document.body;
     const html = document.documentElement;
     const anyModalOpen =
-      showNameInput || showMinNamesWarning || showLongNameWarning || showDuplicateWarning;
+      showNameInput ||
+      showMinNamesWarning ||
+      showLongNameWarning ||
+      showDuplicateWarning;
 
     if (anyModalOpen) {
       body.style.overflow = "hidden";
@@ -256,7 +266,12 @@ export default function Home() {
       body.style.width = "";
       body.style.height = "";
     }
-  }, [showNameInput, showMinNamesWarning, showLongNameWarning, showDuplicateWarning]);
+  }, [
+    showNameInput,
+    showMinNamesWarning,
+    showLongNameWarning,
+    showDuplicateWarning,
+  ]);
 
   // Validate name lengths
   const validateNameLengths = (namesList: string[]): boolean => {
@@ -297,7 +312,10 @@ export default function Home() {
     const shuffledNumbers = [...numbers];
     for (let i = shuffledNumbers.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [shuffledNumbers[i], shuffledNumbers[j]] = [shuffledNumbers[j], shuffledNumbers[i]];
+      [shuffledNumbers[i], shuffledNumbers[j]] = [
+        shuffledNumbers[j],
+        shuffledNumbers[i],
+      ];
     }
 
     setWheelNames(shuffledNumbers);
@@ -327,8 +345,8 @@ export default function Home() {
     const enhancedTrim = (name: string): string => {
       return name
         .trim()
-        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-        .replace(/[^\w\s\-\.]/g, '') // Remove special characters except hyphens and dots
+        .replace(/\s+/g, " ") // Replace multiple spaces with single space
+        .replace(/[^\w\s\-\.]/g, "") // Remove special characters except hyphens and dots
         .substring(0, 20); // Cap length at 20 characters
     };
 
@@ -349,8 +367,9 @@ export default function Home() {
     }
 
     // Remove duplicates (case-insensitive)
-    return names.filter((name, index, arr) =>
-      arr.findIndex(n => n.toLowerCase() === name.toLowerCase()) === index
+    return names.filter(
+      (name, index, arr) =>
+        arr.findIndex((n) => n.toLowerCase() === name.toLowerCase()) === index
     );
   }, []);
 
@@ -361,8 +380,8 @@ export default function Home() {
     // Use optimized name processing
     const rawNames = inputValue
       .split(/[,\s]+/)
-      .map(name => name.trim())
-      .filter(name => name.length > 0);
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
 
     const names = processNames(inputValue);
 
@@ -370,7 +389,9 @@ export default function Home() {
     const duplicatesRemoved = rawNames.length - names.length;
     if (duplicatesRemoved > 0) {
       setDuplicateWarningText(
-        `${duplicatesRemoved} duplicate ${duplicatesRemoved === 1 ? 'name was' : 'names were'} removed.`
+        `${duplicatesRemoved} duplicate ${
+          duplicatesRemoved === 1 ? "name was" : "names were"
+        } removed.`
       );
       setShowDuplicateWarning(true);
     }
@@ -414,7 +435,7 @@ export default function Home() {
           style={{
             zIndex: -1,
             minHeight: "100vh",
-            minWidth: "100vw"
+            minWidth: "100vw",
           }}
         >
           <Image
@@ -456,7 +477,7 @@ export default function Home() {
         style={{
           zIndex: -1,
           minHeight: "100vh",
-          minWidth: "100vw"
+          minWidth: "100vw",
         }}
       >
         <Image
@@ -508,7 +529,7 @@ export default function Home() {
               </button>
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
                 {showRandomCountInput
-                  ? "How many random names?"
+                  ? "How many random tiles?"
                   : "Enter Names Below"}
               </h2>
               {!showRandomCountInput && (
@@ -594,7 +615,7 @@ export default function Home() {
                           className="text-lg font-semibold text-gray-700 hover:text-blue-600 transition-colors cursor-pointer px-2 py-1 rounded hover:bg-gray-100"
                           style={{ touchAction: "manipulation" }}
                         >
-                          {randomNameCount} names
+                          {randomNameCount} tiles
                         </button>
                       )}
                     </div>
@@ -606,8 +627,12 @@ export default function Home() {
                       onChange={(e) => setRandomNameCount(e.target.value)}
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
                       style={{
-                        background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((parseInt(randomNameCount) || 6) - 2) / 99 * 100}%, #e5e7eb ${((parseInt(randomNameCount) || 6) - 2) / 99 * 100}%, #e5e7eb 100%)`,
-                        touchAction: "manipulation"
+                        background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${
+                          (((parseInt(randomNameCount) || 6) - 2) / 99) * 100
+                        }%, #e5e7eb ${
+                          (((parseInt(randomNameCount) || 6) - 2) / 99) * 100
+                        }%, #e5e7eb 100%)`,
+                        touchAction: "manipulation",
                       }}
                       autoFocus={showRandomCountInput && !isEditingCount}
                     />
@@ -710,7 +735,7 @@ export default function Home() {
                     Need More Names
                   </h3>
                   <p className="text-sm text-gray-600">
-                    Please enter at least 2 names to spin the wheel
+                    Enter min. 2 names to spin the wheel
                   </p>
                 </div>
                 <button
@@ -803,7 +828,9 @@ export default function Home() {
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
                     Duplicates Removed
                   </h3>
-                  <p className="text-sm text-gray-600">{duplicateWarningText}</p>
+                  <p className="text-sm text-gray-600">
+                    {duplicateWarningText}
+                  </p>
                 </div>
                 <button
                   onClick={() => setShowDuplicateWarning(false)}
