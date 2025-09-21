@@ -12,6 +12,7 @@ export default function Home() {
   const [teamName, setTeamName] = useState("");
   const [randomNameCount, setRandomNameCount] = useState("6");
   const [showRandomCountInput, setShowRandomCountInput] = useState(false);
+  const [isEditingCount, setIsEditingCount] = useState(false);
   const [showMinNamesWarning, setShowMinNamesWarning] = useState(false);
   const [showLongNameWarning, setShowLongNameWarning] = useState(false);
   const [longNameWarningText, setLongNameWarningText] = useState("");
@@ -476,13 +477,13 @@ export default function Home() {
                   ? "How many random names?"
                   : "Enter Names Below"}
               </h2>
-              <p className="text-gray-600 mb-4">
-                <span className="text-sm text-gray-500">
-                  {showRandomCountInput
-                    ? "Choose between 2-101 names"
-                    : "Enter at least 2 comma separated names or use random"}
-                </span>
-              </p>
+              {!showRandomCountInput && (
+                <p className="text-gray-600 mb-4">
+                  <span className="text-sm text-gray-500">
+                    Enter at least 2 comma separated names or use random
+                  </span>
+                </p>
+              )}
               {!showRandomCountInput ? (
                 <>
                   <input
@@ -513,25 +514,73 @@ export default function Home() {
                 </>
               ) : (
                 <div>
-                  <label className="block text-center text-gray-600 mb-2 text-sm">
-                    Select number of names
-                  </label>
-                  <select
-                    value={randomNameCount}
-                    onChange={(e) => setRandomNameCount(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center text-lg bg-white cursor-pointer"
-                    style={{ touchAction: "manipulation" }}
-                    autoFocus={showRandomCountInput}
-                  >
-                    {Array.from({ length: 100 }, (_, i) => i + 2).map((num) => (
-                      <option key={num} value={num}>
-                        {num} names
-                      </option>
-                    ))}
-                  </select>
+                  {/* Merged Slider and Manual Input */}
+                  <div>
+                    <div className="flex items-center justify-center mb-2">
+                      {isEditingCount ? (
+                        <input
+                          type="number"
+                          min="2"
+                          max="101"
+                          value={randomNameCount}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Allow empty string for user typing
+                            if (value === "") {
+                              setRandomNameCount("");
+                              return;
+                            }
+                            const num = parseInt(value);
+                            if (!isNaN(num) && num >= 2 && num <= 101) {
+                              setRandomNameCount(value);
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Ensure valid value on blur and exit edit mode
+                            const num = parseInt(e.target.value);
+                            if (isNaN(num) || num < 2) {
+                              setRandomNameCount("2");
+                            } else if (num > 101) {
+                              setRandomNameCount("101");
+                            }
+                            setIsEditingCount(false);
+                          }}
+                          onKeyPress={(e) => {
+                            if (e.key === "Enter") {
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          className="text-lg font-semibold text-gray-700 text-center bg-transparent border-b-2 border-blue-500 outline-none w-24 px-2 py-1 h-8 rounded hover:bg-gray-100"
+                          style={{ touchAction: "manipulation" }}
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          onClick={() => setIsEditingCount(true)}
+                          className="text-lg font-semibold text-gray-700 hover:text-blue-600 transition-colors cursor-pointer px-2 py-1 rounded hover:bg-gray-100"
+                          style={{ touchAction: "manipulation" }}
+                        >
+                          {randomNameCount} names
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="range"
+                      min="2"
+                      max="101"
+                      value={parseInt(randomNameCount) || 6}
+                      onChange={(e) => setRandomNameCount(e.target.value)}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                      style={{
+                        background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((parseInt(randomNameCount) || 6) - 2) / 99 * 100}%, #e5e7eb ${((parseInt(randomNameCount) || 6) - 2) / 99 * 100}%, #e5e7eb 100%)`,
+                        touchAction: "manipulation"
+                      }}
+                      autoFocus={showRandomCountInput && !isEditingCount}
+                    />
+                  </div>
                 </div>
               )}
-              <div className="mt-6">
+              <div className="mt-4">
                 {!showRandomCountInput ? (
                   <div className="flex gap-3">
                     <button
