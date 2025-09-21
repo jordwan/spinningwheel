@@ -20,7 +20,12 @@ const cryptoRandom = (): number => {
 };
 
 /** ========= DRAG UTILITIES ========= */
-const getAngleFromPoint = (centerX: number, centerY: number, pointX: number, pointY: number): number => {
+const getAngleFromPoint = (
+  centerX: number,
+  centerY: number,
+  pointX: number,
+  pointY: number
+): number => {
   const deltaX = pointX - centerX;
   const deltaY = pointY - centerY;
   let angle = Math.atan2(deltaY, deltaX);
@@ -29,7 +34,11 @@ const getAngleFromPoint = (centerX: number, centerY: number, pointX: number, poi
   return angle;
 };
 
-const getCanvasCoordinates = (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
+const getCanvasCoordinates = (
+  canvas: HTMLCanvasElement,
+  clientX: number,
+  clientY: number
+) => {
   const rect = canvas.getBoundingClientRect();
   return { x: clientX - rect.left, y: clientY - rect.top };
 };
@@ -43,7 +52,10 @@ const normalizeAngleDifference = (angleDiff: number): number => {
 
 /** ========= TEXT UTILITIES ========= */
 
-const getSimpleFontSize = (segmentCount: number, isNumbers: boolean = false): number => {
+const getSimpleFontSize = (
+  segmentCount: number,
+  isNumbers: boolean = false
+): number => {
   // Numbers are typically shorter (1-3 characters) so we can use larger fonts
   if (isNumbers && segmentCount <= 20) {
     if (segmentCount <= 10) return 20;
@@ -60,7 +72,7 @@ const getSimpleFontSize = (segmentCount: number, isNumbers: boolean = false): nu
 
 const simpleTextTruncate = (text: string, maxLength: number): string => {
   if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength - 3) + '...';
+  return text.slice(0, maxLength - 3) + "...";
 };
 
 interface SpinningWheelProps {
@@ -70,7 +82,12 @@ interface SpinningWheelProps {
   showBlank?: boolean;
 }
 
-const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFreeSpins = true, showBlank = false }) => {
+const SpinningWheel: React.FC<SpinningWheelProps> = ({
+  names,
+  onReset,
+  includeFreeSpins = true,
+  showBlank = false,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Layout refs
@@ -96,7 +113,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [isIOS16, setIsIOS16] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isFirefox, setIsFirefox] = useState(false);
-  const [deviceCapability, setDeviceCapability] = useState<'high' | 'medium' | 'low'>('medium');
+  const [deviceCapability, setDeviceCapability] = useState<
+    "high" | "medium" | "low"
+  >("medium");
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [ariaAnnouncement, setAriaAnnouncement] = useState<string>("");
 
@@ -107,22 +126,27 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const [lastDragTime, setLastDragTime] = useState(0);
   const momentumAnimationRef = useRef<number | null>(null);
 
-
   // RAF throttling for drag handlers
   const dragUpdateRef = useRef<number | null>(null);
-  const pendingDragUpdate = useRef<{ clientX: number; clientY: number } | null>(null);
-
+  const pendingDragUpdate = useRef<{ clientX: number; clientY: number } | null>(
+    null
+  );
 
   // Canvas optimization caches
   const pointerGradientCache = useRef<CanvasGradient | null>(null);
-  const lastCanvasSize = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+  const lastCanvasSize = useRef<{ width: number; height: number }>({
+    width: 0,
+    height: 0,
+  });
 
   // Segment gradient caches for performance
   const segmentGradientsCache = useRef<Map<string, CanvasGradient>>(new Map());
   const lastWheelConfig = useRef<string>("");
 
   // Performance management
-  const [performanceMode, setPerformanceMode] = useState<'optimal' | 'balanced' | 'performance'>('optimal');
+  const [performanceMode, setPerformanceMode] = useState<
+    "optimal" | "balanced" | "performance"
+  >("optimal");
 
   /** ========= AUDIO (optimized with node pooling) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -140,9 +164,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     sources: [],
     gains: [],
     currentIndex: 0,
-    poolSize: 8
+    poolSize: 8,
   });
-
 
   // Create audio context only (fast operation)
   const getAudioContext = useCallback(() => {
@@ -175,7 +198,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
       // Create click buffer asynchronously
       if (!clickBufferRef.current) {
-        await new Promise<void>(resolve => {
+        await new Promise<void>((resolve) => {
           setTimeout(() => {
             const duration = 0.008; // Shorter for efficiency while maintaining quality
             const sr = ctx.sampleRate;
@@ -194,7 +217,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
               let sample = 0;
               sample += Math.sin(2 * Math.PI * fundamental * t) * 0.7; // Main tone
-              sample += Math.sin(2 * Math.PI * harmonic2 * t) * 0.25;  // Second harmonic
+              sample += Math.sin(2 * Math.PI * harmonic2 * t) * 0.25; // Second harmonic
 
               data[i] = sample * env * 0.2;
             }
@@ -231,11 +254,15 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     const pool = audioPoolRef.current;
 
     // Clear existing pool
-    pool.sources.forEach(source => {
-      try { source.disconnect(); } catch {}
+    pool.sources.forEach((source) => {
+      try {
+        source.disconnect();
+      } catch {}
     });
-    pool.gains.forEach(gain => {
-      try { gain.disconnect(); } catch {}
+    pool.gains.forEach((gain) => {
+      try {
+        gain.disconnect();
+      } catch {}
     });
 
     pool.sources = [];
@@ -249,48 +276,53 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     }
   }, []);
 
-  const playTickSound = useCallback(async (v = 0.1) => {
-    try {
-      const ctx = await ensureAudio();
-      if (!ctx || !clickBufferRef.current) return;
+  const playTickSound = useCallback(
+    async (v = 0.1) => {
+      try {
+        const ctx = await ensureAudio();
+        if (!ctx || !clickBufferRef.current) return;
 
-      if (ctx.state === "suspended") {
-        await ctx.resume().catch(() => {});
+        if (ctx.state === "suspended") {
+          await ctx.resume().catch(() => {});
+        }
+
+        // Initialize pool if needed
+        const pool = audioPoolRef.current;
+        if (pool.gains.length === 0) {
+          initializeAudioPool(ctx);
+        }
+
+        // Get next available node from pool
+        const gain = pool.gains[pool.currentIndex];
+        pool.currentIndex = (pool.currentIndex + 1) % pool.poolSize;
+
+        // Set volume
+        gain.gain.value = Math.max(0.01, Math.min(0.12, v));
+
+        // Create new source (these are lightweight and disposable)
+        const src = ctx.createBufferSource();
+        src.buffer = clickBufferRef.current;
+        src.connect(gain);
+
+        // Auto-cleanup after sound finishes
+        src.onended = () => {
+          try {
+            src.disconnect();
+          } catch {}
+        };
+
+        src.start();
+      } catch {
+        // Silently fail for audio errors
       }
-
-      // Initialize pool if needed
-      const pool = audioPoolRef.current;
-      if (pool.gains.length === 0) {
-        initializeAudioPool(ctx);
-      }
-
-      // Get next available node from pool
-      const gain = pool.gains[pool.currentIndex];
-      pool.currentIndex = (pool.currentIndex + 1) % pool.poolSize;
-
-      // Set volume
-      gain.gain.value = Math.max(0.01, Math.min(0.12, v));
-
-      // Create new source (these are lightweight and disposable)
-      const src = ctx.createBufferSource();
-      src.buffer = clickBufferRef.current;
-      src.connect(gain);
-
-      // Auto-cleanup after sound finishes
-      src.onended = () => {
-        try { src.disconnect(); } catch {}
-      };
-
-      src.start();
-    } catch {
-      // Silently fail for audio errors
-    }
-  }, [ensureAudio, initializeAudioPool]);
+    },
+    [ensureAudio, initializeAudioPool]
+  );
 
   const playTadaSound = useCallback(async (v = 0.3) => {
     try {
       // Use the actual MP3 file instead of generated sound
-      const audio = new Audio('/audio/tada.mp3');
+      const audio = new Audio("/audio/tada.mp3");
 
       // Set volume (keep it reasonable, not too loud)
       audio.volume = Math.max(0.1, Math.min(0.3, v * 0.5)); // Max 30% volume
@@ -342,7 +374,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       centerX,
       centerY,
       radius,
-      sliceAngle
+      sliceAngle,
     };
   }, [canvasCSSSize, wheelNames.length]);
 
@@ -351,16 +383,19 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     if (showBlank) return { fontSize: 16, displayTexts: [] };
 
     // Detect if we're showing numbers (all segments are numeric)
-    const isNumbers = wheelNames.length > 0 && wheelNames.every(name =>
-      name !== "RESPIN" && name !== "" && /^\d+$/.test(name)
-    );
+    const isNumbers =
+      wheelNames.length > 0 &&
+      wheelNames.every(
+        (name) => name !== "RESPIN" && name !== "" && /^\d+$/.test(name)
+      );
 
     const fontSize = getSimpleFontSize(wheelNames.length, isNumbers);
 
     // Simple truncation based on segment count
-    const maxLength = wheelNames.length <= 10 ? 20 : wheelNames.length <= 20 ? 15 : 12;
+    const maxLength =
+      wheelNames.length <= 10 ? 20 : wheelNames.length <= 20 ? 15 : 12;
 
-    const displayTexts = wheelNames.map(name => {
+    const displayTexts = wheelNames.map((name) => {
       if (name === "RESPIN" || name === "") return name;
       return simpleTextTruncate(name, maxLength);
     });
@@ -380,9 +415,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     const respinCount = wheelNames.filter((n) => n === "RESPIN").length;
 
     if (!includeFreeSpins || respinCount === 0) {
-      setFairnessText(
-        `Each name ${((1 / total) * 100).toFixed(2)}% chance`
-      );
+      setFairnessText(`Each name ${((1 / total) * 100).toFixed(2)}% chance`);
     } else {
       setFairnessText(
         `Each name ${((1 / total) * 100).toFixed(2)}% chance, Free Spin ${(
@@ -402,7 +435,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       const animate = (currentTime: number) => {
         // Adaptive frame rate based on device capability
         // High capability: 8.33ms (120fps), Medium/Low: 16.67ms (60fps)
-        const throttleMs = deviceCapability === 'high' ? 8.33 : 16.67;
+        const throttleMs = deviceCapability === "high" ? 8.33 : 16.67;
 
         if (currentTime - lastTime >= throttleMs) {
           const t = currentTime / 1000;
@@ -430,14 +463,34 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
     if (isFirefox) {
       // Try Firefox-specific viewport first, then fallback
-      const firefoxVh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--firefox-vh').replace('px', '')) * 100;
-      const visualVh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--visual-vh').replace('px', '')) * 100;
-      const standardVh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--vh').replace('px', '')) * 100;
+      const firefoxVh =
+        parseInt(
+          getComputedStyle(document.documentElement)
+            .getPropertyValue("--firefox-vh")
+            .replace("px", "")
+        ) * 100;
+      const visualVh =
+        parseInt(
+          getComputedStyle(document.documentElement)
+            .getPropertyValue("--visual-vh")
+            .replace("px", "")
+        ) * 100;
+      const standardVh =
+        parseInt(
+          getComputedStyle(document.documentElement)
+            .getPropertyValue("--vh")
+            .replace("px", "")
+        ) * 100;
 
       vh = firefoxVh || visualVh || standardVh || window.innerHeight;
     } else {
       // Use standard dynamic viewport height for non-Firefox browsers
-      vh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--vh').replace('px', '')) * 100 || window.innerHeight;
+      vh =
+        parseInt(
+          getComputedStyle(document.documentElement)
+            .getPropertyValue("--vh")
+            .replace("px", "")
+        ) * 100 || window.innerHeight;
     }
 
     // Conservative fallbacks so first pass doesn't oversize the wheel:
@@ -456,7 +509,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     let target = Math.min(availableW, availableH);
 
     // Desktop guard: allow slightly bigger wheel on XL screens
-    const vhCap = Math.floor(vh * (vw >= 1280 ? 0.62 : vw >= 1024 ? 0.58 : 0.62));
+    const vhCap = Math.floor(
+      vh * (vw >= 1280 ? 0.62 : vw >= 1024 ? 0.58 : 0.62)
+    );
     target = Math.min(target, vhCap);
 
     // Global clamps - keep consistent sizes
@@ -505,7 +560,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   useEffect(() => {
     return () => {
       // Cleanup audio context on unmount
-      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+      if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
         try {
           audioCtxRef.current.close();
         } catch (error) {
@@ -531,11 +586,15 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
       // Clear audio pool
       const pool = audioPoolRef.current;
-      pool.sources.forEach(source => {
-        try { source.disconnect(); } catch {}
+      pool.sources.forEach((source) => {
+        try {
+          source.disconnect();
+        } catch {}
       });
-      pool.gains.forEach(gain => {
-        try { gain.disconnect(); } catch {}
+      pool.gains.forEach((gain) => {
+        try {
+          gain.disconnect();
+        } catch {}
       });
       pool.sources = [];
       pool.gains = [];
@@ -546,7 +605,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   /** ========= Lazy Audio Initialization ========= */
   useEffect(() => {
     // Only initialize audio on first user interaction to avoid blocking initial load
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       let audioInitialized = false;
 
       const initAudioOnInteraction = () => {
@@ -556,21 +615,27 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             // Silently handle audio initialization failures
           });
           // Remove listeners after first interaction
-          document.removeEventListener('click', initAudioOnInteraction);
-          document.removeEventListener('touchstart', initAudioOnInteraction);
-          document.removeEventListener('keydown', initAudioOnInteraction);
+          document.removeEventListener("click", initAudioOnInteraction);
+          document.removeEventListener("touchstart", initAudioOnInteraction);
+          document.removeEventListener("keydown", initAudioOnInteraction);
         }
       };
 
       // Initialize audio on first user interaction
-      document.addEventListener('click', initAudioOnInteraction, { passive: true });
-      document.addEventListener('touchstart', initAudioOnInteraction, { passive: true });
-      document.addEventListener('keydown', initAudioOnInteraction, { passive: true });
+      document.addEventListener("click", initAudioOnInteraction, {
+        passive: true,
+      });
+      document.addEventListener("touchstart", initAudioOnInteraction, {
+        passive: true,
+      });
+      document.addEventListener("keydown", initAudioOnInteraction, {
+        passive: true,
+      });
 
       return () => {
-        document.removeEventListener('click', initAudioOnInteraction);
-        document.removeEventListener('touchstart', initAudioOnInteraction);
-        document.removeEventListener('keydown', initAudioOnInteraction);
+        document.removeEventListener("click", initAudioOnInteraction);
+        document.removeEventListener("touchstart", initAudioOnInteraction);
+        document.removeEventListener("keydown", initAudioOnInteraction);
       };
     }
   }, [ensureAudio]);
@@ -578,11 +643,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   /** ========= Device Detection (Optimized) ========= */
   useEffect(() => {
     // Batch all detection logic to minimize DOM queries
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
 
     // Use requestIdleCallback to run detection when main thread is free
     const runDetection = (callback: IdleRequestCallback) => {
-      if ('requestIdleCallback' in window) {
+      if ("requestIdleCallback" in window) {
         requestIdleCallback(callback);
       } else {
         // Fallback for browsers without requestIdleCallback
@@ -607,7 +672,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       }
 
       // Device capability detection
-      const lowMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      const lowMotion = window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)"
+      )?.matches;
       const cores = navigator.hardwareConcurrency || 4;
 
       // Batch state updates
@@ -615,19 +682,21 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       setIsIOS(isIOS);
       setIsFirefox(isFirefox);
       setPrefersReducedMotion(!!lowMotion);
-      setDeviceCapability(lowMotion ? 'low' : (cores >= 8 ? 'high' : 'medium'));
+      setDeviceCapability(lowMotion ? "low" : cores >= 8 ? "high" : "medium");
 
       // Set up motion preference listener
-      const motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const motionMediaQuery = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      );
       const handleMotionChange = (e: MediaQueryListEvent) => {
         setPrefersReducedMotion(e.matches);
         if (e.matches) {
-          setDeviceCapability('low');
+          setDeviceCapability("low");
         }
       };
 
       if (motionMediaQuery.addEventListener) {
-        motionMediaQuery.addEventListener('change', handleMotionChange);
+        motionMediaQuery.addEventListener("change", handleMotionChange);
       } else {
         motionMediaQuery.addListener(handleMotionChange);
       }
@@ -635,7 +704,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       // Cleanup function for motion listener
       return () => {
         if (motionMediaQuery.removeEventListener) {
-          motionMediaQuery.removeEventListener('change', handleMotionChange);
+          motionMediaQuery.removeEventListener("change", handleMotionChange);
         } else {
           motionMediaQuery.removeListener(handleMotionChange);
         }
@@ -647,75 +716,84 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   // Allow drag when wheel is visible and not spinning, even if blank
   const canDrag = !isSpinning && !showWinnerModal;
 
-  const startDrag = useCallback((clientX: number, clientY: number) => {
-    if (!canDrag || !canvasRef.current) return;
+  const startDrag = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!canDrag || !canvasRef.current) return;
 
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
+      const canvas = canvasRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
 
-    // Check if click/touch is within wheel area
-    const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
-    const wheelRadius = Math.min(centerX, centerY) - 18;
+      // Check if click/touch is within wheel area
+      const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+      const wheelRadius = Math.min(centerX, centerY) - 18;
 
-    if (distance <= wheelRadius) {
-      const angle = getAngleFromPoint(centerX, centerY, x, y);
-      setIsDragging(true);
-      setLastDragAngle(angle);
-      setDragVelocity(0);
-      setLastDragTime(Date.now());
+      if (distance <= wheelRadius) {
+        const angle = getAngleFromPoint(centerX, centerY, x, y);
+        setIsDragging(true);
+        setLastDragAngle(angle);
+        setDragVelocity(0);
+        setLastDragTime(Date.now());
 
-      // Cancel any existing momentum
-      if (momentumAnimationRef.current) {
-        cancelAnimationFrame(momentumAnimationRef.current);
-        momentumAnimationRef.current = null;
+        // Cancel any existing momentum
+        if (momentumAnimationRef.current) {
+          cancelAnimationFrame(momentumAnimationRef.current);
+          momentumAnimationRef.current = null;
+        }
       }
-    }
-  }, [canDrag]);
+    },
+    [canDrag]
+  );
 
   // RAF-throttled drag update for better performance
-  const performDragUpdate = useCallback((clientX: number, clientY: number) => {
-    if (!isDragging || !canvasRef.current || lastDragAngle === null) return;
+  const performDragUpdate = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!isDragging || !canvasRef.current || lastDragAngle === null) return;
 
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
+      const canvas = canvasRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
 
-    const currentAngle = getAngleFromPoint(centerX, centerY, x, y);
-    const angleDiff = normalizeAngleDifference(currentAngle - lastDragAngle);
+      const currentAngle = getAngleFromPoint(centerX, centerY, x, y);
+      const angleDiff = normalizeAngleDifference(currentAngle - lastDragAngle);
 
-    // Calculate velocity for momentum
-    const currentTime = Date.now();
-    const timeDiff = currentTime - lastDragTime;
-    if (timeDiff > 0) {
-      setDragVelocity(angleDiff / timeDiff * 1000); // radians per second
-    }
+      // Calculate velocity for momentum
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastDragTime;
+      if (timeDiff > 0) {
+        setDragVelocity((angleDiff / timeDiff) * 1000); // radians per second
+      }
 
-    setRotation(prev => prev + angleDiff);
-    setLastDragAngle(currentAngle);
-    setLastDragTime(currentTime);
-  }, [isDragging, lastDragAngle, lastDragTime]);
+      setRotation((prev) => prev + angleDiff);
+      setLastDragAngle(currentAngle);
+      setLastDragTime(currentTime);
+    },
+    [isDragging, lastDragAngle, lastDragTime]
+  );
 
-  const updateDrag = useCallback((clientX: number, clientY: number) => {
-    // Store the latest coordinates
-    pendingDragUpdate.current = { clientX, clientY };
+  const updateDrag = useCallback(
+    (clientX: number, clientY: number) => {
+      // Store the latest coordinates
+      pendingDragUpdate.current = { clientX, clientY };
 
-    // Only schedule a new RAF if one isn't already pending
-    if (dragUpdateRef.current === null) {
-      dragUpdateRef.current = requestAnimationFrame(() => {
-        if (pendingDragUpdate.current) {
-          const { clientX: x, clientY: y } = pendingDragUpdate.current;
-          performDragUpdate(x, y);
-          pendingDragUpdate.current = null;
-        }
-        dragUpdateRef.current = null;
-      });
-    }
-  }, [performDragUpdate]);
+      // Only schedule a new RAF if one isn't already pending
+      if (dragUpdateRef.current === null) {
+        dragUpdateRef.current = requestAnimationFrame(() => {
+          if (pendingDragUpdate.current) {
+            const { clientX: x, clientY: y } = pendingDragUpdate.current;
+            performDragUpdate(x, y);
+            pendingDragUpdate.current = null;
+          }
+          dragUpdateRef.current = null;
+        });
+      }
+    },
+    [performDragUpdate]
+  );
 
   const endDrag = useCallback(() => {
     if (!isDragging) return;
@@ -743,7 +821,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
         // Continue if velocity is significant
         if (Math.abs(currentVelocity) > 0.01 && canDrag) {
-          setRotation(r => r + currentVelocity * dt);
+          setRotation((r) => r + currentVelocity * dt);
           momentumAnimationRef.current = requestAnimationFrame(animateMomentum);
         } else {
           momentumAnimationRef.current = null;
@@ -756,42 +834,57 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   }, [isDragging, dragVelocity, canDrag]);
 
   // Mouse event handlers
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    startDrag(e.clientX, e.clientY);
-  }, [startDrag]);
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      startDrag(e.clientX, e.clientY);
+    },
+    [startDrag]
+  );
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (isDragging) {
-      updateDrag(e.clientX, e.clientY);
-    }
-  }, [isDragging, updateDrag]);
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (isDragging) {
+        updateDrag(e.clientX, e.clientY);
+      }
+    },
+    [isDragging, updateDrag]
+  );
 
   const handleMouseUp = useCallback(() => {
     endDrag();
   }, [endDrag]);
 
   // Touch event handlers
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
-    if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      startDrag(touch.clientX, touch.clientY);
-    }
-  }, [startDrag]);
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        startDrag(touch.clientX, touch.clientY);
+      }
+    },
+    [startDrag]
+  );
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
-    if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      updateDrag(touch.clientX, touch.clientY);
-    }
-  }, [updateDrag]);
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        updateDrag(touch.clientX, touch.clientY);
+      }
+    },
+    [updateDrag]
+  );
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
-    endDrag();
-  }, [endDrag]);
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      e.preventDefault();
+      endDrag();
+    },
+    [endDrag]
+  );
 
   // Global mouse event handlers for smooth dragging
   useEffect(() => {
@@ -804,12 +897,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         endDrag();
       };
 
-      document.addEventListener('mousemove', handleGlobalMouseMove);
-      document.addEventListener('mouseup', handleGlobalMouseUp);
+      document.addEventListener("mousemove", handleGlobalMouseMove);
+      document.addEventListener("mouseup", handleGlobalMouseUp);
 
       return () => {
-        document.removeEventListener('mousemove', handleGlobalMouseMove);
-        document.removeEventListener('mouseup', handleGlobalMouseUp);
+        document.removeEventListener("mousemove", handleGlobalMouseMove);
+        document.removeEventListener("mouseup", handleGlobalMouseUp);
       };
     }
   }, [isDragging, updateDrag, endDrag]);
@@ -843,68 +936,74 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   );
 
   // Cached gradient creation for performance
-  const getCachedGradient = useCallback((
-    ctx: CanvasRenderingContext2D,
-    type: string,
-    segmentIndex: number,
-    centerX: number,
-    centerY: number,
-    radius: number,
-    midAngle: number,
-    color?: string
-  ): CanvasGradient => {
-    const cacheKey = `${type}-${segmentIndex}-${centerX}-${centerY}-${radius}-${color || ''}`;
-    const cache = segmentGradientsCache.current;
+  const getCachedGradient = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      type: string,
+      segmentIndex: number,
+      centerX: number,
+      centerY: number,
+      radius: number,
+      midAngle: number,
+      color?: string
+    ): CanvasGradient => {
+      const cacheKey = `${type}-${segmentIndex}-${centerX}-${centerY}-${radius}-${
+        color || ""
+      }`;
+      const cache = segmentGradientsCache.current;
 
-    if (cache.has(cacheKey)) {
-      return cache.get(cacheKey)!;
-    }
+      if (cache.has(cacheKey)) {
+        return cache.get(cacheKey)!;
+      }
 
-    let gradient: CanvasGradient;
+      let gradient: CanvasGradient;
 
-    if (type === 'blank') {
-      gradient = ctx.createRadialGradient(
-        centerX + Math.cos(midAngle) * radius * 0.5,
-        centerY + Math.sin(midAngle) * radius * 0.5,
-        0,
-        centerX,
-        centerY,
-        radius
-      );
-      const cleanColor = color!.slice(0, 7);
-      gradient.addColorStop(0, cleanColor + "33");
-      gradient.addColorStop(0.85, cleanColor + "22");
-      gradient.addColorStop(1, cleanColor + "11");
-    } else if (type === 'respin') {
-      gradient = ctx.createRadialGradient(
-        centerX + Math.cos(midAngle) * radius * 0.5,
-        centerY + Math.sin(midAngle) * radius * 0.5,
-        0,
-        centerX,
-        centerY,
-        radius
-      );
-      gradient.addColorStop(0, "#2a2a2a");
-      gradient.addColorStop(0.7, "#0f0f0f");
-      gradient.addColorStop(1, "#000000");
-    } else { // regular segment
-      gradient = ctx.createRadialGradient(
-        centerX + Math.cos(midAngle) * radius * 0.5,
-        centerY + Math.sin(midAngle) * radius * 0.5,
-        0,
-        centerX,
-        centerY,
-        radius
-      );
-      const cleanColor = color!.slice(0, 7);
-      gradient.addColorStop(0, cleanColor);
-      gradient.addColorStop(0.85, cleanColor + "dd");
-      gradient.addColorStop(1, cleanColor + "99");
-    }
+      if (type === "blank") {
+        gradient = ctx.createRadialGradient(
+          centerX + Math.cos(midAngle) * radius * 0.5,
+          centerY + Math.sin(midAngle) * radius * 0.5,
+          0,
+          centerX,
+          centerY,
+          radius
+        );
+        const cleanColor = color!.slice(0, 7);
+        gradient.addColorStop(0, cleanColor + "33");
+        gradient.addColorStop(0.85, cleanColor + "22");
+        gradient.addColorStop(1, cleanColor + "11");
+      } else if (type === "respin") {
+        gradient = ctx.createRadialGradient(
+          centerX + Math.cos(midAngle) * radius * 0.5,
+          centerY + Math.sin(midAngle) * radius * 0.5,
+          0,
+          centerX,
+          centerY,
+          radius
+        );
+        gradient.addColorStop(0, "#2a2a2a");
+        gradient.addColorStop(0.7, "#0f0f0f");
+        gradient.addColorStop(1, "#000000");
+      } else {
+        // regular segment
+        gradient = ctx.createRadialGradient(
+          centerX + Math.cos(midAngle) * radius * 0.5,
+          centerY + Math.sin(midAngle) * radius * 0.5,
+          0,
+          centerX,
+          centerY,
+          radius
+        );
+        const cleanColor = color!.slice(0, 7);
+        gradient.addColorStop(0, cleanColor);
+        gradient.addColorStop(0.85, cleanColor + "dd");
+        gradient.addColorStop(1, cleanColor + "99");
+      }
 
-    cache.set(cacheKey, gradient);
-    return gradient;
-  }, []);
+      cache.set(cacheKey, gradient);
+      return gradient;
+    },
+    []
+  );
 
   // Clear gradient cache when wheel configuration changes
   const clearGradientCache = useCallback(() => {
@@ -912,175 +1011,219 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   }, []);
 
   // Draw wheel segments with performance-aware rendering
-  const drawWheelSegments = useCallback((ctx: CanvasRenderingContext2D) => {
-    if (!wheelGeometry) return;
+  const drawWheelSegments = useCallback(
+    (ctx: CanvasRenderingContext2D) => {
+      if (!wheelGeometry) return;
 
-    const { centerX, centerY, radius, sliceAngle } = wheelGeometry;
-    const { fontSize, displayTexts } = textInfo;
+      const { centerX, centerY, radius, sliceAngle } = wheelGeometry;
+      const { fontSize, displayTexts } = textInfo;
 
-    // Performance optimizations based on segment count
-    const useSimplifiedGradients = performanceMode === 'performance';
-    const skipInnerGlow = performanceMode === 'performance';
-    const reducedShadows = performanceMode !== 'optimal';
+      // Performance optimizations based on segment count
+      const useSimplifiedGradients = performanceMode === "performance";
+      const skipInnerGlow = performanceMode === "performance";
+      const reducedShadows = performanceMode !== "optimal";
 
-    // Draw wheel segments
-    wheelNames.forEach((name, i) => {
-      const start = i * sliceAngle;
-      const end = (i + 1) * sliceAngle;
-      const midAngle = start + sliceAngle / 2;
+      // Draw wheel segments
+      wheelNames.forEach((name, i) => {
+        const start = i * sliceAngle;
+        const end = (i + 1) * sliceAngle;
+        const midAngle = start + sliceAngle / 2;
 
-      ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.arc(centerX, centerY, radius, start, end);
-      ctx.closePath();
-
-      if (showBlank) {
-        // Use simplified or cached gradient for blank segments
-        if (useSimplifiedGradients) {
-          const baseColor = colors[i % colors.length];
-          const cleanColor = baseColor.slice(0, 7);
-          ctx.fillStyle = cleanColor + "33";
-        } else {
-          const baseColor = colors[i % colors.length];
-          const g = getCachedGradient(ctx, 'blank', i, centerX, centerY, radius, midAngle, baseColor);
-          ctx.fillStyle = g;
-        }
-        ctx.fill();
-
-        // Lighter border for blank state
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      } else if (name === "RESPIN") {
-        // Use simplified or cached gradient for RESPIN
-        if (useSimplifiedGradients) {
-          ctx.fillStyle = "#1a1a1a";
-        } else {
-          const g = getCachedGradient(ctx, 'respin', i, centerX, centerY, radius, midAngle);
-          ctx.fillStyle = g;
-        }
-        ctx.fill();
-
-        // Standard white border to match other segments
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // Save and clip to segment for inner golden border
-        ctx.save();
-        ctx.clip();
-
-        // Draw golden inner border (closer to edge to avoid gap)
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
-        ctx.arc(centerX, centerY, radius - 2, start, end);
+        ctx.arc(centerX, centerY, radius, start, end);
         ctx.closePath();
-        ctx.strokeStyle = "#ffd700";
-        ctx.lineWidth = 3;
-        ctx.stroke();
 
-        ctx.restore();
-      } else {
-        // Use simplified or cached gradient for regular segments
-        if (useSimplifiedGradients) {
-          const baseColor = colors[i % colors.length];
-          const cleanColor = baseColor.slice(0, 7);
-          ctx.fillStyle = cleanColor;
-        } else {
-          const baseColor = colors[i % colors.length];
-          const g = getCachedGradient(ctx, 'regular', i, centerX, centerY, radius, midAngle, baseColor);
-          ctx.fillStyle = g;
-        }
-        ctx.fill();
+        if (showBlank) {
+          // Use simplified or cached gradient for blank segments
+          if (useSimplifiedGradients) {
+            const baseColor = colors[i % colors.length];
+            const cleanColor = baseColor.slice(0, 7);
+            ctx.fillStyle = cleanColor + "33";
+          } else {
+            const baseColor = colors[i % colors.length];
+            const g = getCachedGradient(
+              ctx,
+              "blank",
+              i,
+              centerX,
+              centerY,
+              radius,
+              midAngle,
+              baseColor
+            );
+            ctx.fillStyle = g;
+          }
+          ctx.fill();
 
-        // White border with shadow
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 2;
-        ctx.stroke();
+          // Lighter border for blank state
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        } else if (name === "RESPIN") {
+          // Use simplified or cached gradient for RESPIN
+          if (useSimplifiedGradients) {
+            ctx.fillStyle = "#1a1a1a";
+          } else {
+            const g = getCachedGradient(
+              ctx,
+              "respin",
+              i,
+              centerX,
+              centerY,
+              radius,
+              midAngle
+            );
+            ctx.fillStyle = g;
+          }
+          ctx.fill();
 
-        // Inner glow (skip in performance mode)
-        if (!skipInnerGlow) {
+          // Standard white border to match other segments
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Save and clip to segment for inner golden border
           ctx.save();
           ctx.clip();
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-          ctx.lineWidth = 4;
+
+          // Draw golden inner border (closer to edge to avoid gap)
+          ctx.beginPath();
+          ctx.moveTo(centerX, centerY);
+          ctx.arc(centerX, centerY, radius - 2, start, end);
+          ctx.closePath();
+          ctx.strokeStyle = "#ffd700";
+          ctx.lineWidth = 3;
           ctx.stroke();
+
+          ctx.restore();
+        } else {
+          // Use simplified or cached gradient for regular segments
+          if (useSimplifiedGradients) {
+            const baseColor = colors[i % colors.length];
+            const cleanColor = baseColor.slice(0, 7);
+            ctx.fillStyle = cleanColor;
+          } else {
+            const baseColor = colors[i % colors.length];
+            const g = getCachedGradient(
+              ctx,
+              "regular",
+              i,
+              centerX,
+              centerY,
+              radius,
+              midAngle,
+              baseColor
+            );
+            ctx.fillStyle = g;
+          }
+          ctx.fill();
+
+          // White border with shadow
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Inner glow (skip in performance mode)
+          if (!skipInnerGlow) {
+            ctx.save();
+            ctx.clip();
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+
+        // Labels (skip for blank segments)
+        if (!showBlank) {
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.rotate(start + sliceAngle / 2);
+          ctx.textAlign = "right";
+
+          if (name === "RESPIN") {
+            const text = "FREE SPIN";
+            const fs = Math.max(8, fontSize - 2); // Slightly smaller than regular text
+
+            ctx.font = `bold ${fs}px Arial`;
+            ctx.strokeStyle = "#000";
+            ctx.lineWidth = Math.max(1, fs / 8);
+            const paddingFromEdge = 15;
+            ctx.strokeText(text, radius - paddingFromEdge, fs / 3);
+            ctx.fillStyle = "#ffff00";
+            ctx.fillText(text, radius - paddingFromEdge, fs / 3);
+          } else {
+            // Use simple pre-calculated font size and display text
+            const displayText = displayTexts[i] || name;
+            const fs = fontSize;
+
+            ctx.fillStyle = "#fff";
+            ctx.font = `bold ${fs}px Arial`;
+
+            // Apply shadows only in optimal mode for performance
+            if (!reducedShadows) {
+              ctx.shadowColor = "rgba(0,0,0,0.7)";
+              ctx.shadowBlur = Math.max(2, fs / 4);
+              ctx.shadowOffsetX = 1;
+              ctx.shadowOffsetY = 1;
+            }
+
+            // Position text consistently from edge, regardless of length
+            const paddingFromEdge = 15; // Consistent padding from wheel edge
+            ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
+
+            // Reset shadow properties to prevent context pollution
+            if (!reducedShadows) {
+              ctx.shadowColor = "transparent";
+              ctx.shadowBlur = 0;
+              ctx.shadowOffsetX = 0;
+              ctx.shadowOffsetY = 0;
+            }
+          }
           ctx.restore();
         }
-      }
+      });
 
-      // Labels (skip for blank segments)
-      if (!showBlank) {
-        ctx.save();
-        ctx.translate(centerX, centerY);
-        ctx.rotate(start + sliceAngle / 2);
-        ctx.textAlign = "right";
+      // Center cap with metallic gradient
+      const capGradient = ctx.createRadialGradient(
+        centerX,
+        centerY,
+        0,
+        centerX,
+        centerY,
+        25
+      );
+      capGradient.addColorStop(0, "#4a4a4a");
+      capGradient.addColorStop(0.5, "#2a2a2a");
+      capGradient.addColorStop(0.8, "#1a1a1a");
+      capGradient.addColorStop(1, "#000000");
 
-        if (name === "RESPIN") {
-          const text = "FREE SPIN";
-          const fs = Math.max(8, fontSize - 2); // Slightly smaller than regular text
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 25, 0, 2 * Math.PI);
+      ctx.fillStyle = capGradient;
+      ctx.fill();
+      ctx.strokeStyle = "#333";
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
-          ctx.font = `bold ${fs}px Arial`;
-          ctx.strokeStyle = "#000";
-          ctx.lineWidth = Math.max(1, fs / 8);
-          const paddingFromEdge = 15;
-          ctx.strokeText(text, radius - paddingFromEdge, fs / 3);
-          ctx.fillStyle = "#ffff00";
-          ctx.fillText(text, radius - paddingFromEdge, fs / 3);
-        } else {
-          // Use simple pre-calculated font size and display text
-          const displayText = displayTexts[i] || name;
-          const fs = fontSize;
-
-          ctx.fillStyle = "#fff";
-          ctx.font = `bold ${fs}px Arial`;
-
-          // Apply shadows only in optimal mode for performance
-          if (!reducedShadows) {
-            ctx.shadowColor = "rgba(0,0,0,0.7)";
-            ctx.shadowBlur = Math.max(2, fs / 4);
-            ctx.shadowOffsetX = 1;
-            ctx.shadowOffsetY = 1;
-          }
-
-          // Position text consistently from edge, regardless of length
-          const paddingFromEdge = 15; // Consistent padding from wheel edge
-          ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
-
-          // Reset shadow properties to prevent context pollution
-          if (!reducedShadows) {
-            ctx.shadowColor = "transparent";
-            ctx.shadowBlur = 0;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
-          }
-        }
-        ctx.restore();
-      }
-    });
-
-    // Center cap with metallic gradient
-    const capGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 25);
-    capGradient.addColorStop(0, "#4a4a4a");
-    capGradient.addColorStop(0.5, "#2a2a2a");
-    capGradient.addColorStop(0.8, "#1a1a1a");
-    capGradient.addColorStop(1, "#000000");
-
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 25, 0, 2 * Math.PI);
-    ctx.fillStyle = capGradient;
-    ctx.fill();
-    ctx.strokeStyle = "#333";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Inner circle accent
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 18, 0, 2 * Math.PI);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }, [wheelGeometry, textInfo, wheelNames, colors, showBlank, getCachedGradient, performanceMode]);
+      // Inner circle accent
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 18, 0, 2 * Math.PI);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    },
+    [
+      wheelGeometry,
+      textInfo,
+      wheelNames,
+      colors,
+      showBlank,
+      getCachedGradient,
+      performanceMode,
+    ]
+  );
 
   /** ========= Performance Mode Detection ========= */
   useEffect(() => {
@@ -1088,18 +1231,20 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
     // Determine performance mode based on segment count
     if (segmentCount <= 8) {
-      setPerformanceMode('optimal'); // Full quality rendering
+      setPerformanceMode("optimal"); // Full quality rendering
     } else if (segmentCount <= 15) {
-      setPerformanceMode('balanced'); // Cached gradients, full features
+      setPerformanceMode("balanced"); // Cached gradients, full features
     } else {
-      setPerformanceMode('performance'); // Simplified rendering for high counts
+      setPerformanceMode("performance"); // Simplified rendering for high counts
     }
   }, [wheelNames.length]);
 
   /** ========= Gradient Cache Management ========= */
   useEffect(() => {
     // Clear gradient cache when wheel configuration changes
-    const currentConfig = `${wheelNames.join('-')}-${canvasCSSSize}-${colors.join('-')}-${showBlank}`;
+    const currentConfig = `${wheelNames.join(
+      "-"
+    )}-${canvasCSSSize}-${colors.join("-")}-${showBlank}`;
     if (lastWheelConfig.current !== currentConfig) {
       clearGradientCache();
       lastWheelConfig.current = currentConfig;
@@ -1110,18 +1255,20 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     const canvas = canvasRef.current;
     if (!canvas || !wheelGeometry) return;
 
-    const dpr = typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio || 1) : 1; // Cap DPR at 2
+    const dpr =
+      typeof window !== "undefined"
+        ? Math.min(2, window.devicePixelRatio || 1)
+        : 1; // Cap DPR at 2
     const css = canvasCSSSize;
 
     // Optimize canvas sizing - only update if changed
     const currentWidth = Math.floor(css * dpr);
     const currentHeight = Math.floor(css * dpr);
-    const sizeChanged = (
+    const sizeChanged =
       canvas.width !== currentWidth ||
       canvas.height !== currentHeight ||
       lastCanvasSize.current.width !== currentWidth ||
-      lastCanvasSize.current.height !== currentHeight
-    );
+      lastCanvasSize.current.height !== currentHeight;
 
     if (sizeChanged) {
       canvas.style.width = `${css}px`;
@@ -1174,8 +1321,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     // Cache pointer gradient for better performance
     if (!pointerGradientCache.current || sizeChanged) {
       const pointerGradient = ctx.createLinearGradient(
-        pointerX - 5, centerY,
-        pointerX + pointerOffsetX, centerY
+        pointerX - 5,
+        centerY,
+        pointerX + pointerOffsetX,
+        centerY
       );
       pointerGradient.addColorStop(0, "#ff3333");
       pointerGradient.addColorStop(0.5, "#ff0000");
@@ -1196,7 +1345,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
     ctx.stroke();
-  }, [rotation, canvasCSSSize, drawWheelSegments, prefersReducedMotion, wheelGeometry]);
+  }, [
+    rotation,
+    canvasCSSSize,
+    drawWheelSegments,
+    prefersReducedMotion,
+    wheelGeometry,
+  ]);
 
   useEffect(() => {
     drawWheel();
@@ -1211,13 +1366,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
     try {
       // Lazy-load canvas-confetti only when needed
-      const { default: confetti } = await import('canvas-confetti');
+      const { default: confetti } = await import("canvas-confetti");
 
       const baseCount = 100; // Reduced from 200 to 100 (50% less)
       // Scale particle count based on device capability
       let scaleFactor = 1.0;
-      if (deviceCapability === 'low') scaleFactor = 0.3;
-      else if (deviceCapability === 'medium') scaleFactor = 0.6;
+      if (deviceCapability === "low") scaleFactor = 0.3;
+      else if (deviceCapability === "medium") scaleFactor = 0.6;
       else scaleFactor = 1.0; // high capability
 
       const count = baseCount * scaleFactor;
@@ -1226,7 +1381,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         origin: { y: 0.7 },
         zIndex: 9999,
         disableForReducedMotion: true, // Respect accessibility settings
-        colors: ['#ffd700'] // Yellow/gold confetti
+        colors: ["#ffd700"], // Yellow/gold confetti
       };
       const fire = (r: number, o: Parameters<typeof confetti>[0]) =>
         confetti({ ...defaults, ...o, particleCount: Math.floor(count * r) });
@@ -1237,33 +1392,33 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       fire(0.1, { spread: 120, startVelocity: 45 });
     } catch (error) {
       // Gracefully handle failed confetti load
-      console.warn('Failed to load confetti:', error);
+      console.warn("Failed to load confetti:", error);
     }
   };
 
   /** ========= Spin logic ========= */
   const winnerRhymes = [
     "Winner Winner, Chicken Dinner",
-    "You are the Chosen One",
+    "The chosen one is...",
     "Victory Royale!",
-    "Winner = Chosen",
-    "Absolute Legend Pick",
-    "Throw some W's in the chat for",
-    "The Wheel has Spoken",
-    "You have been randomly selected",
+    "Winner = Declared",
+    "Absolute legend pick",
+    "Throw some W's in the chat",
+    "The Wheel has spoken",
+    "Randomly selected winner is...",
     "Jackpot!!!",
-    "Congrats",
-    "The Algorithm was in your Favor",
+    "Shout-Out",
+    "The Algorithm was in favor of...",
   ];
 
   const spin = () => {
     if (isSpinning || showBlank) return;
 
     // Track wheel spin event
-    if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('event', 'wheel_spin', {
+    if (typeof window !== "undefined" && window.gtag) {
+      window.gtag("event", "wheel_spin", {
         segments: wheelNames.length,
-        spin_power: speedIndicator
+        spin_power: speedIndicator,
       });
     }
 
@@ -1273,9 +1428,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     setShowFairnessPopup(false);
     setLockedSpeed(speedIndicator);
 
-
     // Enhanced aria announcement for spin start
-    setAriaAnnouncement(`Spinning wheel with ${wheelNames.length} options at ${Math.round(speedIndicator * 100)}% power`);
+    setAriaAnnouncement(
+      `Spinning wheel with ${wheelNames.length} options at ${Math.round(
+        speedIndicator * 100
+      )}% power`
+    );
 
     const spinStrength = speedIndicator;
     const baseRotations = 2.5 + spinStrength * 5; // 2.5 to 7.5 rotations
@@ -1293,7 +1451,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
       // Adaptive frame rate based on device capability
       // High capability: 8.33ms (120fps), Medium/Low: 16.67ms (60fps)
-      const throttleMs = deviceCapability === 'high' ? 8.33 : 16.67;
+      const throttleMs = deviceCapability === "high" ? 8.33 : 16.67;
 
       if (now - lastFrameTime < throttleMs) {
         requestAnimationFrame(animate);
@@ -1309,7 +1467,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       setRotation(currentRotation);
 
       // Calculate which segment is currently under the pointer (using same logic as final result)
-      const normalized = (2 * Math.PI - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
+      const normalized =
+        (2 * Math.PI - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
       const currentSegment = Math.floor(normalized / segmentSize);
 
       // Play click sound on every segment crossing with optimized audio system
@@ -1347,14 +1506,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           // Everything else happens asynchronously (non-blocking)
           setTimeout(() => {
             // Enhanced aria announcement for result
-            setAriaAnnouncement(`Winner selected: ${winner}. The wheel has stopped spinning.`);
+            setAriaAnnouncement(
+              `Winner selected: ${winner}. The wheel has stopped spinning.`
+            );
 
             // Track winner selection (async, non-blocking)
-            if (typeof window !== 'undefined' && window.gtag) {
-              window.gtag('event', 'wheel_result', {
+            if (typeof window !== "undefined" && window.gtag) {
+              window.gtag("event", "wheel_result", {
                 result: winner,
                 segments: wheelNames.length,
-                is_respin: false
+                is_respin: false,
               });
             }
 
@@ -1365,14 +1526,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         } else {
           // For RESPIN, just do aria announcement
           setTimeout(() => {
-            setAriaAnnouncement("Free spin! The wheel landed on a respin. You get another turn.");
+            setAriaAnnouncement(
+              "Free spin! The wheel landed on a respin. You get another turn."
+            );
 
             // Track respin selection (async, non-blocking)
-            if (typeof window !== 'undefined' && window.gtag) {
-              window.gtag('event', 'wheel_result', {
+            if (typeof window !== "undefined" && window.gtag) {
+              window.gtag("event", "wheel_result", {
                 result: winner,
                 segments: wheelNames.length,
-                is_respin: true
+                is_respin: true,
               });
             }
           }, 0);
@@ -1400,7 +1563,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       }}
       onFocus={() => {
         if (!showBlank) {
-          setAriaAnnouncement(`Spinning wheel ready with ${wheelNames.length} options. Press Space or Enter to spin.`);
+          setAriaAnnouncement(
+            `Spinning wheel ready with ${wheelNames.length} options. Press Space or Enter to spin.`
+          );
         }
       }}
     >
@@ -1443,21 +1608,25 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           style={{
             width: canvasCSSSize,
             height: canvasCSSSize,
-            cursor: canDrag ? (isDragging ? 'grabbing' : 'grab') : 'default',
-            touchAction: 'none', // Prevent touch scroll stealing drags
+            cursor: canDrag ? (isDragging ? "grabbing" : "grab") : "default",
+            touchAction: "none", // Prevent touch scroll stealing drags
             // Remove problematic iOS 16 properties and respect motion preferences
-            ...(isIOS16 ? {} : {
-              transform: 'translateZ(0)', // Hardware acceleration
-              willChange: prefersReducedMotion ? 'auto' : 'transform', // Hint browser for optimization, but respect motion preferences
-            }),
+            ...(isIOS16
+              ? {}
+              : {
+                  transform: "translateZ(0)", // Hardware acceleration
+                  willChange: prefersReducedMotion ? "auto" : "transform", // Hint browser for optimization, but respect motion preferences
+                }),
             // Firefox-specific optimizations
-            ...(isFirefox ? {
-              imageRendering: 'auto',
-              WebkitBackfaceVisibility: 'hidden',
-              backfaceVisibility: 'hidden',
-              // Enhanced performance for Firefox
-              contain: 'layout style paint',
-            } : {}),
+            ...(isFirefox
+              ? {
+                  imageRendering: "auto",
+                  WebkitBackfaceVisibility: "hidden",
+                  backfaceVisibility: "hidden",
+                  // Enhanced performance for Firefox
+                  contain: "layout style paint",
+                }
+              : {}),
           }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
@@ -1476,28 +1645,33 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           width: `max(${canvasCSSSize}px, 200px)`,
           maxWidth: isFirefox ? "600px" : "95vw",
           // iOS 16 layout fixes
-          ...(isIOS16 ? {
-            display: '-webkit-box',
-            WebkitBoxPack: 'center',
-            WebkitBoxAlign: 'center',
-            WebkitBoxOrient: 'horizontal'
-          } : {}),
+          ...(isIOS16
+            ? {
+                display: "-webkit-box",
+                WebkitBoxPack: "center",
+                WebkitBoxAlign: "center",
+                WebkitBoxOrient: "horizontal",
+              }
+            : {}),
           // Firefox-specific layout improvements
-          ...(isFirefox ? {
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            alignItems: 'center'
-          } : {}),
+          ...(isFirefox
+            ? {
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                alignItems: "center",
+              }
+            : {}),
         }}
       >
         <button
           onClick={spin}
           disabled={isSpinning || showBlank}
           className={`
-            ${isFirefox
-              ? "px-4 py-3 text-base min-w-[140px] max-w-[200px] mr-3"
-              : "px-[clamp(16px,3vw,22px)] py-[clamp(12px,2.5vw,14px)] text-[clamp(16px,2.2vw,18px)] min-w-[clamp(120px,28vw,156px)] mr-3"
+            ${
+              isFirefox
+                ? "px-4 py-3 text-base min-w-[140px] max-w-[200px] mr-3"
+                : "px-[clamp(16px,3vw,22px)] py-[clamp(12px,2.5vw,14px)] text-[clamp(16px,2.2vw,18px)] min-w-[clamp(120px,28vw,156px)] mr-3"
             }
             font-bold text-white rounded-lg shadow-lg transition-all
             ${
@@ -1507,21 +1681,28 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             }
           `}
           style={{
-            touchAction: 'manipulation',
-            opacity: (isSpinning || showBlank) ? '0.5' : '1',
-            pointerEvents: (isSpinning || showBlank) ? 'none' : 'auto',
+            touchAction: "manipulation",
+            opacity: isSpinning || showBlank ? "0.5" : "1",
+            pointerEvents: isSpinning || showBlank ? "none" : "auto",
             // iOS opacity fixes
-            ...(isIOS && (isSpinning || showBlank) ? {
-              WebkitOpacity: '0.5',
-              filter: 'opacity(0.5)',
-              backgroundColor: isSpinning || showBlank ? 'rgba(34, 197, 94, 0.5)' : undefined
-            } : {}),
+            ...(isIOS && (isSpinning || showBlank)
+              ? {
+                  WebkitOpacity: "0.5",
+                  filter: "opacity(0.5)",
+                  backgroundColor:
+                    isSpinning || showBlank
+                      ? "rgba(34, 197, 94, 0.5)"
+                      : undefined,
+                }
+              : {}),
             // iOS 16 button fixes
-            ...(isIOS16 ? {
-              WebkitAppearance: 'none',
-              border: 'none',
-              outline: 'none'
-            } : {})
+            ...(isIOS16
+              ? {
+                  WebkitAppearance: "none",
+                  border: "none",
+                  outline: "none",
+                }
+              : {}),
           }}
         >
           {isSpinning ? "Spinning..." : "SPIN!"}
@@ -1540,9 +1721,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             }}
             disabled={isSpinning || showBlank}
             className={`
-              ${isFirefox
-                ? "px-3 py-3 text-sm min-w-[90px] max-w-[140px]"
-                : "px-[clamp(14px,2.5vw,18px)] py-[clamp(10px,2vw,12px)] text-[clamp(13px,1.8vw,14px)] min-w-[clamp(85px,20vw,110px)]"
+              ${
+                isFirefox
+                  ? "px-3 py-3 text-sm min-w-[90px] max-w-[140px]"
+                  : "px-[clamp(14px,2.5vw,18px)] py-[clamp(10px,2vw,12px)] text-[clamp(13px,1.8vw,14px)] min-w-[clamp(85px,20vw,110px)]"
               }
               font-bold text-white rounded-lg shadow-lg
               transition-all hover:scale-[1.02] active:scale-95
@@ -1553,21 +1735,28 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
               }
             `}
             style={{
-              touchAction: 'manipulation',
-              opacity: (isSpinning || showBlank) ? '0.5' : '1',
-              pointerEvents: (isSpinning || showBlank) ? 'none' : 'auto',
+              touchAction: "manipulation",
+              opacity: isSpinning || showBlank ? "0.5" : "1",
+              pointerEvents: isSpinning || showBlank ? "none" : "auto",
               // iOS opacity fixes
-              ...(isIOS && (isSpinning || showBlank) ? {
-                WebkitOpacity: '0.5',
-                filter: 'opacity(0.5)',
-                backgroundColor: isSpinning || showBlank ? 'rgba(59, 130, 246, 0.5)' : undefined
-              } : {}),
+              ...(isIOS && (isSpinning || showBlank)
+                ? {
+                    WebkitOpacity: "0.5",
+                    filter: "opacity(0.5)",
+                    backgroundColor:
+                      isSpinning || showBlank
+                        ? "rgba(59, 130, 246, 0.5)"
+                        : undefined,
+                  }
+                : {}),
               // iOS 16 button fixes
-              ...(isIOS16 ? {
-                WebkitAppearance: 'none',
-                border: 'none',
-                outline: 'none'
-              } : {})
+              ...(isIOS16
+                ? {
+                    WebkitAppearance: "none",
+                    border: "none",
+                    outline: "none",
+                  }
+                : {}),
             }}
           >
             Reset
@@ -1594,7 +1783,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           <div
             className="bg-white rounded-2xl p-6 sm:p-8 transform scale-100 animate-bounce-in pointer-events-auto text-center max-w-[90vw] w-full max-w-md"
             style={{
-              boxShadow: '0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)'
+              boxShadow:
+                "0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)",
             }}
             onClick={(e) => {
               // Prevent modal from closing when clicking inside the modal content
@@ -1607,15 +1797,15 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             <p
               className={`font-bold text-green-600 animate-pulse mb-6 leading-tight break-words ${
                 selectedName.length > 15
-                  ? 'text-2xl sm:text-3xl'
+                  ? "text-2xl sm:text-3xl"
                   : selectedName.length > 10
-                  ? 'text-3xl sm:text-4xl'
-                  : 'text-4xl sm:text-5xl'
+                  ? "text-3xl sm:text-4xl"
+                  : "text-4xl sm:text-5xl"
               }`}
               style={{
-                wordBreak: 'break-word',
-                overflowWrap: 'break-word',
-                hyphens: 'auto'
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+                hyphens: "auto",
               }}
             >
               {selectedName}
@@ -1630,7 +1820,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
                 setWinnerRhyme("");
               }}
               className="min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              style={{ touchAction: 'manipulation' }}
+              style={{ touchAction: "manipulation" }}
             >
               Close
             </button>
@@ -1676,8 +1866,18 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             <div className="flex items-center justify-center mb-4">
               <div className="relative">
                 <div className="absolute inset-0 animate-pulse bg-green-500/20 rounded-full blur-xl"></div>
-                <svg className="w-12 h-12 text-green-400 relative" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                <svg
+                  className="w-12 h-12 text-green-400 relative"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                  />
                 </svg>
               </div>
               <h2 className="text-2xl font-bold text-white ml-3">
@@ -1689,36 +1889,46 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
               <div className="bg-gradient-to-r from-green-500/10 to-green-600/10 border border-green-500/30 p-3 rounded-lg">
                 <div className="flex items-center mb-2">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse mr-2"></div>
-                  <strong className="text-green-400 uppercase text-xs tracking-wider">Cryptographically Secure Randomness</strong>
+                  <strong className="text-green-400 uppercase text-xs tracking-wider">
+                    Cryptographically Secure Randomness
+                  </strong>
                 </div>
                 <p className="text-gray-300 text-xs leading-relaxed">
-                  Powered by crypto.getRandomValues() - military-grade randomness used by banks, cryptocurrency,
-                  and security systems worldwide.
+                  Powered by crypto.getRandomValues() - military-grade
+                  randomness used by banks, cryptocurrency, and security systems
+                  worldwide.
                 </p>
               </div>
 
               <div className="bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-500/30 p-3 rounded-lg">
                 <div className="flex items-center mb-2">
                   <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse mr-2"></div>
-                  <strong className="text-blue-400 uppercase text-xs tracking-wider">Technical Stack</strong>
+                  <strong className="text-blue-400 uppercase text-xs tracking-wider">
+                    Technical Stack
+                  </strong>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-start">
                     <span className="text-blue-300 mr-2">▸</span>
                     <p className="text-gray-300 text-xs">
-                      <span className="text-blue-300 font-mono">CSPRNG:</span> Hardware entropy from OS kernel
+                      <span className="text-blue-300 font-mono">CSPRNG:</span>{" "}
+                      Hardware entropy from OS kernel
                     </p>
                   </div>
                   <div className="flex items-start">
                     <span className="text-blue-300 mr-2">▸</span>
                     <p className="text-gray-300 text-xs">
-                      <span className="text-blue-300 font-mono">Entropy:</span> Keyboard/mouse timing, CPU thermal noise
+                      <span className="text-blue-300 font-mono">Entropy:</span>{" "}
+                      Keyboard/mouse timing, CPU thermal noise
                     </p>
                   </div>
                   <div className="flex items-start">
                     <span className="text-blue-300 mr-2">▸</span>
                     <p className="text-gray-300 text-xs">
-                      <span className="text-blue-300 font-mono">RNG Quality:</span> 32+ bits true randomness used
+                      <span className="text-blue-300 font-mono">
+                        RNG Quality:
+                      </span>{" "}
+                      32+ bits true randomness used
                     </p>
                   </div>
                 </div>
@@ -1727,29 +1937,49 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
               <div className="bg-gradient-to-r from-purple-500/10 to-purple-600/10 border border-purple-500/30 p-3 rounded-lg">
                 <div className="flex items-center mb-2">
                   <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse mr-2"></div>
-                  <strong className="text-purple-400 uppercase text-xs tracking-wider">Live Statistics</strong>
+                  <strong className="text-purple-400 uppercase text-xs tracking-wider">
+                    Live Statistics
+                  </strong>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="bg-black/30 rounded p-2">
-                    <p className="text-purple-300 font-mono text-[10px]">SEGMENTS</p>
+                    <p className="text-purple-300 font-mono text-[10px]">
+                      SEGMENTS
+                    </p>
                     <p className="text-white font-bold">{wheelNames.length}</p>
                   </div>
                   <div className="bg-black/30 rounded p-2">
-                    <p className="text-purple-300 font-mono text-[10px]">OUTCOME BITS</p>
-                    <p className="text-white font-bold">{Math.ceil(Math.log2(wheelNames.length))}</p>
+                    <p className="text-purple-300 font-mono text-[10px]">
+                      OUTCOME BITS
+                    </p>
+                    <p className="text-white font-bold">
+                      {Math.ceil(Math.log2(wheelNames.length))}
+                    </p>
                   </div>
                   <div className="bg-black/30 rounded p-2">
-                    <p className="text-purple-300 font-mono text-[10px]">NAME ODDS</p>
-                    <p className="text-white font-bold">{((1 / wheelNames.length) * 100).toFixed(2)}%</p>
+                    <p className="text-purple-300 font-mono text-[10px]">
+                      NAME ODDS
+                    </p>
+                    <p className="text-white font-bold">
+                      {((1 / wheelNames.length) * 100).toFixed(2)}%
+                    </p>
                   </div>
-                  {includeFreeSpins && wheelNames.filter((n) => n === "RESPIN").length > 0 && (
-                    <div className="bg-black/30 rounded p-2">
-                      <p className="text-purple-300 font-mono text-[10px]">RESPIN ODDS</p>
-                      <p className="text-white font-bold">
-                        {((wheelNames.filter((n) => n === "RESPIN").length / wheelNames.length) * 100).toFixed(2)}%
-                      </p>
-                    </div>
-                  )}
+                  {includeFreeSpins &&
+                    wheelNames.filter((n) => n === "RESPIN").length > 0 && (
+                      <div className="bg-black/30 rounded p-2">
+                        <p className="text-purple-300 font-mono text-[10px]">
+                          RESPIN ODDS
+                        </p>
+                        <p className="text-white font-bold">
+                          {(
+                            (wheelNames.filter((n) => n === "RESPIN").length /
+                              wheelNames.length) *
+                            100
+                          ).toFixed(2)}
+                          %
+                        </p>
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
@@ -1757,7 +1987,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             <button
               onClick={() => setShowFairnessPopup(false)}
               className="mt-4 px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg hover:from-blue-600 hover:to-purple-600 transition-all transform hover:scale-105 font-semibold"
-              style={{ touchAction: 'manipulation' }}
+              style={{ touchAction: "manipulation" }}
             >
               Got it!
             </button>
@@ -1777,7 +2007,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             )}
             {/* Always show last winner line to prevent layout shifts */}
             <div className="text-[clamp(8px,1.2vw,10px)] text-white/70 px-1 truncate max-w-full">
-              Last winner: {lastWinner ? (
+              Last winner:{" "}
+              {lastWinner ? (
                 <span className="text-white font-semibold">{lastWinner}</span>
               ) : (
                 <span className="text-white/40 italic">—</span>
@@ -1789,15 +2020,15 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
               onClick={() => {
                 setShowFairnessPopup(true);
                 // Track fairness popup view
-                if (typeof window !== 'undefined' && window.gtag) {
-                  window.gtag('event', 'fairness_view', {
-                    event_category: 'engagement',
-                    event_label: 'view_fairness_popup'
+                if (typeof window !== "undefined" && window.gtag) {
+                  window.gtag("event", "fairness_view", {
+                    event_category: "engagement",
+                    event_label: "view_fairness_popup",
                   });
                 }
               }}
               className="text-[clamp(10px,1.6vw,12px)] text-white/70 hover:text-white underline min-h-[24px] px-2 py-1"
-              style={{ touchAction: 'manipulation' }}
+              style={{ touchAction: "manipulation" }}
             >
               fairness
             </button>

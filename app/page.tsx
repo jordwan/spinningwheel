@@ -531,12 +531,13 @@ export default function Home() {
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
                 {showRandomCountInput
                   ? "How many random tiles?"
-                  : "Enter Names Below"}
+                  : "Customize Wheel"}
               </h2>
               {!showRandomCountInput && (
                 <p className="text-gray-600 mb-4">
                   <span className="text-sm text-gray-500">
-                    Enter names below or use random to select number of tiles
+                    Input custom names / numbers <br></br>or use random to
+                    select.
                   </span>
                 </p>
               )}
@@ -546,7 +547,7 @@ export default function Home() {
                     type="text"
                     value={teamName}
                     onChange={(e) => setTeamName(e.target.value)}
-                    placeholder="Team name (optional)"
+                    placeholder="Wheel name (optional)"
                     className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                     style={{ touchAction: "manipulation" }}
                     autoComplete="off"
@@ -558,7 +559,7 @@ export default function Home() {
                     value={localInputValue}
                     onChange={(e) => handleInputChange(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    placeholder="example: mike, cindy, jamal, wayne..."
+                    placeholder="eg: mike, cindy, jamal, wayne..."
                     className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
                     style={{ touchAction: "manipulation" }}
                     autoComplete="off"
