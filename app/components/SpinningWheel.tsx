@@ -1521,7 +1521,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
             // Trigger effects (async, non-blocking)
             triggerConfetti();
-            playTadaSound().catch(() => {}); // Fire and forget async audio
+            // Removed winner audio - only show confetti
           }, 0);
         } else {
           // For RESPIN, just do aria announcement
