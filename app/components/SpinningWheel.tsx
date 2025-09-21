@@ -1440,12 +1440,17 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     // TRUE RANDOM: Select winner independently of current wheel position
     const randomWinnerIndex = Math.floor(cryptoRandom() * wheelNames.length);
     const segmentAngle = (2 * Math.PI) / wheelNames.length;
-    const targetAngle = randomWinnerIndex * segmentAngle;
 
-    // Calculate final rotation to land on the randomly selected segment
-    // Add full rotations + random offset within the winning segment for visual appeal
+    // Calculate the middle of the target segment (where we want the pointer to land)
+    const targetSegmentMiddle = randomWinnerIndex * segmentAngle + segmentAngle / 2;
+
+    // The pointer is at angle 0 (right side), so we need to rotate until
+    // the target segment middle aligns with the pointer position
+    const targetRotation = (2 * Math.PI) - targetSegmentMiddle;
+
+    // Add full rotations for visual effect
     const extraRotations = Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
-    const finalRotation = rotation + extraRotations + (targetAngle - (rotation % (2 * Math.PI)));
+    const finalRotation = rotation + extraRotations + targetRotation;
 
     const startTime = Date.now();
     let lastFrameTime = 0;
