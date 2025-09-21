@@ -119,7 +119,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   /** ========= AUDIO (optimized with node pooling) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
   const clickBufferRef = useRef<AudioBuffer | null>(null);
-  const tadaBufferRef = useRef<AudioBuffer | null>(null);
   const audioInitPromiseRef = useRef<Promise<void> | null>(null);
   const isAudioInitializingRef = useRef<boolean>(false);
 
@@ -135,6 +134,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     currentIndex: 0,
     poolSize: 8
   });
+
 
   // Create audio context only (fast operation)
   const getAudioContext = useCallback(() => {
@@ -197,57 +197,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         });
       }
 
-      // Create tada buffer asynchronously in chunks
-      if (!tadaBufferRef.current) {
-        await new Promise<void>(resolve => {
-          setTimeout(() => {
-            const duration = 0.8;
-            const sr = ctx.sampleRate;
-            const frames = Math.max(1, Math.floor(duration * sr));
-            const tadaBuffer = ctx.createBuffer(1, frames, sr);
-            const tadaData = tadaBuffer.getChannelData(0);
-            const frequencies = [261.63, 329.63, 392.0];
-
-            // Process in chunks to avoid blocking
-            const chunkSize = Math.ceil(frames / 4);
-            let processedFrames = 0;
-
-            const processChunk = () => {
-              const endFrame = Math.min(processedFrames + chunkSize, frames);
-
-              for (let i = processedFrames; i < endFrame; i++) {
-                const t = i / sr;
-                const p = t / duration;
-                const env = p < 0.1 ? p / 0.1 : p < 0.6 ? 1 : (1 - p) / 0.4;
-                let sample = 0;
-
-                frequencies.forEach((f, idx) => {
-                  const ns = idx * 0.15;
-                  const ne = ns + 0.4;
-                  if (t >= ns && t <= ne) {
-                    const np = (t - ns) / (ne - ns);
-                    const nenv = Math.sin(Math.PI * np);
-                    sample += Math.sin(2 * Math.PI * f * t) * nenv * 0.3;
-                  }
-                });
-
-                tadaData[i] = sample * env * 0.4;
-              }
-
-              processedFrames = endFrame;
-
-              if (processedFrames < frames) {
-                setTimeout(processChunk, 0); // Yield to main thread
-              } else {
-                tadaBufferRef.current = tadaBuffer;
-                resolve();
-              }
-            };
-
-            processChunk();
-          }, 0);
-        });
-      }
+      // No longer need tada buffer generation since we're using MP3 file
     } catch (error) {
       console.warn("Audio buffer creation failed:", error);
     } finally {
@@ -261,7 +211,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     if (!ctx) return null;
 
     // Start async buffer creation if not already done
-    if (!audioInitPromiseRef.current && !clickBufferRef.current && !tadaBufferRef.current) {
+    if (!audioInitPromiseRef.current && !clickBufferRef.current) {
       audioInitPromiseRef.current = createAudioBuffersAsync();
     }
 
@@ -331,23 +281,20 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
 
   const playTadaSound = useCallback(async (v = 0.3) => {
     try {
-      const ctx = await ensureAudio();
-      if (!ctx || !tadaBufferRef.current) return;
+      // Use the actual MP3 file instead of generated sound
+      const audio = new Audio('/audio/tada.mp3');
 
-      if (ctx.state === "suspended") {
-        await ctx.resume().catch(() => {});
-      }
+      // Set volume (keep it reasonable, not too loud)
+      audio.volume = Math.max(0.1, Math.min(0.3, v * 0.5)); // Max 30% volume
 
-      const src = ctx.createBufferSource();
-      src.buffer = tadaBufferRef.current;
-      const gain = ctx.createGain();
-      gain.gain.value = Math.max(0.1, Math.min(0.5, v));
-      src.connect(gain).connect(ctx.destination);
-      src.start();
+      // Play the sound
+      await audio.play().catch(() => {
+        // Silently fail if audio playback is blocked
+      });
     } catch {
       // Silently fail for audio errors
     }
-  }, [ensureAudio]);
+  }, []);
 
   /** ========= Names + RESPIN placement ========= */
   const wheelNames = useMemo(() => {
@@ -1252,7 +1199,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       // Lazy-load canvas-confetti only when needed
       const { default: confetti } = await import('canvas-confetti');
 
-      const baseCount = 200;
+      const baseCount = 100; // Reduced from 200 to 100 (50% less)
       // Scale particle count based on device capability
       let scaleFactor = 1.0;
       if (deviceCapability === 'low') scaleFactor = 0.3;
@@ -1264,8 +1211,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       const defaults = {
         origin: { y: 0.7 },
         zIndex: 9999,
-        disableForReducedMotion: true // Respect accessibility settings
-      } as const;
+        disableForReducedMotion: true, // Respect accessibility settings
+        colors: ['#ffd700'] // Yellow/gold confetti
+      };
       const fire = (r: number, o: Parameters<typeof confetti>[0]) =>
         confetti({ ...defaults, ...o, particleCount: Math.floor(count * r) });
       fire(0.25, { spread: 26, startVelocity: 55 });
@@ -1311,12 +1259,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     setShowFairnessPopup(false);
     setLockedSpeed(speedIndicator);
 
+
     // Enhanced aria announcement for spin start
     setAriaAnnouncement(`Spinning wheel with ${wheelNames.length} options at ${Math.round(speedIndicator * 100)}% power`);
 
     const spinStrength = speedIndicator;
-    const baseRotations = 3 + spinStrength * 10;
-    const spinDuration = 4000 + (1 - spinStrength) * 4000;
+    const baseRotations = 2.5 + spinStrength * 5; // 2.5 to 7.5 rotations
+    const spinDuration = 10000; // Fixed 10 second duration for all speeds
     const finalRotation =
       rotation + Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
 
@@ -1365,6 +1314,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         setIsSpinning(false);
         setLockedSpeed(null);
 
+        // Calculate winner immediately
         const normalized =
           (2 * Math.PI - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
         const selectedIndex = Math.floor(
@@ -1373,32 +1323,45 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         const winner = wheelNames[selectedIndex];
         setSelectedName(winner);
 
-        // Enhanced aria announcement for result
-        if (winner === "RESPIN") {
-          setAriaAnnouncement("Free spin! The wheel landed on a respin. You get another turn.");
-        } else {
-          setAriaAnnouncement(`Winner selected: ${winner}. The wheel has stopped spinning.`);
-        }
-
-        // Note: lastWinner will be set when user closes the winner modal
-
-        // Track winner selection
-        if (typeof window !== 'undefined' && window.gtag) {
-          window.gtag('event', 'wheel_result', {
-            result: winner,
-            segments: wheelNames.length,
-            is_respin: winner === "RESPIN"
-          });
-        }
-
         if (winner !== "RESPIN") {
-          // Show winner immediately
+          // Show winner modal IMMEDIATELY - this is what user sees
           const rhyme =
             winnerRhymes[Math.floor(cryptoRandom() * winnerRhymes.length)];
           setWinnerRhyme(rhyme);
           setShowWinnerModal(true);
-          triggerConfetti();
-          playTadaSound().catch(() => {}); // Fire and forget async audio
+
+          // Everything else happens asynchronously (non-blocking)
+          setTimeout(() => {
+            // Enhanced aria announcement for result
+            setAriaAnnouncement(`Winner selected: ${winner}. The wheel has stopped spinning.`);
+
+            // Track winner selection (async, non-blocking)
+            if (typeof window !== 'undefined' && window.gtag) {
+              window.gtag('event', 'wheel_result', {
+                result: winner,
+                segments: wheelNames.length,
+                is_respin: false
+              });
+            }
+
+            // Trigger effects (async, non-blocking)
+            triggerConfetti();
+            playTadaSound().catch(() => {}); // Fire and forget async audio
+          }, 0);
+        } else {
+          // For RESPIN, just do aria announcement
+          setTimeout(() => {
+            setAriaAnnouncement("Free spin! The wheel landed on a respin. You get another turn.");
+
+            // Track respin selection (async, non-blocking)
+            if (typeof window !== 'undefined' && window.gtag) {
+              window.gtag('event', 'wheel_result', {
+                result: winner,
+                segments: wheelNames.length,
+                is_respin: true
+              });
+            }
+          }, 0);
         }
       }
     };
@@ -1433,9 +1396,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       {/* Spin Power (≈50% width on mobile, larger on bigger screens) */}
       <div
         ref={speedRef}
-        className="mb-3 w-[min(45vw,300px)] sm:w-[min(60vw,360px)] lg:w-[400px]"
+        className="mb-2 w-[min(45vw,300px)] sm:w-[min(60vw,360px)] lg:w-[400px]"
       >
-        <div className="text-center mb-1 text-[clamp(11px,1.6vw,14px)] font-semibold text-white">
+        <div className="text-center mb-1 text-[clamp(10px,1.5vw,13px)] font-semibold text-white">
           Spin Power
         </div>
         <div className="relative h-6 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
@@ -1458,7 +1421,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       {/* Wheel */}
       <div
         ref={wheelWrapRef}
-        className="relative flex items-center justify-center mb-4 flex-1 flex-col justify-center"
+        className="relative flex items-center justify-center mb-8 flex-1 min-h-0 flex-col justify-center"
       >
         <canvas
           ref={canvasRef}
@@ -1494,7 +1457,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       {/* Controls — width locked to wheel, wrap when needed */}
       <div
         ref={controlsRef}
-        className="flex flex-wrap gap-3 sm:gap-4 justify-center items-center mx-auto mb-4"
+        className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center mx-auto mb-2"
         style={{
           width: `${canvasCSSSize}px`,
           maxWidth: isFirefox ? "600px" : "95vw",
@@ -1789,24 +1752,26 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
         </div>
       )}
 
-      {/* Footer */}
-      <div ref={footerRef} className="w-full text-center min-h-[60px] flex flex-col justify-end">
-        <div ref={footerContentRef} className="space-y-2">
-          {(fairnessText || lastWinner) && (
-            <div className="text-center flex flex-col items-center gap-1 mb-2">
-              {fairnessText && (
-                <span className="text-[clamp(10px,1.6vw,12px)] text-white/70 whitespace-nowrap">
-                  {fairnessText}
-                </span>
-              )}
-              {lastWinner && (
-                <span className="text-[clamp(10px,1.6vw,12px)] text-white/70 break-words max-w-full px-2">
-                  Last winner: <span className="text-white font-semibold">{lastWinner}</span>
-                </span>
+      {/* Footer - Ultra compact and stable */}
+      <div ref={footerRef} className="w-full text-center flex-shrink-0">
+        <div ref={footerContentRef} className="pb-1">
+          {/* Stable content area with skeleton placeholders */}
+          <div className="text-center space-y-0">
+            {fairnessText && (
+              <div className="text-[clamp(8px,1.2vw,10px)] text-white/70 whitespace-nowrap">
+                {fairnessText}
+              </div>
+            )}
+            {/* Always show last winner line to prevent layout shifts */}
+            <div className="text-[clamp(8px,1.2vw,10px)] text-white/70 px-1 truncate max-w-full">
+              Last winner: {lastWinner ? (
+                <span className="text-white font-semibold">{lastWinner}</span>
+              ) : (
+                <span className="text-white/40 italic">—</span>
               )}
             </div>
-          )}
-          <div className="text-center pb-2">
+          </div>
+          <div className="text-center mt-0">
             <button
               onClick={() => {
                 setShowFairnessPopup(true);
