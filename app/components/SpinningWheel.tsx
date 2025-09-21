@@ -1407,6 +1407,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   const spin = () => {
     if (isSpinning || showBlank) return;
 
+    // If there's a current winner being shown, save it to history before spinning again
+    if (showWinnerModal && selectedName && selectedName !== "RESPIN") {
+      setWinnerHistory(prev => [...prev, selectedName]);
+    }
+
     // Track wheel spin event
     if (typeof window !== "undefined" && window.gtag) {
       window.gtag("event", "wheel_spin", {
@@ -1634,7 +1639,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       {/* Controls — width locked to wheel, wrap when needed */}
       <div
         ref={controlsRef}
-        className="flex flex-wrap justify-center items-center mx-auto mb-2"
+        className="flex flex-wrap justify-center items-center mx-auto mb-2 relative z-[60]"
         style={{
           width: `max(${canvasCSSSize}px, 200px)`,
           maxWidth: isFirefox ? "600px" : "95vw",
@@ -2008,8 +2013,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                   {winnerHistory.length > 1 && (
                     <span className="text-white/50 font-normal">
                       {" ← "}
-                      {winnerHistory.slice(0, -1).reverse().slice(0, 3).join(" ← ")}
-                      {winnerHistory.length > 4 && " ..."}
+                      {winnerHistory.slice(0, -1).reverse().slice(0, 24).join(" ← ")}
+                      {winnerHistory.length > 25 && " ..."}
                     </span>
                   )}
                 </span>
