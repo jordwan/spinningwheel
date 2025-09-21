@@ -156,17 +156,31 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       if (!clickBufferRef.current) {
         await new Promise<void>(resolve => {
           setTimeout(() => {
-            const duration = 0.008;
+            const duration = 0.012; // Slightly longer for more distinctive sound
             const sr = ctx.sampleRate;
             const frames = Math.max(1, Math.floor(duration * sr));
             const buffer = ctx.createBuffer(1, frames, sr);
             const data = buffer.getChannelData(0);
-            const freq = 2000;
 
+            // Create a more distinctive "tick" sound with harmonic content
             for (let i = 0; i < frames; i++) {
               const t = i / sr;
-              const env = Math.exp(-t * 150);
-              data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.3;
+              const env = Math.exp(-t * 120); // Slightly slower decay
+
+              // Fundamental frequency with harmonics for richer sound
+              const fundamental = 1800;
+              const harmonic2 = fundamental * 2;
+              const harmonic3 = fundamental * 3;
+
+              let sample = 0;
+              sample += Math.sin(2 * Math.PI * fundamental * t) * 0.6; // Main tone
+              sample += Math.sin(2 * Math.PI * harmonic2 * t) * 0.2;   // Second harmonic
+              sample += Math.sin(2 * Math.PI * harmonic3 * t) * 0.1;   // Third harmonic
+
+              // Add slight noise for more realistic click
+              sample += (Math.random() - 0.5) * 0.05;
+
+              data[i] = sample * env * 0.25;
             }
 
             clickBufferRef.current = buffer;
@@ -1271,20 +1285,24 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       const currentRotation = rotation + (finalRotation - rotation) * easeOut;
       setRotation(currentRotation);
 
-      // Calculate which segment is currently under the pointer
-      const normalizedRotation = ((currentRotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-      const currentSegment = Math.floor(normalizedRotation / segmentSize);
+      // Calculate which segment is currently under the pointer (using same logic as final result)
+      const normalized = (2 * Math.PI - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
+      const currentSegment = Math.floor(normalized / segmentSize);
 
-      const minBetweenTicks = 50 + 200 * progress; // 50ms → 250ms
-      if (
-        currentSegment !== lastSegment &&
-        now - lastSoundTime >= minBetweenTicks
-      ) {
+      // Play click sound on every segment crossing (no time throttling for accuracy)
+      if (currentSegment !== lastSegment) {
+        // Calculate speed-based volume (louder when faster)
         const speed = 1 - easeOut;
-        const vol = Math.max(0.02, Math.min(0.1, 0.02 + (1 - speed) * 0.08));
-        playTickSound(vol).catch(() => {}); // Fire and forget async audio
+        const vol = Math.max(0.01, Math.min(0.08, 0.01 + speed * 0.07));
+
+        // Only throttle by a minimal amount to prevent audio glitches on very fast spinning
+        const minInterval = 16; // ~60fps equivalent - just to prevent audio overlap
+        if (now - lastSoundTime >= minInterval) {
+          playTickSound(vol).catch(() => {}); // Fire and forget async audio
+          lastSoundTime = now;
+        }
+
         lastSegment = currentSegment;
-        lastSoundTime = now;
       }
 
       if (progress < 1) {
