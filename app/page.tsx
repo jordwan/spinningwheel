@@ -500,7 +500,7 @@ export default function Home() {
       <div className="relative z-10">
         {/* Name Input Popup (overlay on top of wheel) */}
         {showNameInput && (
-          <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
+          <div className="fixed inset-0 flex items-center justify-center z-[70] p-4 pointer-events-none">
             <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full pointer-events-auto text-center relative">
               {/* Close button */}
               <button
