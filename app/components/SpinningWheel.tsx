@@ -319,22 +319,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     [ensureAudio, initializeAudioPool]
   );
 
-  const playTadaSound = useCallback(async (v = 0.3) => {
-    try {
-      // Use the actual MP3 file instead of generated sound
-      const audio = new Audio("/audio/tada.mp3");
-
-      // Set volume (keep it reasonable, not too loud)
-      audio.volume = Math.max(0.1, Math.min(0.3, v * 0.5)); // Max 30% volume
-
-      // Play the sound
-      await audio.play().catch(() => {
-        // Silently fail if audio playback is blocked
-      });
-    } catch {
-      // Silently fail for audio errors
-    }
-  }, []);
 
   /** ========= Names + RESPIN placement ========= */
   const wheelNames = useMemo(() => {
@@ -572,6 +556,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
   /** ========= Drag Animation Cleanup ========= */
   useEffect(() => {
+    const segmentCache = segmentGradientsCache.current;
+    const audioPool = audioPoolRef.current;
+
     return () => {
       // Cleanup momentum animation on unmount
       if (momentumAnimationRef.current) {
@@ -582,23 +569,22 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       // Clear canvas optimization caches
       pointerGradientCache.current = null;
       lastCanvasSize.current = { width: 0, height: 0 };
-      segmentGradientsCache.current.clear();
+      segmentCache.clear();
 
       // Clear audio pool
-      const pool = audioPoolRef.current;
-      pool.sources.forEach((source) => {
+      audioPool.sources.forEach((source) => {
         try {
           source.disconnect();
         } catch {}
       });
-      pool.gains.forEach((gain) => {
+      audioPool.gains.forEach((gain) => {
         try {
           gain.disconnect();
         } catch {}
       });
-      pool.sources = [];
-      pool.gains = [];
-      pool.currentIndex = 0;
+      audioPool.sources = [];
+      audioPool.gains = [];
+      audioPool.currentIndex = 0;
     };
   }, []);
 

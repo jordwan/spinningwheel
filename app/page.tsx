@@ -75,12 +75,14 @@ export default function Home() {
 
   // Cleanup debounce timers on unmount
   useEffect(() => {
+    const nameProcessingDebounce = nameProcessingDebounceRef.current;
+
     return () => {
       if (inputDebounceRef.current) {
         clearTimeout(inputDebounceRef.current);
       }
-      if (nameProcessingDebounceRef.current) {
-        clearTimeout(nameProcessingDebounceRef.current);
+      if (nameProcessingDebounce) {
+        clearTimeout(nameProcessingDebounce);
       }
     };
   }, []);
