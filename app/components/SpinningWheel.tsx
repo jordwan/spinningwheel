@@ -1289,15 +1289,46 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       const normalized = (2 * Math.PI - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
       const currentSegment = Math.floor(normalized / segmentSize);
 
-      // Play click sound on every segment crossing (no time throttling for accuracy)
+      // Smart click sound system to prevent audio glitches with many segments
       if (currentSegment !== lastSegment) {
         // Calculate speed-based volume (louder when faster)
         const speed = 1 - easeOut;
         const vol = Math.max(0.01, Math.min(0.08, 0.01 + speed * 0.07));
 
-        // Only throttle by a minimal amount to prevent audio glitches on very fast spinning
-        const minInterval = 16; // ~60fps equivalent - just to prevent audio overlap
-        if (now - lastSoundTime >= minInterval) {
+        // Smart skipping logic based on segment count and spin speed
+        const segmentCount = wheelNames.length;
+        let shouldPlayClick = true;
+
+        if (segmentCount >= 15) {
+          // For many segments, implement smart skipping
+          if (speed > 0.7) {
+            // Very fast spinning: skip 3 out of 4 clicks
+            shouldPlayClick = (currentSegment % 4) === 0;
+          } else if (speed > 0.4) {
+            // Fast spinning: skip every other click
+            shouldPlayClick = (currentSegment % 2) === 0;
+          } else if (speed > 0.2) {
+            // Medium spinning: skip every 3rd click
+            shouldPlayClick = (currentSegment % 3) !== 0;
+          }
+          // Slow spinning: play all clicks
+        } else if (segmentCount >= 10) {
+          // For moderate segment counts, lighter skipping
+          if (speed > 0.8) {
+            // Very fast: skip every other
+            shouldPlayClick = (currentSegment % 2) === 0;
+          } else if (speed > 0.5) {
+            // Fast: skip every 3rd
+            shouldPlayClick = (currentSegment % 3) !== 0;
+          }
+          // Otherwise play all clicks
+        }
+        // For <= 9 segments: always play all clicks
+
+        // Minimum interval to prevent audio system overload
+        const minInterval = segmentCount >= 20 ? 25 : 16; // Longer interval for very high segment counts
+
+        if (shouldPlayClick && now - lastSoundTime >= minInterval) {
           playTickSound(vol).catch(() => {}); // Fire and forget async audio
           lastSoundTime = now;
         }
