@@ -447,12 +447,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     target = Math.min(target, vhCap);
 
     // Global clamps - keep consistent sizes
-    const minSize = 280;
-    const maxSize = 600; // Same max for all devices
+    // Reduce size when showing blank wheel with modal overlay
+    const minSize = showBlank ? 250 : 280;
+    const maxSize = showBlank ? 450 : 600; // Smaller max for blank state
     target = Math.max(minSize, Math.min(maxSize, target));
 
     setCanvasCSSSize(target);
-  }, [isFirefox]);
+  }, [isFirefox, showBlank]);
 
   useLayoutEffect(() => {
     // Initial pass + observers (so when controls gain height, we recalc)
