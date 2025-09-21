@@ -20,6 +20,7 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [duplicateWarningText, setDuplicateWarningText] = useState("");
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   // Debouncing refs for performance optimization
   const inputDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -31,6 +32,21 @@ export default function Home() {
   // Hydration guard - ensures client-side rendering
   useEffect(() => {
     setMounted(true);
+
+    // Detect mobile device
+    const checkIsMobile = () => {
+      if (typeof window !== "undefined") {
+        // Check for touch capability and screen size
+        const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const isSmallScreen = window.innerWidth <= 1024; // Consider tablets as mobile for keyboard behavior
+        setIsMobileDevice(hasTouch && isSmallScreen);
+      }
+    };
+
+    checkIsMobile();
+    window.addEventListener('resize', checkIsMobile);
+
+    return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
 
   // Handle dynamic viewport height for mobile devices
@@ -265,6 +281,31 @@ export default function Home() {
     return getRandomNames(count);
   };
 
+  const handleRandomNames = () => {
+    const count = parseInt(randomNameCount) || 10;
+    setWheelNames(generateRandomNames(count));
+    setIsUsingCustomNames(false); // Track that we're using random names
+    setShowNameInput(false);
+    setShowRandomCountInput(false);
+  };
+
+  const handleSequentialNumbers = () => {
+    const count = parseInt(randomNameCount) || 10;
+    const numbers = Array.from({ length: count }, (_, i) => (i + 1).toString());
+
+    // Shuffle the numbers array to randomize their position on the wheel
+    const shuffledNumbers = [...numbers];
+    for (let i = shuffledNumbers.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledNumbers[i], shuffledNumbers[j]] = [shuffledNumbers[j], shuffledNumbers[i]];
+    }
+
+    setWheelNames(shuffledNumbers);
+    setIsUsingCustomNames(false); // Track that we're using sequential numbers
+    setShowNameInput(false);
+    setShowRandomCountInput(false);
+  };
+
   // Debounced input change handler to reduce expensive processing
   const handleInputChange = useCallback((value: string) => {
     // Update local state immediately for UI responsiveness
@@ -314,15 +355,8 @@ export default function Home() {
   }, []);
 
   const handleSubmitNames = () => {
-    // If showing random count input, generate random names
-    if (showRandomCountInput) {
-      const count = parseInt(randomNameCount) || 10;
-      setWheelNames(generateRandomNames(count));
-      setIsUsingCustomNames(false); // Track that we're using random names
-      setShowNameInput(false);
-      setShowRandomCountInput(false);
-      return;
-    }
+    // This function now only handles custom names
+    // Random generation is handled by separate functions
 
     // Use optimized name processing
     const rawNames = inputValue
@@ -509,7 +543,7 @@ export default function Home() {
                     autoCorrect="off"
                     autoCapitalize="none"
                     spellCheck={false}
-                    autoFocus={!showRandomCountInput}
+                    autoFocus={!showRandomCountInput && !isMobileDevice}
                   />
                 </>
               ) : (
@@ -622,13 +656,22 @@ export default function Home() {
                     </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={handleSubmitNames}
-                    className="w-full px-6 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
-                    style={{ touchAction: "manipulation" }}
-                  >
-                    Enter
-                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleRandomNames}
+                      className="flex-1 px-6 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
+                      style={{ touchAction: "manipulation" }}
+                    >
+                      Names
+                    </button>
+                    <button
+                      onClick={handleSequentialNumbers}
+                      className="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
+                      style={{ touchAction: "manipulation" }}
+                    >
+                      Numbers
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
