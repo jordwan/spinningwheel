@@ -146,7 +146,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   // Performance management
   const [performanceMode, setPerformanceMode] = useState<
     "optimal" | "balanced" | "performance"
-  >("optimal");
+  >("balanced");
 
   /** ========= AUDIO (optimized with node pooling) ========= */
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -590,40 +590,47 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
   /** ========= Lazy Audio Initialization ========= */
   useEffect(() => {
-    // Only initialize audio on first user interaction to avoid blocking initial load
-    if (typeof window !== "undefined") {
-      let audioInitialized = false;
+    // Defer audio initialization to reduce initial load
+    const timeoutId = setTimeout(() => {
+      // Only initialize audio on first user interaction to avoid blocking initial load
+      if (typeof window !== "undefined") {
+        let audioInitialized = false;
 
-      const initAudioOnInteraction = () => {
-        if (!audioInitialized) {
-          audioInitialized = true;
-          ensureAudio().catch(() => {
-            // Silently handle audio initialization failures
-          });
-          // Remove listeners after first interaction
+        const initAudioOnInteraction = () => {
+          if (!audioInitialized) {
+            audioInitialized = true;
+            ensureAudio().catch(() => {
+              // Silently handle audio initialization failures
+            });
+            // Remove listeners after first interaction
+            document.removeEventListener("click", initAudioOnInteraction);
+            document.removeEventListener("touchstart", initAudioOnInteraction);
+            document.removeEventListener("keydown", initAudioOnInteraction);
+          }
+        };
+
+        // Initialize audio on first user interaction
+        document.addEventListener("click", initAudioOnInteraction, {
+          passive: true,
+        });
+        document.addEventListener("touchstart", initAudioOnInteraction, {
+          passive: true,
+        });
+        document.addEventListener("keydown", initAudioOnInteraction, {
+          passive: true,
+        });
+
+        return () => {
           document.removeEventListener("click", initAudioOnInteraction);
           document.removeEventListener("touchstart", initAudioOnInteraction);
           document.removeEventListener("keydown", initAudioOnInteraction);
-        }
-      };
+        };
+      }
+    }, 100); // Defer by 100ms
 
-      // Initialize audio on first user interaction
-      document.addEventListener("click", initAudioOnInteraction, {
-        passive: true,
-      });
-      document.addEventListener("touchstart", initAudioOnInteraction, {
-        passive: true,
-      });
-      document.addEventListener("keydown", initAudioOnInteraction, {
-        passive: true,
-      });
-
-      return () => {
-        document.removeEventListener("click", initAudioOnInteraction);
-        document.removeEventListener("touchstart", initAudioOnInteraction);
-        document.removeEventListener("keydown", initAudioOnInteraction);
-      };
-    }
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, [ensureAudio]);
 
   /** ========= Device Detection (Optimized) ========= */
@@ -1594,6 +1601,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           style={{
             width: canvasCSSSize,
             height: canvasCSSSize,
+            willChange: "transform",
             cursor: canDrag ? (isDragging ? "grabbing" : "grab") : "default",
             touchAction: "none", // Prevent touch scroll stealing drags
             // Remove problematic iOS 16 properties and respect motion preferences

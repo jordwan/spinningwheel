@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import Image from "next/image";
-import SpinningWheel from "./components/SpinningWheel";
 import { getRandomNames } from "./data/names";
+
+// Lazy load the heavy SpinningWheel component
+const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
 
 export default function Home() {
   const [showNameInput, setShowNameInput] = useState(true);
@@ -895,10 +897,11 @@ export default function Home() {
             </div>
           </div>
           <div className="flex-1 w-full max-w-4xl mx-auto">
-            <SpinningWheel
-              names={wheelNames.length > 0 ? wheelNames : undefined}
-              includeFreeSpins={false}
-              showBlank={showNameInput}
+            <Suspense fallback={<div className="flex items-center justify-center h-full">Loading wheel...</div>}>
+              <SpinningWheel
+                names={wheelNames.length > 0 ? wheelNames : undefined}
+                includeFreeSpins={false}
+                showBlank={showNameInput}
               onReset={() => {
                 // Track reset action
                 if (typeof window !== "undefined" && window.gtag) {
@@ -917,7 +920,8 @@ export default function Home() {
                 setShowRandomCountInput(false);
                 document.title = "iWheeli.com";
               }}
-            />
+              />
+            </Suspense>
           </div>
         </main>
       </div>
