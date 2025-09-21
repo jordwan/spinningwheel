@@ -480,7 +480,7 @@ export default function Home() {
               {!showRandomCountInput && (
                 <p className="text-gray-600 mb-4">
                   <span className="text-sm text-gray-500">
-                    Enter at least 2 comma separated names or use random
+                    Enter names below or use random to select number of tiles
                   </span>
                 </p>
               )}
