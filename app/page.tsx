@@ -13,6 +13,7 @@ export default function Home() {
   const [randomNameCount, setRandomNameCount] = useState("6");
   const [showRandomCountInput, setShowRandomCountInput] = useState(false);
   const [isEditingCount, setIsEditingCount] = useState(false);
+  const [hasStartedTyping, setHasStartedTyping] = useState(false);
   const [showMinNamesWarning, setShowMinNamesWarning] = useState(false);
   const [showLongNameWarning, setShowLongNameWarning] = useState(false);
   const [longNameWarningText, setLongNameWarningText] = useState("");
@@ -297,7 +298,7 @@ export default function Home() {
   };
 
   const handleRandomNames = () => {
-    const count = parseInt(randomNameCount) || 10;
+    const count = Math.min(parseInt(randomNameCount) || 10, 99);
     setWheelNames(generateRandomNames(count));
     setIsUsingCustomNames(false); // Track that we're using random names
     setShowNameInput(false);
@@ -305,7 +306,7 @@ export default function Home() {
   };
 
   const handleSequentialNumbers = () => {
-    const count = parseInt(randomNameCount) || 10;
+    const count = Math.min(parseInt(randomNameCount) || 10, 99);
     const numbers = Array.from({ length: count }, (_, i) => (i + 1).toString());
 
     // Shuffle the numbers array to randomize their position on the wheel
@@ -575,30 +576,57 @@ export default function Home() {
                       {isEditingCount ? (
                         <input
                           type="number"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           min="2"
-                          max="101"
+                          max="99"
                           value={randomNameCount}
+                          onFocus={(e) => {
+                            setHasStartedTyping(false);
+                            e.target.select(); // Select all text for easy replacement
+                          }}
                           onChange={(e) => {
-                            const value = e.target.value;
+                            let value = e.target.value;
+
+                            // Check for non-numeric characters on desktop
+                            if (value && !/^\d*$/.test(value)) {
+                              // Flash a visual warning
+                              e.target.style.borderColor = 'red';
+                              setTimeout(() => {
+                                e.target.style.borderColor = '#3b82f6';
+                              }, 500);
+                              return;
+                            }
+
+                            // Handle fresh typing (replace existing value)
+                            if (!hasStartedTyping && value.length > 0) {
+                              setHasStartedTyping(true);
+                            }
+
+                            // Limit to 2 digits - keep last 2 digits if more are entered
+                            if (value.length > 2) {
+                              value = value.slice(-2);
+                            }
+
                             // Allow empty string for user typing
                             if (value === "") {
                               setRandomNameCount("");
                               return;
                             }
-                            const num = parseInt(value);
-                            if (!isNaN(num) && num >= 2 && num <= 101) {
-                              setRandomNameCount(value);
-                            }
+
+                            // Accept any 1-2 digit number, validation happens on blur
+                            setRandomNameCount(value);
                           }}
                           onBlur={(e) => {
                             // Ensure valid value on blur and exit edit mode
                             const num = parseInt(e.target.value);
                             if (isNaN(num) || num < 2) {
                               setRandomNameCount("2");
-                            } else if (num > 101) {
-                              setRandomNameCount("101");
+                            } else if (num > 99) {
+                              setRandomNameCount("99");
                             }
                             setIsEditingCount(false);
+                            setHasStartedTyping(false);
                           }}
                           onKeyPress={(e) => {
                             if (e.key === "Enter") {
@@ -622,15 +650,15 @@ export default function Home() {
                     <input
                       type="range"
                       min="2"
-                      max="101"
+                      max="99"
                       value={parseInt(randomNameCount) || 6}
                       onChange={(e) => setRandomNameCount(e.target.value)}
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
                       style={{
                         background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${
-                          (((parseInt(randomNameCount) || 6) - 2) / 99) * 100
+                          (((parseInt(randomNameCount) || 6) - 2) / 97) * 100
                         }%, #e5e7eb ${
-                          (((parseInt(randomNameCount) || 6) - 2) / 99) * 100
+                          (((parseInt(randomNameCount) || 6) - 2) / 97) * 100
                         }%, #e5e7eb 100%)`,
                         touchAction: "manipulation",
                       }}

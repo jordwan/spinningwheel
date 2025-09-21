@@ -1471,7 +1471,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       {/* Controls — width locked to wheel, wrap when needed */}
       <div
         ref={controlsRef}
-        className="flex flex-wrap gap-3 sm:gap-4 justify-center items-center mx-auto mb-2"
+        className="flex flex-wrap justify-center items-center mx-auto mb-2"
         style={{
           width: `max(${canvasCSSSize}px, 200px)`,
           maxWidth: isFirefox ? "600px" : "95vw",
@@ -1486,7 +1486,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           ...(isFirefox ? {
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 'clamp(16px, 2vw, 20px)',
             justifyContent: 'center',
             alignItems: 'center'
           } : {}),
@@ -1497,8 +1496,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           disabled={isSpinning || showBlank}
           className={`
             ${isFirefox
-              ? "px-4 py-3 text-base min-w-[140px] max-w-[200px]"
-              : "px-[clamp(12px,2.2vw,22px)] py-[clamp(9px,1.8vw,14px)] text-[clamp(15px,1.8vw,18px)] min-w-[clamp(100px,22vw,156px)]"
+              ? "px-4 py-3 text-base min-w-[140px] max-w-[200px] mr-3"
+              : "px-[clamp(16px,3vw,22px)] py-[clamp(12px,2.5vw,14px)] text-[clamp(16px,2.2vw,18px)] min-w-[clamp(120px,28vw,156px)] mr-3"
             }
             font-bold text-white rounded-lg shadow-lg transition-all
             ${
@@ -1543,7 +1542,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
             className={`
               ${isFirefox
                 ? "px-3 py-3 text-sm min-w-[90px] max-w-[140px]"
-                : "px-[clamp(10px,2vw,18px)] py-[clamp(8px,1.6vw,12px)] text-[clamp(12px,1.6vw,14px)] min-w-[clamp(70px,16vw,110px)]"
+                : "px-[clamp(14px,2.5vw,18px)] py-[clamp(10px,2vw,12px)] text-[clamp(13px,1.8vw,14px)] min-w-[clamp(85px,20vw,110px)]"
               }
               font-bold text-white rounded-lg shadow-lg
               transition-all hover:scale-[1.02] active:scale-95
