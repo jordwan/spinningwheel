@@ -43,7 +43,15 @@ const normalizeAngleDifference = (angleDiff: number): number => {
 
 /** ========= TEXT UTILITIES ========= */
 
-const getSimpleFontSize = (segmentCount: number): number => {
+const getSimpleFontSize = (segmentCount: number, isNumbers: boolean = false): number => {
+  // Numbers are typically shorter (1-3 characters) so we can use larger fonts
+  if (isNumbers && segmentCount <= 20) {
+    if (segmentCount <= 10) return 20;
+    if (segmentCount <= 15) return 18;
+    return 16;
+  }
+
+  // Original logic for names
   if (segmentCount <= 10) return 16;
   if (segmentCount <= 20) return 14;
   if (segmentCount <= 30) return 12;
@@ -342,7 +350,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
   const textInfo = useMemo(() => {
     if (showBlank) return { fontSize: 16, displayTexts: [] };
 
-    const fontSize = getSimpleFontSize(wheelNames.length);
+    // Detect if we're showing numbers (all segments are numeric)
+    const isNumbers = wheelNames.length > 0 && wheelNames.every(name =>
+      name !== "RESPIN" && name !== "" && /^\d+$/.test(name)
+    );
+
+    const fontSize = getSimpleFontSize(wheelNames.length, isNumbers);
 
     // Simple truncation based on segment count
     const maxLength = wheelNames.length <= 10 ? 20 : wheelNames.length <= 20 ? 15 : 12;
@@ -1458,9 +1471,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       {/* Controls — width locked to wheel, wrap when needed */}
       <div
         ref={controlsRef}
-        className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center mx-auto mb-2"
+        className="flex flex-wrap gap-3 sm:gap-4 justify-center items-center mx-auto mb-2"
         style={{
-          width: `${canvasCSSSize}px`,
+          width: `max(${canvasCSSSize}px, 200px)`,
           maxWidth: isFirefox ? "600px" : "95vw",
           // iOS 16 layout fixes
           ...(isIOS16 ? {
@@ -1473,7 +1486,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           ...(isFirefox ? {
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 'clamp(12px, 1.5vw, 16px)',
+            gap: 'clamp(16px, 2vw, 20px)',
             justifyContent: 'center',
             alignItems: 'center'
           } : {}),
