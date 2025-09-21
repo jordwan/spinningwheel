@@ -507,71 +507,81 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
     };
   }, []);
 
-  /** ========= Async Audio Initialization ========= */
+  /** ========= Lazy Audio Initialization ========= */
   useEffect(() => {
-    // Start audio buffer creation early in background
+    // Only initialize audio on first user interaction to avoid blocking initial load
     if (typeof window !== 'undefined') {
-      // Small delay to let other initialization complete first
-      const timer = setTimeout(() => {
-        ensureAudio().catch(() => {
-          // Silently handle audio initialization failures
-        });
-      }, 500);
+      let audioInitialized = false;
 
-      return () => clearTimeout(timer);
+      const initAudioOnInteraction = () => {
+        if (!audioInitialized) {
+          audioInitialized = true;
+          ensureAudio().catch(() => {
+            // Silently handle audio initialization failures
+          });
+          // Remove listeners after first interaction
+          document.removeEventListener('click', initAudioOnInteraction);
+          document.removeEventListener('touchstart', initAudioOnInteraction);
+          document.removeEventListener('keydown', initAudioOnInteraction);
+        }
+      };
+
+      // Initialize audio on first user interaction
+      document.addEventListener('click', initAudioOnInteraction, { passive: true });
+      document.addEventListener('touchstart', initAudioOnInteraction, { passive: true });
+      document.addEventListener('keydown', initAudioOnInteraction, { passive: true });
+
+      return () => {
+        document.removeEventListener('click', initAudioOnInteraction);
+        document.removeEventListener('touchstart', initAudioOnInteraction);
+        document.removeEventListener('keydown', initAudioOnInteraction);
+      };
     }
   }, [ensureAudio]);
 
-  /** ========= iOS 16 Detection ========= */
+  /** ========= Device Detection (Optimized) ========= */
   useEffect(() => {
-    const detectIOS16 = () => {
-      if (typeof window === 'undefined') return false;
+    // Batch all detection logic to minimize DOM queries
+    if (typeof window === 'undefined') return;
 
+    // Use requestIdleCallback to run detection when main thread is free
+    const runDetection = (callback: IdleRequestCallback) => {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(callback);
+      } else {
+        // Fallback for browsers without requestIdleCallback
+        setTimeout(callback, 50);
+      }
+    };
+
+    runDetection(() => {
       const userAgent = window.navigator.userAgent;
+
+      // Batch browser detection
       const isIOS = /iPad|iPhone|iPod/.test(userAgent);
+      const isFirefox = /Firefox/.test(userAgent);
 
-      if (!isIOS) return false;
-
-      // Extract iOS version from user agent
-      const versionMatch = userAgent.match(/OS (\d+)_(\d+)/);
-      if (versionMatch) {
-        const majorVersion = parseInt(versionMatch[1]);
-        return majorVersion === 16;
+      // iOS 16 specific detection
+      let isIOS16 = false;
+      if (isIOS) {
+        const versionMatch = userAgent.match(/OS (\d+)_(\d+)/);
+        if (versionMatch) {
+          isIOS16 = parseInt(versionMatch[1]) === 16;
+        }
       }
 
-      return false;
-    };
-
-    const isIOS16 = detectIOS16();
-    setIsIOS16(isIOS16);
-
-    // General iOS detection for opacity fixes
-    const detectGeneralIOS = () => {
-      if (typeof window === 'undefined') return false;
-      return /iPad|iPhone|iPod/.test(window.navigator.userAgent);
-    };
-
-    const isIOSDevice = detectGeneralIOS();
-    setIsIOS(isIOSDevice);
-
-    // Firefox detection for zoom-related layout fixes
-    const detectFirefox = () => {
-      if (typeof window === 'undefined') return false;
-      return /Firefox/.test(window.navigator.userAgent);
-    };
-
-    const isFirefoxBrowser = detectFirefox();
-    setIsFirefox(isFirefoxBrowser);
-
-    // Enhanced device capability and motion preference detection with SSR safety
-    if (typeof window !== 'undefined') {
+      // Device capability detection
       const lowMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
       const cores = navigator.hardwareConcurrency || 4;
 
+      // Batch state updates
+      setIsIOS16(isIOS16);
+      setIsIOS(isIOS);
+      setIsFirefox(isFirefox);
       setPrefersReducedMotion(!!lowMotion);
       setDeviceCapability(lowMotion ? 'low' : (cores >= 8 ? 'high' : 'medium'));
 
-      // Listen for changes to motion preferences
+      // Set up motion preference listener
       const motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
       const handleMotionChange = (e: MediaQueryListEvent) => {
         setPrefersReducedMotion(e.matches);
@@ -583,10 +593,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
       if (motionMediaQuery.addEventListener) {
         motionMediaQuery.addEventListener('change', handleMotionChange);
       } else {
-        // Fallback for older browsers
         motionMediaQuery.addListener(handleMotionChange);
       }
 
+      // Cleanup function for motion listener
       return () => {
         if (motionMediaQuery.removeEventListener) {
           motionMediaQuery.removeEventListener('change', handleMotionChange);
@@ -594,7 +604,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({ names, onReset, includeFr
           motionMediaQuery.removeListener(handleMotionChange);
         }
       };
-    }
+    });
   }, []);
 
   /** ========= DRAG INTERACTION HANDLERS ========= */

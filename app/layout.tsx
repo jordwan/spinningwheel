@@ -93,20 +93,48 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {/* Google Tag Manager - Script */}
-        {process.env.NEXT_PUBLIC_GTM_ID && (
-          <Script id="gtm-script" strategy="afterInteractive">
+        {/* Optimized Analytics - Load after page is interactive */}
+        {(process.env.NEXT_PUBLIC_GTM_ID || process.env.NEXT_PUBLIC_GA_TRACKING_ID) && (
+          <Script id="analytics-loader" strategy="lazyOnload">
             {`
-              (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-              new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-              j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-              'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-              })(window,document,'script','dataLayer','${process.env.NEXT_PUBLIC_GTM_ID}');
+              // Initialize dataLayer first
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+
+              // Load analytics after a small delay to not block main thread
+              setTimeout(() => {
+                ${process.env.NEXT_PUBLIC_GTM_ID ? `
+                  // Google Tag Manager
+                  (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+                  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+                  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+                  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+                  })(window,document,'script','dataLayer','${process.env.NEXT_PUBLIC_GTM_ID}');
+                ` : ''}
+
+                ${process.env.NEXT_PUBLIC_GA_TRACKING_ID ? `
+                  // Google Analytics
+                  var gaScript = document.createElement('script');
+                  gaScript.async = true;
+                  gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_TRACKING_ID}';
+                  document.head.appendChild(gaScript);
+
+                  gaScript.onload = function() {
+                    gtag('js', new Date());
+                    gtag('config', '${process.env.NEXT_PUBLIC_GA_TRACKING_ID}', {
+                      send_page_view: true
+                    });
+
+                    // Make gtag available globally for custom events
+                    window.gtag = gtag;
+                  };
+                ` : ''}
+              }, 100); // Small delay to let critical content load first
             `}
           </Script>
         )}
 
-        {/* Google Tag Manager - noscript */}
+        {/* Google Tag Manager - noscript fallback */}
         {process.env.NEXT_PUBLIC_GTM_ID && (
           <noscript>
             <iframe
@@ -116,33 +144,6 @@ export default function RootLayout({
               style={{ display: "none", visibility: "hidden" }}
             />
           </noscript>
-        )}
-
-        {/* Google Analytics */}
-        {process.env.NEXT_PUBLIC_GA_TRACKING_ID && (
-          <>
-            <Script
-              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_TRACKING_ID}`}
-              strategy="afterInteractive"
-            />
-            <Script id="google-analytics" strategy="afterInteractive">
-              {`
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', '${process.env.NEXT_PUBLIC_GA_TRACKING_ID}', {
-                  debug_mode: ${process.env.NODE_ENV === 'development'},
-                  send_page_view: true
-                });
-
-                // Log GA initialization for debugging
-                console.log('Google Analytics initialized with ID: ${process.env.NEXT_PUBLIC_GA_TRACKING_ID}');
-
-                // Make gtag available globally for custom events
-                window.gtag = gtag;
-              `}
-            </Script>
-          </>
         )}
         {children}
       </body>
