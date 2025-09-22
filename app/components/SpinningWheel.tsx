@@ -2015,9 +2015,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                   <span className="text-white/40 italic">—</span>
                 )}
               </div>
-              {/* History extending to the right */}
+              {/* History extending to the right with proper spacing */}
               {winnerHistory.length > 1 && (
-                <div className="absolute left-1/2 ml-2 text-white/50 font-normal whitespace-nowrap overflow-hidden" style={{maxWidth: '40%'}}>
+                <div className="absolute left-1/2 text-white/50 font-normal whitespace-nowrap overflow-hidden pl-4" style={{transform: 'translateX(50%)', maxWidth: '45%'}}>
                   ← {winnerHistory.slice(0, -1).reverse().slice(0, 24).join(" ← ")}
                   {winnerHistory.length > 25 && " ..."}
                 </div>
