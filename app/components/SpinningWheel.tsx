@@ -2017,7 +2017,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               </div>
               {/* History extending to the right with proper spacing */}
               {winnerHistory.length > 1 && (
-                <div className="absolute left-1/2 text-white/50 font-normal whitespace-nowrap overflow-hidden pl-4" style={{transform: 'translateX(50%)', maxWidth: '45%'}}>
+                <div className="absolute text-white/50 font-normal whitespace-nowrap overflow-hidden" style={{left: 'calc(50% + 10ch)', maxWidth: '40%'}}>
                   ← {winnerHistory.slice(0, -1).reverse().slice(0, 24).join(" ← ")}
                   {winnerHistory.length > 25 && " ..."}
                 </div>
