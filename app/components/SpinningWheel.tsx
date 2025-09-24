@@ -16,10 +16,10 @@ import {
   trackWinnerAcknowledged,
   trackFairnessChecked,
   trackRespinTriggered,
-  incrementSpinCount
+  incrementSpinCount,
 } from "../utils/analytics";
 
-/** ========= CRYPTO RNG (minimal + reliable) ========= */
+/** ========= CRYPTO RNG  ========= */
 const cryptoRandom = (): number => {
   if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
     const u32 = new Uint32Array(1);
@@ -328,7 +328,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     },
     [ensureAudio, initializeAudioPool]
   );
-
 
   /** ========= Names + RESPIN placement ========= */
   const wheelNames = useMemo(() => {
@@ -1425,7 +1424,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
     // If there's a current winner being shown, save it to history before spinning again
     if (showWinnerModal && selectedName && selectedName !== "RESPIN") {
-      setWinnerHistory(prev => [...prev, selectedName]);
+      setWinnerHistory((prev) => [...prev, selectedName]);
     }
 
     // Track wheel spin event with new tracking function
@@ -1450,7 +1449,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     const spinDuration = 10000; // Fixed 10 second duration for all speeds
 
     // Simple random spin - let wheel land wherever it naturally stops
-    const finalRotation = rotation + Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
+    const finalRotation =
+      rotation + Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
 
     const startTime = Date.now();
     let lastFrameTime = 0;
@@ -1499,7 +1499,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         setLockedSpeed(null);
 
         // Calculate winner based on where the wheel actually stopped
-        const normalizedRotation = (2 * Math.PI - (finalRotation % (2 * Math.PI))) % (2 * Math.PI);
+        const normalizedRotation =
+          (2 * Math.PI - (finalRotation % (2 * Math.PI))) % (2 * Math.PI);
         const selectedIndex = Math.floor(normalizedRotation / segmentSize);
         const winner = wheelNames[selectedIndex % wheelNames.length];
         setSelectedName(winner);
@@ -1711,7 +1712,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             onClick={() => {
               // Save winner when user resets (acknowledging the win)
               if (selectedName && selectedName !== "RESPIN") {
-                setWinnerHistory(prev => [...prev, selectedName]);
+                setWinnerHistory((prev) => [...prev, selectedName]);
               }
               setShowWinnerModal(false); // Close winner modal first
               setWinnerRhyme("");
@@ -1771,12 +1772,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             if (e.target === e.currentTarget) {
               // Save winner when user acknowledges the win by clicking backdrop
               if (selectedName && selectedName !== "RESPIN") {
-                setWinnerHistory(prev => [...prev, selectedName]);
+                setWinnerHistory((prev) => [...prev, selectedName]);
               }
               setShowWinnerModal(false);
               setWinnerRhyme("");
               // Track winner acknowledged via backdrop
-              trackWinnerAcknowledged('backdrop');
+              trackWinnerAcknowledged("backdrop");
             }
           }}
         >
@@ -1814,12 +1815,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               onClick={() => {
                 // Save winner when user acknowledges the win
                 if (selectedName && selectedName !== "RESPIN") {
-                  setWinnerHistory(prev => [...prev, selectedName]);
+                  setWinnerHistory((prev) => [...prev, selectedName]);
                 }
                 setShowWinnerModal(false);
                 setWinnerRhyme("");
                 // Track winner acknowledged via button
-                trackWinnerAcknowledged('button');
+                trackWinnerAcknowledged("button");
               }}
               className="min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
               style={{ touchAction: "manipulation" }}
@@ -2022,8 +2023,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               </div>
               {/* History extending to the right with proper spacing */}
               {winnerHistory.length > 1 && (
-                <div className="absolute text-white/50 font-normal whitespace-nowrap overflow-hidden" style={{left: 'calc(50% + 10ch)', maxWidth: '40%'}}>
-                  ← {winnerHistory.slice(0, -1).reverse().slice(0, 24).join(" ← ")}
+                <div
+                  className="absolute text-white/50 font-normal whitespace-nowrap overflow-hidden"
+                  style={{ left: "calc(50% + 10ch)", maxWidth: "40%" }}
+                >
+                  ←{" "}
+                  {winnerHistory
+                    .slice(0, -1)
+                    .reverse()
+                    .slice(0, 24)
+                    .join(" ← ")}
                   {winnerHistory.length > 25 && " ..."}
                 </div>
               )}
