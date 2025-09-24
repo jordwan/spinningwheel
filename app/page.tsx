@@ -3,6 +3,18 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import Image from "next/image";
 import { getRandomNames } from "./data/names";
+import {
+  trackNameInputOpened,
+  trackInputMethodSelected,
+  trackCustomNamesSubmitted,
+  trackRandomSelection,
+  trackValidationWarning,
+  trackTeamNameSet,
+  trackWheelReset,
+  trackModalClosed,
+  startSession,
+  endSession
+} from "./utils/analytics";
 
 // Lazy load the heavy SpinningWheel component
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
@@ -36,6 +48,9 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
 
+    // Start analytics session
+    startSession();
+
     // Detect mobile device
     const checkIsMobile = () => {
       if (typeof window !== "undefined") {
@@ -50,7 +65,11 @@ export default function Home() {
     checkIsMobile();
     window.addEventListener("resize", checkIsMobile);
 
-    return () => window.removeEventListener("resize", checkIsMobile);
+    return () => {
+      window.removeEventListener("resize", checkIsMobile);
+      // End analytics session on unmount
+      endSession();
+    };
   }, []);
 
   // Handle dynamic viewport height for mobile devices
@@ -247,6 +266,13 @@ export default function Home() {
     }
   }, [showNameInput, isFirefox, hasVisualViewport]);
 
+  // Track when name input modal opens
+  useEffect(() => {
+    if (showNameInput && mounted) {
+      trackNameInputOpened();
+    }
+  }, [showNameInput, mounted]);
+
   // Prevent body scroll when modals are open
   useEffect(() => {
     const body = document.body;
@@ -292,6 +318,8 @@ export default function Home() {
         `${longNamesText}. Please keep names under ${maxLength} characters.`
       );
       setShowLongNameWarning(true);
+      // Track validation warning
+      trackValidationWarning('long_names', { count: longNames.length });
       return false;
     }
     return true;
@@ -307,6 +335,9 @@ export default function Home() {
     setIsUsingCustomNames(false); // Track that we're using random names
     setShowNameInput(false);
     setShowRandomCountInput(false);
+    // Track random names selection
+    trackRandomSelection('names', count);
+    trackInputMethodSelected('random');
   };
 
   const handleSequentialNumbers = () => {
@@ -327,6 +358,9 @@ export default function Home() {
     setIsUsingCustomNames(false); // Track that we're using sequential numbers
     setShowNameInput(false);
     setShowRandomCountInput(false);
+    // Track sequential numbers selection
+    trackRandomSelection('numbers', count);
+    trackInputMethodSelected('numbers');
   };
 
   // Debounced input change handler to reduce expensive processing
@@ -399,6 +433,8 @@ export default function Home() {
         } removed.`
       );
       setShowDuplicateWarning(true);
+      // Track duplicate warning
+      trackValidationWarning('duplicates', { count: duplicatesRemoved });
     }
 
     if (names.length >= 2) {
@@ -412,10 +448,19 @@ export default function Home() {
         if (teamName) {
           document.title = `${teamName} - iWheeli.com`;
         }
+
+        // Track custom names submission
+        trackCustomNamesSubmitted(names.length, !!teamName);
+        trackInputMethodSelected('custom');
+        if (teamName) {
+          trackTeamNameSet(true);
+        }
       }
     } else if (names.length === 1) {
       // Show styled warning modal
       setShowMinNamesWarning(true);
+      // Track minimum names warning
+      trackValidationWarning('min_names', { count: names.length });
     }
     // Removed the else clause that would show random count input
   };
@@ -508,9 +553,11 @@ export default function Home() {
                   if (showRandomCountInput) {
                     // Go back to custom names input
                     setShowRandomCountInput(false);
+                    trackModalClosed('random_input', 'x_button');
                   } else {
                     // On custom names screen, X button goes to random selector
                     setShowRandomCountInput(true);
+                    trackModalClosed('name_input', 'x_to_random');
                   }
                 }}
                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
@@ -903,13 +950,8 @@ export default function Home() {
                 includeFreeSpins={false}
                 showBlank={showNameInput}
               onReset={() => {
-                // Track reset action
-                if (typeof window !== "undefined" && window.gtag) {
-                  window.gtag("event", "wheel_reset", {
-                    event_category: "engagement",
-                    event_label: "reset_wheel",
-                  });
-                }
+                // Track reset action with context
+                trackWheelReset(isUsingCustomNames);
                 setShowNameInput(true);
                 // Only clear inputValue if we weren't using custom names
                 if (!isUsingCustomNames) {

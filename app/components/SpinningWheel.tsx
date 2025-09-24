@@ -8,6 +8,16 @@ import React, {
   useMemo,
   useLayoutEffect,
 } from "react";
+import {
+  trackWheelDragStart,
+  trackWheelDragEnd,
+  trackSpinInitiated,
+  trackSpinCompleted,
+  trackWinnerAcknowledged,
+  trackFairnessChecked,
+  trackRespinTriggered,
+  incrementSpinCount
+} from "../utils/analytics";
 
 /** ========= CRYPTO RNG (minimal + reliable) ========= */
 const cryptoRandom = (): number => {
@@ -735,6 +745,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           cancelAnimationFrame(momentumAnimationRef.current);
           momentumAnimationRef.current = null;
         }
+
+        // Track drag start
+        trackWheelDragStart();
       }
     },
     [canDrag]
@@ -800,6 +813,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
     setIsDragging(false);
     setLastDragAngle(null);
+
+    // Track drag end with velocity
+    trackWheelDragEnd(dragVelocity);
 
     // Start momentum animation if there's significant velocity
     if (Math.abs(dragVelocity) > 0.5) {
@@ -1412,13 +1428,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       setWinnerHistory(prev => [...prev, selectedName]);
     }
 
-    // Track wheel spin event
-    if (typeof window !== "undefined" && window.gtag) {
-      window.gtag("event", "wheel_spin", {
-        segments: wheelNames.length,
-        spin_power: speedIndicator,
-      });
-    }
+    // Track wheel spin event with new tracking function
+    trackSpinInitiated(wheelNames.length, speedIndicator);
+    incrementSpinCount();
 
     setIsSpinning(true);
     setSelectedName("");
@@ -1506,14 +1518,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               `Winner selected: ${winner}. The wheel has stopped spinning.`
             );
 
-            // Track winner selection (async, non-blocking)
-            if (typeof window !== "undefined" && window.gtag) {
-              window.gtag("event", "wheel_result", {
-                result: winner,
-                segments: wheelNames.length,
-                is_respin: false,
-              });
-            }
+            // Track winner selection with new tracking function
+            trackSpinCompleted(winner, wheelNames.length, false);
 
             // Trigger effects (async, non-blocking)
             triggerConfetti();
@@ -1526,14 +1532,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               "Free spin! The wheel landed on a respin. You get another turn."
             );
 
-            // Track respin selection (async, non-blocking)
-            if (typeof window !== "undefined" && window.gtag) {
-              window.gtag("event", "wheel_result", {
-                result: winner,
-                segments: wheelNames.length,
-                is_respin: true,
-              });
-            }
+            // Track respin selection with new tracking functions
+            trackSpinCompleted(winner, wheelNames.length, true);
+            trackRespinTriggered();
           }, 0);
         }
       }
@@ -1774,6 +1775,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               }
               setShowWinnerModal(false);
               setWinnerRhyme("");
+              // Track winner acknowledged via backdrop
+              trackWinnerAcknowledged('backdrop');
             }
           }}
         >
@@ -1815,6 +1818,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                 }
                 setShowWinnerModal(false);
                 setWinnerRhyme("");
+                // Track winner acknowledged via button
+                trackWinnerAcknowledged('button');
               }}
               className="min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
               style={{ touchAction: "manipulation" }}
@@ -2028,13 +2033,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             <button
               onClick={() => {
                 setShowFairnessPopup(true);
-                // Track fairness popup view
-                if (typeof window !== "undefined" && window.gtag) {
-                  window.gtag("event", "fairness_view", {
-                    event_category: "engagement",
-                    event_label: "view_fairness_popup",
-                  });
-                }
+                // Track fairness popup view with new tracking function
+                trackFairnessChecked();
               }}
               className="text-[clamp(10px,1.6vw,12px)] text-white/70 hover:text-white underline min-h-[24px] px-2 py-1"
               style={{ touchAction: "manipulation" }}
