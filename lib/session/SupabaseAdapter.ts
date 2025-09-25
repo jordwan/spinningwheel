@@ -50,7 +50,10 @@ export class SupabaseAdapter {
         }]);
 
       if (error) {
-        console.warn('Failed to insert session (continuing in local mode):', error);
+        // Only log actual errors, not constraint violations (which are expected)
+        if (error.code !== '23505' && error.code !== '23514') {
+          console.warn('Failed to insert session (continuing in local mode):', error);
+        }
         return; // Don't throw, just log and continue
       }
     } catch (err: unknown) {
@@ -79,7 +82,10 @@ export class SupabaseAdapter {
         .eq('id', sessionId);
 
       if (error) {
-        console.warn('Failed to update session (continuing in local mode):', error);
+        // Only log actual errors, not constraint violations (which are expected)
+        if (error.code !== '23505' && error.code !== '23514') {
+          console.warn('Failed to update session (continuing in local mode):', error);
+        }
         return; // Don't throw, just log and continue
       }
     } catch (err: unknown) {
@@ -169,10 +175,11 @@ export class SupabaseAdapter {
         dbUpdateData.acknowledgeMethod = 'button';
       }
 
-      const { error } = await client
+      const { error, data } = await client
         .from('spin_results')
         .update(dbUpdateData)
-        .eq('id', spinId);
+        .eq('id', spinId)
+        .select();
 
       if (error) {
         // Only log actual errors, not constraint violations (which are expected)
@@ -180,6 +187,13 @@ export class SupabaseAdapter {
           console.warn('Failed to update spin (continuing in local mode):', error);
         }
         return; // Don't throw, just log and continue
+      }
+
+      // If no rows were updated, the spin record doesn't exist yet
+      if (!data || data.length === 0) {
+        // Record doesn't exist - this is expected for acknowledgments of non-synced spins
+        // Just silently continue as the spin will be inserted later with acknowledgment data
+        return;
       }
     } catch (err: unknown) {
       console.warn('Spin update error (continuing in local mode):', err);

@@ -28,6 +28,7 @@ export class DatabaseSync {
   private adapter: DatabaseAdapter | null = null;
   private localSession: LocalSession;
   private lastSyncTime: string | null = null;
+  private sessionInsertAttempted: boolean = false;
 
   private readonly SYNC_INTERVAL = 30000; // 30 seconds - only for retrying failed operations
   private readonly MAX_RETRIES = 3;
@@ -91,7 +92,7 @@ export class DatabaseSync {
   }
 
   private queueInitialSessionInsert(): void {
-    if (!this.adapter) return;
+    if (!this.adapter || this.sessionInsertAttempted) return;
 
     const data = this.localSession.getDataForSync();
     const now = new Date().toISOString();
@@ -105,6 +106,8 @@ export class DatabaseSync {
       timestamp: now,
       retryCount: 0,
     });
+
+    this.sessionInsertAttempted = true;
   }
 
 
@@ -121,7 +124,7 @@ export class DatabaseSync {
       return;
     }
 
-    console.log(`🔄 Syncing ${this.syncQueue.length} operations...`);
+    // Removed excessive sync logging to reduce console noise
 
     const operations = [...this.syncQueue];
     const successfulOps: string[] = [];
