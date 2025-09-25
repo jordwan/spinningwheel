@@ -1978,27 +1978,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             >
               {selectedName}
             </p>
-            <div className="mt-6">
-              <button
-                onClick={() => {
-                  // Save winner when user acknowledges the win
-                  if (selectedName && selectedName !== "RESPIN") {
-                    setWinnerHistory((prev) => [...prev, selectedName]);
-                  }
-                  setShowWinnerModal(false);
-                  setWinnerRhyme("");
-                  // Track winner acknowledged via button
-                  trackWinnerAcknowledged("button");
-                  // Update spin acknowledgment in database
-                  if (onUpdateSpinAcknowledgment && currentSpinId) {
-                    onUpdateSpinAcknowledgment(currentSpinId, "button");
-                  }
-                }}
-                className="w-full min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                style={{ touchAction: "manipulation" }}
-              >
-                Close
-              </button>
+            <div className="mt-6 flex gap-2">
               {selectedName !== "RESPIN" && wheelNames.length > 2 && onRemoveWinner && (
                 <button
                   onClick={async () => {
@@ -2023,12 +2003,33 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                       onUpdateSpinAcknowledgment(currentSpinId, "remove");
                     }
                   }}
-                  className="w-1/2 mx-auto mt-2 px-3 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 transition-colors block"
+                  className="flex-shrink-0 w-20 px-2 py-2 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition-colors flex flex-col items-center justify-center leading-tight"
                   style={{ touchAction: "manipulation" }}
                 >
-                  Remove {selectedName}
+                  <span>Remove</span>
+                  <span className="truncate max-w-full">{selectedName.length > 8 ? selectedName.substring(0, 8) + '...' : selectedName}</span>
                 </button>
               )}
+              <button
+                onClick={() => {
+                  // Save winner when user acknowledges the win
+                  if (selectedName && selectedName !== "RESPIN") {
+                    setWinnerHistory((prev) => [...prev, selectedName]);
+                  }
+                  setShowWinnerModal(false);
+                  setWinnerRhyme("");
+                  // Track winner acknowledged via button
+                  trackWinnerAcknowledged("button");
+                  // Update spin acknowledgment in database
+                  if (onUpdateSpinAcknowledgment && currentSpinId) {
+                    onUpdateSpinAcknowledgment(currentSpinId, "button");
+                  }
+                }}
+                className="flex-1 min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                style={{ touchAction: "manipulation" }}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
