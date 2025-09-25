@@ -182,6 +182,16 @@ export class SupabaseAdapter {
         .select();
 
       if (error) {
+        // Log detailed error information for debugging 400 errors
+        console.warn(`🔍 Spin update error details:`, {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          spinId,
+          updateData: dbUpdateData,
+        });
+
         // Only log actual errors, not constraint violations (which are expected)
         if (error.code !== '23505' && error.code !== '23514') {
           console.warn('Failed to update spin (continuing in local mode):', error);

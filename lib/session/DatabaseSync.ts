@@ -92,10 +92,17 @@ export class DatabaseSync {
   }
 
   private queueInitialSessionInsert(): void {
-    if (!this.adapter || this.sessionInsertAttempted) return;
+    console.log(`🔍 Session insert check: adapter=${!!this.adapter}, attempted=${this.sessionInsertAttempted}`);
+
+    if (!this.adapter || this.sessionInsertAttempted) {
+      console.log('⏭️ Skipping session insert - already attempted or no adapter');
+      return;
+    }
 
     const data = this.localSession.getDataForSync();
     const now = new Date().toISOString();
+
+    console.log(`📝 Queueing session insert for session ID: ${data.session.id}`);
 
     // Queue initial session insert (only happens once when adapter is first set)
     this.queueOperation({
@@ -108,12 +115,30 @@ export class DatabaseSync {
     });
 
     this.sessionInsertAttempted = true;
+    console.log('✅ Session insert queued and flag set');
   }
 
 
   private queueOperation(operation: SyncOperation): void {
-    // Remove existing operation with same ID (deduplication)
-    this.syncQueue = this.syncQueue.filter(op => op.id !== operation.id);
+    // Enhanced deduplication for rapid successive events
+    this.syncQueue = this.syncQueue.filter(op => {
+      // Always remove exact ID matches
+      if (op.id === operation.id) return false;
+
+      // For acknowledgments, also remove if same spin but different timestamp
+      // This handles rapid successive acknowledgment updates
+      if (operation.type === 'acknowledgment' && op.type === 'acknowledgment') {
+        const existingSpinId = op.id.replace('ack_', '');
+        const newSpinId = operation.id.replace('ack_', '');
+        if (existingSpinId === newSpinId) {
+          console.log(`🔄 Replacing acknowledgment for spin ${newSpinId}`);
+          return false;
+        }
+      }
+
+      return true;
+    });
+
     this.syncQueue.push(operation);
 
     // No immediate sync - let the 30-second background loop handle it
@@ -184,7 +209,9 @@ export class DatabaseSync {
         break;
 
       case 'acknowledgment':
-        await this.adapter.updateSpin(operation.data.id as string, {
+        // Extract spin ID from operation ID (format: "ack_{spinId}")
+        const spinId = operation.id.replace('ack_', '');
+        await this.adapter.updateSpin(spinId, {
           acknowledged_at: operation.data.acknowledged_at,
           acknowledge_method: operation.data.acknowledge_method,
         });
@@ -256,7 +283,6 @@ export class DatabaseSync {
       type: 'acknowledgment',
       operation: 'update',
       data: {
-        id: spinId,
         acknowledged_at: acknowledgedAt,
         acknowledge_method: acknowledgeMethod,
       },
