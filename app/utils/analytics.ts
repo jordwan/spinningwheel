@@ -86,7 +86,7 @@ export const trackRandomSelection = (type: 'names' | 'numbers', count: number) =
   });
 };
 
-export const trackValidationWarning = (warningType: 'min_names' | 'long_names' | 'duplicates', details?: any) => {
+export const trackValidationWarning = (warningType: 'min_names' | 'long_names' | 'duplicates', details?: { count?: number }) => {
   trackEvent('validation_warning', {
     event_category: 'setup',
     warning_type: warningType,

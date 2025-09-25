@@ -40,7 +40,7 @@ export default function Home() {
   const [currentConfigId, setCurrentConfigId] = useState<string | null>(null);
 
   // Session tracking
-  const { sessionId, saveConfiguration, recordSpin, updateSpinAcknowledgment } = useSession();
+  const { saveConfiguration, recordSpin, updateSpinAcknowledgment } = useSession();
 
   // Debouncing refs for performance optimization
   const inputDebounceRef = useRef<NodeJS.Timeout | null>(null);

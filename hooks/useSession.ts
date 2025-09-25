@@ -1,10 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { getSupabaseClient, isSupabaseEnabled } from '../lib/supabase/client';
-import { Session, WheelConfiguration, SpinResult } from '../lib/supabase/types';
-
-const SESSION_STORAGE_KEY = 'wheel_session_id';
-const SESSION_EXPIRY_DAYS = 30;
+import { LocalSession, SpinRecord } from '../lib/session/LocalSession';
+import { DatabaseSync } from '../lib/session/DatabaseSync';
+import { SupabaseAdapter } from '../lib/session/SupabaseAdapter';
 
 interface UseSessionReturn {
   sessionId: string | null;
@@ -13,216 +10,127 @@ interface UseSessionReturn {
   saveConfiguration: (names: string[], teamName?: string, inputMethod?: 'custom' | 'random' | 'numbers') => Promise<string | null>;
   recordSpin: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
   updateSpinAcknowledgment: (spinId: string, method: 'button' | 'backdrop' | 'x') => Promise<void>;
-  getSessionHistory: () => Promise<SpinResult[] | null>;
+  getSessionHistory: () => Promise<SpinRecord[] | null>;
+  getSyncStatus?: () => any; // Optional debug info
 }
 
 export function useSession(): UseSessionReturn {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const supabase = useRef(getSupabaseClient());
 
-  // Initialize or retrieve session
+  // Local-first session management
+  const localSessionRef = useRef<LocalSession | null>(null);
+  const syncServiceRef = useRef<DatabaseSync | null>(null);
+
+  // Initialize session - happens immediately, never waits for database
   useEffect(() => {
-    const initSession = async () => {
-      // If Supabase is not enabled, just generate a local session ID
-      if (!isSupabaseEnabled()) {
-        const localSessionId = localStorage.getItem(SESSION_STORAGE_KEY) || uuidv4();
-        localStorage.setItem(SESSION_STORAGE_KEY, localSessionId);
-        setSessionId(localSessionId);
-        setIsLoading(false);
-        return;
-      }
+    try {
+      // Create local session (instant)
+      const localSession = new LocalSession();
+      localSessionRef.current = localSession;
+      setSessionId(localSession.getSessionId());
 
-      try {
-        // Check for existing session in localStorage
-        const existingSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+      // Set up background sync (non-blocking)
+      const syncService = new DatabaseSync(localSession);
+      syncServiceRef.current = syncService;
 
-        if (existingSessionId && supabase.current) {
-          // Verify session exists in database
-          const { data, error } = await supabase.current
-            .from('sessions')
-            .select('*')
-            .eq('id', existingSessionId)
-            .single();
+      // Try to initialize Supabase adapter (if available)
+      setTimeout(async () => {
+        try {
+          const adapter = new SupabaseAdapter();
+          if (adapter.isReady()) {
+            // Verify database schema exists
+            const schemaCheck = await adapter.verifySchema();
+            const allTablesExist = schemaCheck.sessions && schemaCheck.configurations && schemaCheck.spins;
 
-          if (data && !error) {
-            // Check if session is not expired (30 days)
-            const createdAt = new Date(data.created_at);
-            const now = new Date();
-            const daysDiff = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
-
-            if (daysDiff < SESSION_EXPIRY_DAYS) {
-              setSessionId(existingSessionId);
-              setIsLoading(false);
-              return;
+            if (allTablesExist) {
+              syncService.setAdapter(adapter);
+              console.log('🚀 Database sync enabled - all tables verified');
+            } else {
+              console.warn('⚠️ Database tables missing or inaccessible. Please run schema.sql in Supabase.');
+              console.log('📱 Continuing in local-only mode');
             }
+          } else {
+            console.log('📱 Running in local-only mode');
           }
+        } catch (err) {
+          console.warn('Database adapter initialization failed:', err);
+          // Continue in local-only mode
         }
+      }, 0);
 
-        // Create new session
-        const newSessionId = uuidv4();
-        const deviceType = /Mobile|Android|iPhone/i.test(navigator.userAgent) ? 'mobile' : 'desktop';
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Session initialization failed:', err);
+      setError('Failed to initialize session');
+      setIsLoading(false);
+    }
 
-        if (supabase.current) {
-          const { error } = await supabase.current
-            .from('sessions')
-            .insert({
-              id: newSessionId,
-              device_type: deviceType,
-              user_agent: navigator.userAgent.substring(0, 500), // Limit user agent length
-            });
-
-          if (error) {
-            console.error('Failed to create session in database:', error);
-            setError('Session storage unavailable');
-          }
-        }
-
-        localStorage.setItem(SESSION_STORAGE_KEY, newSessionId);
-        setSessionId(newSessionId);
-      } catch (err) {
-        console.error('Session initialization error:', err);
-        setError('Failed to initialize session');
-        // Fall back to local session
-        const localSessionId = uuidv4();
-        localStorage.setItem(SESSION_STORAGE_KEY, localSessionId);
-        setSessionId(localSessionId);
-      } finally {
-        setIsLoading(false);
+    // Cleanup on unmount
+    return () => {
+      if (syncServiceRef.current) {
+        syncServiceRef.current.destroy();
       }
     };
-
-    initSession();
   }, []);
 
-  // Save wheel configuration
+  // Save wheel configuration - returns immediately
   const saveConfiguration = useCallback(async (
     names: string[],
     teamName?: string,
     inputMethod?: 'custom' | 'random' | 'numbers'
   ): Promise<string | null> => {
-    if (!sessionId || !supabase.current) return null;
+    if (!localSessionRef.current) return null;
 
-    try {
-      const configId = uuidv4();
+    // Save immediately to local storage
+    const configId = localSessionRef.current.saveConfiguration(names, teamName, inputMethod);
 
-      // Update session with team name and input method if provided
-      if (teamName || inputMethod) {
-        await supabase.current
-          .from('sessions')
-          .update({
-            team_name: teamName,
-            input_method: inputMethod,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', sessionId);
-      }
+    // Background sync happens automatically via DatabaseSync
+    return configId;
+  }, []);
 
-      // Save wheel configuration
-      const { error } = await supabase.current
-        .from('wheel_configurations')
-        .insert({
-          id: configId,
-          session_id: sessionId,
-          names: names,
-          segment_count: names.length,
-        });
-
-      if (error) {
-        console.error('Failed to save configuration:', error);
-        return null;
-      }
-
-      return configId;
-    } catch (err) {
-      console.error('Error saving configuration:', err);
-      return null;
-    }
-  }, [sessionId]);
-
-  // Record spin result
+  // Record spin result - returns immediately
   const recordSpin = useCallback(async (
     configId: string,
     winner: string,
     isRespin: boolean,
     spinPower: number
   ): Promise<string | null> => {
-    if (!sessionId || !supabase.current) return null;
+    if (!localSessionRef.current) return null;
 
-    try {
-      const spinId = uuidv4();
+    // Record immediately to local storage
+    const spinId = localSessionRef.current.recordSpin(configId, winner, isRespin, spinPower);
 
-      const { error } = await supabase.current
-        .from('spin_results')
-        .insert({
-          id: spinId,
-          session_id: sessionId,
-          configuration_id: configId,
-          winner: winner,
-          is_respin: isRespin,
-          spin_power: spinPower,
-          spin_timestamp: new Date().toISOString(),
-        });
+    // Background sync happens automatically via DatabaseSync
+    return spinId;
+  }, []);
 
-      if (error) {
-        console.error('Failed to record spin:', error);
-        return null;
-      }
-
-      return spinId;
-    } catch (err) {
-      console.error('Error recording spin:', err);
-      return null;
-    }
-  }, [sessionId]);
-
-  // Update spin acknowledgment
+  // Update spin acknowledgment - returns immediately
   const updateSpinAcknowledgment = useCallback(async (
     spinId: string,
     method: 'button' | 'backdrop' | 'x'
   ): Promise<void> => {
-    if (!supabase.current || !spinId) return;
+    if (!localSessionRef.current) return;
 
-    try {
-      const { error } = await supabase.current
-        .from('spin_results')
-        .update({
-          acknowledged_at: new Date().toISOString(),
-          acknowledge_method: method,
-        })
-        .eq('id', spinId);
+    // Update immediately in local storage
+    localSessionRef.current.updateSpinAcknowledgment(spinId, method);
 
-      if (error) {
-        console.error('Failed to update spin acknowledgment:', error);
-      }
-    } catch (err) {
-      console.error('Error updating spin acknowledgment:', err);
-    }
+    // Background sync happens automatically via DatabaseSync
   }, []);
 
-  // Get session history
-  const getSessionHistory = useCallback(async (): Promise<SpinResult[] | null> => {
-    if (!sessionId || !supabase.current) return null;
+  // Get session history - returns immediately from local storage
+  const getSessionHistory = useCallback(async (): Promise<SpinRecord[] | null> => {
+    if (!localSessionRef.current) return null;
 
-    try {
-      const { data, error } = await supabase.current
-        .from('spin_results')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('spin_timestamp', { ascending: false });
+    // Get from local storage immediately
+    return localSessionRef.current.getSpinHistory();
+  }, []);
 
-      if (error) {
-        console.error('Failed to fetch session history:', error);
-        return null;
-      }
-
-      return data;
-    } catch (err) {
-      console.error('Error fetching session history:', err);
-      return null;
-    }
-  }, [sessionId]);
+  // Get sync status for debugging (optional)
+  const getSyncStatus = useCallback(() => {
+    return syncServiceRef.current?.getSyncStatus() || null;
+  }, []);
 
   return {
     sessionId,
@@ -232,5 +140,6 @@ export function useSession(): UseSessionReturn {
     recordSpin,
     updateSpinAcknowledgment,
     getSessionHistory,
+    getSyncStatus,
   };
 }

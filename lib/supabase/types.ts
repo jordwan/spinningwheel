@@ -36,8 +36,12 @@ export interface Database {
     Tables: {
       sessions: {
         Row: Session;
-        Insert: Omit<Session, 'id' | 'created_at' | 'updated_at'> & {
+        Insert: {
           id?: string;
+          team_name?: string;
+          input_method?: 'custom' | 'random' | 'numbers';
+          device_type?: 'mobile' | 'desktop';
+          user_agent?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -45,16 +49,27 @@ export interface Database {
       };
       wheel_configurations: {
         Row: WheelConfiguration;
-        Insert: Omit<WheelConfiguration, 'id' | 'created_at'> & {
+        Insert: {
           id?: string;
+          session_id: string;
+          names: string[];
+          segment_count: number;
           created_at?: string;
         };
         Update: Partial<Omit<WheelConfiguration, 'id'>>;
       };
       spin_results: {
         Row: SpinResult;
-        Insert: Omit<SpinResult, 'id'> & {
+        Insert: {
           id?: string;
+          session_id: string;
+          configuration_id: string;
+          winner: string;
+          is_respin: boolean;
+          spin_power: number;
+          spin_timestamp?: string;
+          acknowledged_at?: string;
+          acknowledge_method?: 'button' | 'backdrop' | 'x';
         };
         Update: Partial<Omit<SpinResult, 'id'>>;
       };

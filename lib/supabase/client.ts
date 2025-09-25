@@ -7,7 +7,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 // Create a singleton Supabase client for use in the browser
 let supabase: ReturnType<typeof createClient<Database>> | null = null;
 
-export function getSupabaseClient() {
+export function getSupabaseClient(): ReturnType<typeof createClient<Database>> | null {
   // Return null if credentials aren't configured
   if (!supabaseUrl || !supabaseAnonKey ||
       supabaseUrl === 'your_supabase_project_url' ||
