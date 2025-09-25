@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { getIPAddressWithTimeout } from '../utils/geolocation';
 
 export interface SessionData {
   id: string;
@@ -6,6 +7,7 @@ export interface SessionData {
   teamName?: string;
   inputMethod?: 'custom' | 'random' | 'numbers';
   deviceType?: 'mobile' | 'desktop';
+  ipAddress?: string;
   [key: string]: unknown; // Allow additional properties for database compatibility
 }
 
@@ -49,6 +51,9 @@ export class LocalSession {
 
     // Auto-save on changes
     this.addChangeListener(() => this.saveToStorage());
+
+    // Fetch location data in the background (non-blocking)
+    this.initializeLocationData();
   }
 
   private loadOrCreateSession(): SessionData {
@@ -120,6 +125,29 @@ export class LocalSession {
 
   private notifyChange(): void {
     this.changeListeners.forEach(listener => listener());
+  }
+
+  /**
+   * Initialize IP address in the background (non-blocking)
+   */
+  private async initializeLocationData(): Promise<void> {
+    try {
+      // Only fetch if we don't already have IP address
+      if (!this.sessionData.ipAddress) {
+        const ipAddress = await getIPAddressWithTimeout(3000);
+
+        if (ipAddress) {
+          // Update session with IP address
+          this.sessionData.ipAddress = ipAddress;
+
+          // Notify listeners (will trigger save and sync)
+          this.notifyChange();
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to get IP address:', error);
+      // Continue without IP address - this is not critical for app functionality
+    }
   }
 
   // Public API

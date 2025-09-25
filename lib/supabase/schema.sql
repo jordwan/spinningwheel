@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS public.sessions (
   team_name TEXT,
   input_method TEXT CHECK (input_method IN ('custom', 'random', 'numbers')),
   device_type TEXT CHECK (device_type IN ('mobile', 'desktop')),
-  user_agent TEXT
+  user_agent TEXT,
+  ip_address INET
 );
 
 -- Create wheel_configurations table

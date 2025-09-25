@@ -45,6 +45,7 @@ export class SupabaseAdapter {
           user_agent: typeof navigator !== 'undefined'
             ? navigator.userAgent.substring(0, 500)
             : null,
+          ip_address: sessionData.ipAddress || null,
           created_at: sessionData.createdAt,
         }]);
 
@@ -72,6 +73,7 @@ export class SupabaseAdapter {
         .update({
           team_name: sessionData.teamName || null,
           input_method: sessionData.inputMethod || null,
+          ip_address: sessionData.ipAddress || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', sessionId);

@@ -8,6 +8,7 @@ export interface Session {
   input_method?: 'custom' | 'random' | 'numbers';
   device_type?: 'mobile' | 'desktop';
   user_agent?: string;
+  ip_address?: string;
 }
 
 export interface WheelConfiguration {
@@ -42,6 +43,7 @@ export interface Database {
           input_method?: 'custom' | 'random' | 'numbers';
           device_type?: 'mobile' | 'desktop';
           user_agent?: string;
+          ip_address?: string;
           created_at?: string;
           updated_at?: string;
         };
