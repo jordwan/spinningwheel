@@ -21,7 +21,7 @@ interface InteractionEventParams extends BaseEventParams {
   result?: string;
   is_respin?: boolean;
   velocity?: number;
-  close_method?: 'button' | 'backdrop' | 'x';
+  close_method?: 'button' | 'backdrop' | 'x' | 'remove';
 }
 
 interface ValidationEventParams extends BaseEventParams {
@@ -140,7 +140,7 @@ export const trackSpinCompleted = (result: string, segments: number, isRespin: b
   });
 };
 
-export const trackWinnerAcknowledged = (closeMethod: 'button' | 'backdrop' | 'x') => {
+export const trackWinnerAcknowledged = (closeMethod: 'button' | 'backdrop' | 'x' | 'remove') => {
   trackEvent('winner_acknowledged', {
     event_category: 'interaction',
     close_method: closeMethod,

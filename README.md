@@ -9,3 +9,8 @@ pnpm dev
 # or
 bun dev
 ```
+
+    git checkout main
+    git merge dev
+    git push origin main
+    git checkout dev

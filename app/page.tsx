@@ -971,6 +971,14 @@ export default function Home() {
                 configId={currentConfigId}
                 onRecordSpin={recordSpin}
                 onUpdateSpinAcknowledgment={updateSpinAcknowledgment}
+                onRemoveWinner={async (newNames: string[]) => {
+                  // Update the wheel names in the parent component
+                  setWheelNames(newNames);
+                  // Create new configuration with the remaining names
+                  const newConfigId = await saveConfiguration(newNames, teamName || undefined, 'elimination');
+                  setCurrentConfigId(newConfigId);
+                  return newConfigId;
+                }}
                 onReset={() => {
                   // Track reset action with context
                   trackWheelReset(isUsingCustomNames);

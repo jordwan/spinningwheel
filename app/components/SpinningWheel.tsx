@@ -92,7 +92,8 @@ interface SpinningWheelProps {
   showBlank?: boolean;
   configId?: string | null;
   onRecordSpin?: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
-  onUpdateSpinAcknowledgment?: (spinId: string, method: 'button' | 'backdrop' | 'x') => Promise<void>;
+  onUpdateSpinAcknowledgment?: (spinId: string, method: 'button' | 'backdrop' | 'x' | 'remove') => Promise<void>;
+  onRemoveWinner?: (newNames: string[]) => Promise<string | null>;
 }
 
 const SpinningWheel: React.FC<SpinningWheelProps> = ({
@@ -103,6 +104,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   configId,
   onRecordSpin,
   onUpdateSpinAcknowledgment,
+  onRemoveWinner,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -407,7 +409,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   useEffect(() => {
     if (showBlank) {
       setFairnessText("");
-      setWinnerHistory([]); // Clear winner history when resetting
       return;
     }
 
@@ -1452,8 +1453,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     );
 
     const spinStrength = speedIndicator;
-    const baseRotations = 2.5 + spinStrength * 5; // 2.5 to 7.5 rotations
-    const spinDuration = 10000; // Fixed 10 second duration for all speeds
+
+    // Dynamic rotations based on number of names - fewer names spin faster (more rotations)
+    const extraRotations = wheelNames.length < 5 ? (5 - wheelNames.length) * 1.5 : 0;
+    const baseRotations = 2.5 + spinStrength * 5 + extraRotations; // 2 names = 7-12 rotations, 3 names = 5.5-10.5, 4 names = 4-9, 5+ names = 2.5-7.5
+
+    const spinDuration = 10000; // Fixed 10 second duration for all
 
     // Simple random spin - let wheel land wherever it naturally stops
     const finalRotation =
@@ -1834,26 +1839,58 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             >
               {selectedName}
             </p>
-            <button
-              onClick={() => {
-                // Save winner when user acknowledges the win
-                if (selectedName && selectedName !== "RESPIN") {
-                  setWinnerHistory((prev) => [...prev, selectedName]);
-                }
-                setShowWinnerModal(false);
-                setWinnerRhyme("");
-                // Track winner acknowledged via button
-                trackWinnerAcknowledged("button");
-                // Update spin acknowledgment in database
-                if (onUpdateSpinAcknowledgment && currentSpinId) {
-                  onUpdateSpinAcknowledgment(currentSpinId, "button");
-                }
-              }}
-              className="min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              style={{ touchAction: "manipulation" }}
-            >
-              Close
-            </button>
+            <div className="mt-6">
+              <button
+                onClick={() => {
+                  // Save winner when user acknowledges the win
+                  if (selectedName && selectedName !== "RESPIN") {
+                    setWinnerHistory((prev) => [...prev, selectedName]);
+                  }
+                  setShowWinnerModal(false);
+                  setWinnerRhyme("");
+                  // Track winner acknowledged via button
+                  trackWinnerAcknowledged("button");
+                  // Update spin acknowledgment in database
+                  if (onUpdateSpinAcknowledgment && currentSpinId) {
+                    onUpdateSpinAcknowledgment(currentSpinId, "button");
+                  }
+                }}
+                className="w-full min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                style={{ touchAction: "manipulation" }}
+              >
+                Close
+              </button>
+              {selectedName !== "RESPIN" && wheelNames.length > 2 && onRemoveWinner && (
+                <button
+                  onClick={async () => {
+                    // Remove the winner from the wheel
+                    const newNames = wheelNames.filter(name => name !== selectedName && name !== "RESPIN");
+
+                    // Save winner to history
+                    if (selectedName && selectedName !== "RESPIN") {
+                      setWinnerHistory((prev) => [...prev, selectedName]);
+                    }
+
+                    // Close modal
+                    setShowWinnerModal(false);
+                    setWinnerRhyme("");
+
+                    // Create new configuration with remaining names
+                    const newConfigId = await onRemoveWinner(newNames);
+
+                    // Track winner acknowledged via removal
+                    trackWinnerAcknowledged("remove");
+                    if (onUpdateSpinAcknowledgment && currentSpinId) {
+                      onUpdateSpinAcknowledgment(currentSpinId, "remove");
+                    }
+                  }}
+                  className="w-1/2 mx-auto mt-2 px-3 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 transition-colors block"
+                  style={{ touchAction: "manipulation" }}
+                >
+                  Remove {selectedName}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
