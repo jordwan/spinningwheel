@@ -185,7 +185,7 @@ export class SupabaseAdapter {
     try {
       // Simple query to test connection
       const client: any = this.client;
-      const { data, error } = await client
+      const { error } = await client
         .from('sessions')
         .select('id')
         .limit(1);
