@@ -975,7 +975,7 @@ export default function Home() {
                   // Update the wheel names in the parent component
                   setWheelNames(newNames);
                   // Create new configuration with the remaining names
-                  const newConfigId = await saveConfiguration(newNames, teamName || undefined, 'elimination');
+                  const newConfigId = await saveConfiguration(newNames, teamName || undefined, 'custom');
                   setCurrentConfigId(newConfigId);
                   return newConfigId;
                 }}

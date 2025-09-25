@@ -29,7 +29,7 @@ export interface SpinRecord {
   spinPower: number;
   timestamp: string;
   acknowledgedAt?: string;
-  acknowledgeMethod?: 'button' | 'backdrop' | 'x';
+  acknowledgeMethod?: 'button' | 'backdrop' | 'x' | 'remove';
   [key: string]: unknown; // Allow additional properties for database compatibility
 }
 
@@ -214,7 +214,7 @@ export class LocalSession {
   /**
    * Update spin acknowledgment - returns immediately
    */
-  updateSpinAcknowledgment(spinId: string, method: 'button' | 'backdrop' | 'x'): void {
+  updateSpinAcknowledgment(spinId: string, method: 'button' | 'backdrop' | 'x' | 'remove'): void {
     const spin = this.spins.find(s => s.id === spinId);
     if (spin) {
       spin.acknowledgedAt = new Date().toISOString();

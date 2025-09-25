@@ -9,7 +9,7 @@ interface UseSessionReturn {
   error: string | null;
   saveConfiguration: (names: string[], teamName?: string, inputMethod?: 'custom' | 'random' | 'numbers') => Promise<string | null>;
   recordSpin: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
-  updateSpinAcknowledgment: (spinId: string, method: 'button' | 'backdrop' | 'x') => Promise<void>;
+  updateSpinAcknowledgment: (spinId: string, method: 'button' | 'backdrop' | 'x' | 'remove') => Promise<void>;
   getSessionHistory: () => Promise<SpinRecord[] | null>;
   getSyncStatus?: () => any; // Optional debug info
 }
@@ -109,7 +109,7 @@ export function useSession(): UseSessionReturn {
   // Update spin acknowledgment - returns immediately
   const updateSpinAcknowledgment = useCallback(async (
     spinId: string,
-    method: 'button' | 'backdrop' | 'x'
+    method: 'button' | 'backdrop' | 'x' | 'remove'
   ): Promise<void> => {
     if (!localSessionRef.current) return;
 

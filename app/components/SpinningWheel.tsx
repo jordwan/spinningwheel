@@ -1110,7 +1110,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     }
 
     return originalColorMap.current;
-  }, [wheelNames, selectedTheme]);
+  }, [wheelNames, selectedTheme, colorThemes]);
 
   // Get color for a specific name
   const getColorForName = useCallback((name: string): string => {
@@ -1546,7 +1546,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
       fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
       fire(0.1, { spread: 120, startVelocity: 45 });
-    } catch (error) {
+    } catch {
       // Gracefully handle failed confetti load
     }
   };
@@ -2015,7 +2015,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                     setWinnerRhyme("");
 
                     // Create new configuration with remaining names
-                    const newConfigId = await onRemoveWinner(newNames);
+                    await onRemoveWinner(newNames);
 
                     // Track winner acknowledged via removal
                     trackWinnerAcknowledged("remove");
