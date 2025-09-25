@@ -1211,7 +1211,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       // Performance optimizations based on segment count
       const useSimplifiedGradients = performanceMode === "performance";
       const skipInnerGlow = performanceMode === "performance";
-      const reducedShadows = performanceMode !== "optimal";
 
       // Draw wheel segments
       wheelNames.forEach((name, i) => {

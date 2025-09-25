@@ -1,4 +1,4 @@
-import { LocalSession } from './LocalSession';
+import { LocalSession, WheelConfig, SpinRecord } from './LocalSession';
 
 interface SyncOperation {
   id: string;
@@ -40,8 +40,8 @@ export class DatabaseSync {
 
     // Set up event-based sync callbacks
     this.localSession.setSyncCallbacks({
-      onConfigurationSaved: (config) => this.syncConfiguration(config as any),
-      onSpinRecorded: (spin) => this.syncSpin(spin as any),
+      onConfigurationSaved: (config) => this.syncConfiguration(config as WheelConfig),
+      onSpinRecorded: (spin) => this.syncSpin(spin as SpinRecord),
       onSpinAcknowledged: (spinId, acknowledgedAt, method) =>
         this.syncSpinAcknowledgment(spinId, acknowledgedAt, method),
     });
