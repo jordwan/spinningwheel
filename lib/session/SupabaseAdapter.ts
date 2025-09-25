@@ -107,7 +107,10 @@ export class SupabaseAdapter {
         }]);
 
       if (error) {
-        console.warn('Failed to insert configuration (continuing in local mode):', error);
+        // Only log actual errors, not constraint violations (which are expected)
+        if (error.code !== '23505' && error.code !== '23514') {
+          console.warn('Failed to insert configuration (continuing in local mode):', error);
+        }
         return; // Don't throw, just log and continue
       }
     } catch (err: unknown) {
@@ -135,11 +138,14 @@ export class SupabaseAdapter {
           spin_power: spinData.spinPower,
           spin_timestamp: spinData.timestamp,
           acknowledged_at: spinData.acknowledgedAt || null,
-          acknowledge_method: spinData.acknowledgeMethod || null,
+          acknowledge_method: spinData.acknowledgeMethod === 'remove' ? 'button' : (spinData.acknowledgeMethod || null),
         }]);
 
       if (error) {
-        console.warn('Failed to insert spin (continuing in local mode):', error);
+        // Only log actual errors, not constraint violations (which are expected)
+        if (error.code !== '23505' && error.code !== '23514') {
+          console.warn('Failed to insert spin (continuing in local mode):', error);
+        }
         return; // Don't throw, just log and continue
       }
     } catch (err: unknown) {
@@ -156,13 +162,23 @@ export class SupabaseAdapter {
 
     try {
       const client: any = this.client;
+
+      // Map 'remove' to 'button' for database compatibility
+      const dbUpdateData = { ...updateData };
+      if (dbUpdateData.acknowledgeMethod === 'remove') {
+        dbUpdateData.acknowledgeMethod = 'button';
+      }
+
       const { error } = await client
         .from('spin_results')
-        .update(updateData)
+        .update(dbUpdateData)
         .eq('id', spinId);
 
       if (error) {
-        console.warn('Failed to update spin (continuing in local mode):', error);
+        // Only log actual errors, not constraint violations (which are expected)
+        if (error.code !== '23505' && error.code !== '23514') {
+          console.warn('Failed to update spin (continuing in local mode):', error);
+        }
         return; // Don't throw, just log and continue
       }
     } catch (err: unknown) {

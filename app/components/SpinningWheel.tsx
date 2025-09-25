@@ -936,7 +936,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     () => [
       // Vibrant Theme
       [
-        "#FF6B35ff", "#F7931Eff", "#FFD23Fff", "#06FFA5ff", "#4ECDC4ff",
+        "#FF6B35ff", "#E91E63ff", "#FFD23Fff", "#06FFA5ff", "#4ECDC4ff",
         "#45B7D1ff", "#96CEB4ff", "#FFEAA7ff", "#DDA0DDff", "#98D8C8ff"
       ],
       // Ocean Theme
@@ -982,12 +982,32 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       // Neon Theme
       [
         "#FF00FFff", "#00FFFFff", "#FFFF00ff", "#FF0080ff", "#80FF00ff",
-        "#FF4000ff", "#4000FFff", "#00FF40ff", "#FF8000ff", "#8000FFff"
+        "#FF4000ff", "#4000FFff", "#00FF40ff", "#9D00FFff", "#8000FFff"
       ],
       // Nature Theme
       [
         "#228B22ff", "#32CD32ff", "#8FBC8Fff", "#2E8B57ff", "#556B2Fff",
-        "#8B4513ff", "#A0522Dff", "#CD853Fff", "#DEB887ff", "#F4A460ff"
+        "#8B4513ff", "#4682B4ff", "#CD853Fff", "#2F4F4Fff", "#6B8E23ff"
+      ],
+      // Cyberpunk Theme
+      [
+        "#00FFFFff", "#FF00FFff", "#39FF14ff", "#6600CCff", "#0033FFff",
+        "#FFFF00ff", "#FF1493ff", "#FF6600ff", "#9D00FFff", "#FF073Aff"
+      ],
+      // Pastel Dream Theme
+      [
+        "#FFD1DCff", "#AEC6CFff", "#FDFD96ff", "#B2D8B2ff", "#E6E6FAff",
+        "#FFDAB9ff", "#AAF0D1ff", "#E0BBE4ff", "#FFB5C5ff", "#87CEEBff"
+      ],
+      // Autumn Harvest Theme
+      [
+        "#CC5500ff", "#8B0000ff", "#FFD700ff", "#8B4513ff", "#FF7518ff",
+        "#800020ff", "#228B22ff", "#B87333ff", "#4B0082ff", "#DC143Cff"
+      ],
+      // Galaxy Theme
+      [
+        "#4B0082ff", "#FF1493ff", "#C0C0C0ff", "#000080ff", "#00FF7Fff",
+        "#FF4500ff", "#1C1C1Cff", "#008B8Bff", "#DC143Cff", "#8A2BE2ff"
       ]
     ],
     []
@@ -1328,25 +1348,15 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             ctx.fillStyle = "#fff";
             ctx.font = `bold ${fs}px Arial`;
 
-            // Apply shadows only in optimal mode for performance
-            if (!reducedShadows) {
-              ctx.shadowColor = "rgba(0,0,0,0.7)";
-              ctx.shadowBlur = Math.max(2, fs / 4);
-              ctx.shadowOffsetX = 1;
-              ctx.shadowOffsetY = 1;
-            }
-
             // Position text consistently from edge, regardless of length
             const paddingFromEdge = 15; // Consistent padding from wheel edge
-            ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
 
-            // Reset shadow properties to prevent context pollution
-            if (!reducedShadows) {
-              ctx.shadowColor = "transparent";
-              ctx.shadowBlur = 0;
-              ctx.shadowOffsetX = 0;
-              ctx.shadowOffsetY = 0;
-            }
+            // Super thin black outline for better legibility on light colors
+            ctx.strokeStyle = "#000";
+            ctx.lineWidth = 0.5; // As thin as possible
+            ctx.strokeText(displayText, radius - paddingFromEdge, fs / 3);
+
+            ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
           }
           ctx.restore();
         }

@@ -29,7 +29,7 @@ export class DatabaseSync {
   private localSession: LocalSession;
   private lastSyncTime: string | null = null;
 
-  private readonly SYNC_INTERVAL = 5000; // 5 seconds (for debugging)
+  private readonly SYNC_INTERVAL = 30000; // 30 seconds - only for retrying failed operations
   private readonly MAX_RETRIES = 3;
   private readonly RETRY_BACKOFF = 2000; // 2 seconds initial backoff
 
@@ -38,9 +38,12 @@ export class DatabaseSync {
     this.setupNetworkListeners();
     this.startSyncLoop();
 
-    // Listen for local changes and queue them for sync
-    localSession.addChangeListener(() => {
-      this.queueDataForSync();
+    // Set up event-based sync callbacks
+    this.localSession.setSyncCallbacks({
+      onConfigurationSaved: (config) => this.syncConfiguration(config as any),
+      onSpinRecorded: (spin) => this.syncSpin(spin as any),
+      onSpinAcknowledged: (spinId, acknowledgedAt, method) =>
+        this.syncSpinAcknowledgment(spinId, acknowledgedAt, method),
     });
   }
 
@@ -49,9 +52,8 @@ export class DatabaseSync {
    */
   setAdapter(adapter: DatabaseAdapter): void {
     this.adapter = adapter;
-    // Immediately try to sync existing data
+    // Only queue the session insert - no aggressive data dump
     this.queueInitialSessionInsert();
-    this.queueDataForSync();
   }
 
   private setupNetworkListeners(): void {
@@ -94,7 +96,6 @@ export class DatabaseSync {
     const data = this.localSession.getDataForSync();
     const now = new Date().toISOString();
 
-    console.log('🔄 Queueing initial session insert for:', data.session.id);
     // Queue initial session insert (only happens once when adapter is first set)
     this.queueOperation({
       id: `session_insert_${data.session.id}`,
@@ -106,83 +107,13 @@ export class DatabaseSync {
     });
   }
 
-  private queueDataForSync(): void {
-    if (!this.adapter) return;
-
-    const data = this.localSession.getDataForSync();
-    const now = new Date().toISOString();
-
-    console.log('🔄 Queueing session update for:', data.session.id);
-    // Queue session update if it's changed (for subsequent updates)
-    this.queueOperation({
-      id: `session_update_${data.session.id}`,
-      type: 'session',
-      operation: 'update',
-      data: data.session,
-      timestamp: now,
-      retryCount: 0,
-    });
-
-    // Queue new configurations
-    console.log(`🔄 Checking ${data.configurations.length} configurations for sync`);
-    data.configurations.forEach(config => {
-      if (!this.lastSyncTime || config.createdAt > this.lastSyncTime) {
-        console.log('🔄 Queueing configuration insert for:', config.id);
-        this.queueOperation({
-          id: `config_${config.id}`,
-          type: 'configuration',
-          operation: 'insert',
-          data: config,
-          timestamp: now,
-          retryCount: 0,
-        });
-      }
-    });
-
-    // Queue new spins
-    console.log(`🔄 Checking ${data.spins.length} spins for sync`);
-    data.spins.forEach(spin => {
-      if (!this.lastSyncTime || spin.timestamp > this.lastSyncTime) {
-        console.log('🔄 Queueing spin insert for:', spin.winner);
-        this.queueOperation({
-          id: `spin_${spin.id}`,
-          type: 'spin',
-          operation: 'insert',
-          data: spin,
-          timestamp: now,
-          retryCount: 0,
-        });
-      }
-
-      // Queue acknowledgment updates
-      if (spin.acknowledgedAt && (!this.lastSyncTime || spin.acknowledgedAt > this.lastSyncTime)) {
-        console.log('🔄 Queueing acknowledgment update for:', spin.id);
-        this.queueOperation({
-          id: `ack_${spin.id}`,
-          type: 'acknowledgment',
-          operation: 'update',
-          data: {
-            id: spin.id,
-            acknowledged_at: spin.acknowledgedAt,
-            acknowledge_method: spin.acknowledgeMethod,
-          },
-          timestamp: now,
-          retryCount: 0,
-        });
-      }
-    });
-  }
 
   private queueOperation(operation: SyncOperation): void {
     // Remove existing operation with same ID (deduplication)
     this.syncQueue = this.syncQueue.filter(op => op.id !== operation.id);
     this.syncQueue.push(operation);
 
-    // Immediate sync attempt if online and adapter available
-    if (this.isOnline && this.adapter) {
-      // Use setTimeout to avoid blocking the current execution
-      setTimeout(() => this.processSyncQueue(), 0);
-    }
+    // No immediate sync - let the 30-second background loop handle it
   }
 
   private async processSyncQueue(): Promise<void> {
@@ -199,7 +130,7 @@ export class DatabaseSync {
       try {
         await this.executeSyncOperation(operation);
         successfulOps.push(operation.id);
-        console.log(`✅ Synced: ${operation.type} ${operation.operation}`);
+        // Removed sync success logging to reduce console noise
       } catch (error) {
         console.warn(`❌ Sync failed for ${operation.id}:`, error);
 
@@ -225,7 +156,7 @@ export class DatabaseSync {
 
     if (successfulOps.length > 0) {
       this.lastSyncTime = new Date().toISOString();
-      console.log(`✨ Sync complete - ${successfulOps.length} operations succeeded`);
+      // Removed sync completion logging to reduce console noise
     }
   }
 
@@ -281,9 +212,54 @@ export class DatabaseSync {
   /**
    * Force immediate sync (for testing)
    */
-  async forcSync(): Promise<void> {
-    this.queueDataForSync();
+  async forceSync(): Promise<void> {
     await this.processSyncQueue();
+  }
+
+  /**
+   * Sync new configuration (event-based)
+   */
+  async syncConfiguration(config: Record<string, unknown>): Promise<void> {
+    this.queueOperation({
+      id: `config_${config.id}`,
+      type: 'configuration',
+      operation: 'insert',
+      data: config,
+      timestamp: new Date().toISOString(),
+      retryCount: 0,
+    });
+  }
+
+  /**
+   * Sync new spin result (event-based)
+   */
+  async syncSpin(spin: Record<string, unknown>): Promise<void> {
+    this.queueOperation({
+      id: `spin_${spin.id}`,
+      type: 'spin',
+      operation: 'insert',
+      data: spin,
+      timestamp: new Date().toISOString(),
+      retryCount: 0,
+    });
+  }
+
+  /**
+   * Sync spin acknowledgment (event-based)
+   */
+  async syncSpinAcknowledgment(spinId: string, acknowledgedAt: string, acknowledgeMethod: string): Promise<void> {
+    this.queueOperation({
+      id: `ack_${spinId}`,
+      type: 'acknowledgment',
+      operation: 'update',
+      data: {
+        id: spinId,
+        acknowledged_at: acknowledgedAt,
+        acknowledge_method: acknowledgeMethod,
+      },
+      timestamp: new Date().toISOString(),
+      retryCount: 0,
+    });
   }
 
   /**

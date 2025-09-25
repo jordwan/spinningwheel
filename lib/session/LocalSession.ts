@@ -44,6 +44,11 @@ export class LocalSession {
   private configurations: WheelConfig[] = [];
   private spins: SpinRecord[] = [];
   private changeListeners: (() => void)[] = [];
+  private syncCallbacks: {
+    onConfigurationSaved?: (config: WheelConfig) => void;
+    onSpinRecorded?: (spin: SpinRecord) => void;
+    onSpinAcknowledged?: (spinId: string, acknowledgedAt: string, method: string) => void;
+  } = {};
 
   constructor() {
     this.sessionData = this.loadOrCreateSession();
@@ -186,6 +191,11 @@ export class LocalSession {
     this.configurations.push(config);
     this.notifyChange();
 
+    // Trigger event-based sync
+    if (this.syncCallbacks.onConfigurationSaved) {
+      this.syncCallbacks.onConfigurationSaved(config);
+    }
+
     return configId;
   }
 
@@ -208,6 +218,11 @@ export class LocalSession {
     this.spins.push(spin);
     this.notifyChange();
 
+    // Trigger event-based sync
+    if (this.syncCallbacks.onSpinRecorded) {
+      this.syncCallbacks.onSpinRecorded(spin);
+    }
+
     return spinId;
   }
 
@@ -217,9 +232,15 @@ export class LocalSession {
   updateSpinAcknowledgment(spinId: string, method: 'button' | 'backdrop' | 'x' | 'remove'): void {
     const spin = this.spins.find(s => s.id === spinId);
     if (spin) {
-      spin.acknowledgedAt = new Date().toISOString();
+      const acknowledgedAt = new Date().toISOString();
+      spin.acknowledgedAt = acknowledgedAt;
       spin.acknowledgeMethod = method;
       this.notifyChange();
+
+      // Trigger event-based sync
+      if (this.syncCallbacks.onSpinAcknowledged) {
+        this.syncCallbacks.onSpinAcknowledged(spinId, acknowledgedAt, method);
+      }
     }
   }
 
@@ -267,6 +288,17 @@ export class LocalSession {
         this.changeListeners.splice(index, 1);
       }
     };
+  }
+
+  /**
+   * Set sync callbacks for event-based syncing
+   */
+  setSyncCallbacks(callbacks: {
+    onConfigurationSaved?: (config: WheelConfig) => void;
+    onSpinRecorded?: (spin: SpinRecord) => void;
+    onSpinAcknowledged?: (spinId: string, acknowledgedAt: string, method: string) => void;
+  }): void {
+    this.syncCallbacks = callbacks;
   }
 
   /**
