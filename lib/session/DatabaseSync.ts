@@ -29,6 +29,7 @@ export class DatabaseSync {
   private localSession: LocalSession;
   private lastSyncTime: string | null = null;
   private sessionInsertAttempted: boolean = false;
+  private static globalSessionInsertAttempted: Set<string> = new Set();
 
   private readonly SYNC_INTERVAL = 30000; // 30 seconds - only for retrying failed operations
   private readonly MAX_RETRIES = 3;
@@ -92,10 +93,11 @@ export class DatabaseSync {
   }
 
   private queueInitialSessionInsert(): void {
-    console.log(`🔍 Session insert check: adapter=${!!this.adapter}, attempted=${this.sessionInsertAttempted}`);
+    const sessionId = this.localSession.getSessionId();
+    console.log(`🔍 Session insert check: adapter=${!!this.adapter}, instanceAttempted=${this.sessionInsertAttempted}, globalAttempted=${DatabaseSync.globalSessionInsertAttempted.has(sessionId)}`);
 
-    if (!this.adapter || this.sessionInsertAttempted) {
-      console.log('⏭️ Skipping session insert - already attempted or no adapter');
+    if (!this.adapter || this.sessionInsertAttempted || DatabaseSync.globalSessionInsertAttempted.has(sessionId)) {
+      console.log('⏭️ Skipping session insert - already attempted globally or no adapter');
       return;
     }
 
@@ -115,7 +117,8 @@ export class DatabaseSync {
     });
 
     this.sessionInsertAttempted = true;
-    console.log('✅ Session insert queued and flag set');
+    DatabaseSync.globalSessionInsertAttempted.add(sessionId);
+    console.log('✅ Session insert queued and flags set (instance + global)');
   }
 
 

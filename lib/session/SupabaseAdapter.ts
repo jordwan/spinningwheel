@@ -171,8 +171,8 @@ export class SupabaseAdapter {
 
       // Map 'remove' to 'button' for database compatibility
       const dbUpdateData = { ...updateData };
-      if (dbUpdateData.acknowledgeMethod === 'remove') {
-        dbUpdateData.acknowledgeMethod = 'button';
+      if (dbUpdateData.acknowledge_method === 'remove') {
+        dbUpdateData.acknowledge_method = 'button';
       }
 
       const { error, data } = await client
@@ -192,7 +192,8 @@ export class SupabaseAdapter {
           updateData: dbUpdateData,
         });
 
-        // Only log actual errors, not constraint violations (which are expected)
+        // Silence expected constraint violations and other handled errors
+        // 23505: duplicate key, 23514: check constraint (acknowledge_method values)
         if (error.code !== '23505' && error.code !== '23514') {
           console.warn('Failed to update spin (continuing in local mode):', error);
         }
