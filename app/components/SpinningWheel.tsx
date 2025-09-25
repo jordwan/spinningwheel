@@ -90,6 +90,9 @@ interface SpinningWheelProps {
   onReset?: () => void;
   includeFreeSpins?: boolean;
   showBlank?: boolean;
+  configId?: string | null;
+  onRecordSpin?: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
+  onUpdateSpinAcknowledgment?: (spinId: string, method: 'button' | 'backdrop' | 'x') => Promise<void>;
 }
 
 const SpinningWheel: React.FC<SpinningWheelProps> = ({
@@ -97,6 +100,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   onReset,
   includeFreeSpins = true,
   showBlank = false,
+  configId,
+  onRecordSpin,
+  onUpdateSpinAcknowledgment,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -123,6 +129,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   const [isIOS16, setIsIOS16] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isFirefox, setIsFirefox] = useState(false);
+  const [currentSpinId, setCurrentSpinId] = useState<string | null>(null);
   const [deviceCapability, setDeviceCapability] = useState<
     "high" | "medium" | "low"
   >("medium");
@@ -1513,7 +1520,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           setShowWinnerModal(true);
 
           // Everything else happens asynchronously (non-blocking)
-          setTimeout(() => {
+          setTimeout(async () => {
             // Enhanced aria announcement for result
             setAriaAnnouncement(
               `Winner selected: ${winner}. The wheel has stopped spinning.`
@@ -1522,13 +1529,19 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             // Track winner selection with new tracking function
             trackSpinCompleted(winner, wheelNames.length, false);
 
+            // Record spin in database
+            if (onRecordSpin && configId) {
+              const spinId = await onRecordSpin(configId, winner, false, speedIndicator);
+              setCurrentSpinId(spinId);
+            }
+
             // Trigger effects (async, non-blocking)
             triggerConfetti();
             // Removed winner audio - only show confetti
           }, 0);
         } else {
           // For RESPIN, just do aria announcement
-          setTimeout(() => {
+          setTimeout(async () => {
             setAriaAnnouncement(
               "Free spin! The wheel landed on a respin. You get another turn."
             );
@@ -1536,6 +1549,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             // Track respin selection with new tracking functions
             trackSpinCompleted(winner, wheelNames.length, true);
             trackRespinTriggered();
+
+            // Record respin in database
+            if (onRecordSpin && configId) {
+              const spinId = await onRecordSpin(configId, winner, true, speedIndicator);
+              setCurrentSpinId(spinId);
+            }
           }, 0);
         }
       }
@@ -1778,6 +1797,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               setWinnerRhyme("");
               // Track winner acknowledged via backdrop
               trackWinnerAcknowledged("backdrop");
+              // Update spin acknowledgment in database
+              if (onUpdateSpinAcknowledgment && currentSpinId) {
+                onUpdateSpinAcknowledgment(currentSpinId, "backdrop");
+              }
             }
           }}
         >
@@ -1821,6 +1844,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                 setWinnerRhyme("");
                 // Track winner acknowledged via button
                 trackWinnerAcknowledged("button");
+                // Update spin acknowledgment in database
+                if (onUpdateSpinAcknowledgment && currentSpinId) {
+                  onUpdateSpinAcknowledgment(currentSpinId, "button");
+                }
               }}
               className="min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
               style={{ touchAction: "manipulation" }}

@@ -15,6 +15,7 @@ import {
   startSession,
   endSession
 } from "./utils/analytics";
+import { useSession } from "../hooks/useSession";
 
 // Lazy load the heavy SpinningWheel component
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
@@ -36,6 +37,10 @@ export default function Home() {
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [duplicateWarningText, setDuplicateWarningText] = useState("");
   const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [currentConfigId, setCurrentConfigId] = useState<string | null>(null);
+
+  // Session tracking
+  const { sessionId, saveConfiguration, recordSpin, updateSpinAcknowledgment } = useSession();
 
   // Debouncing refs for performance optimization
   const inputDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -329,18 +334,23 @@ export default function Home() {
     return getRandomNames(count);
   };
 
-  const handleRandomNames = () => {
+  const handleRandomNames = async () => {
     const count = Math.min(parseInt(randomNameCount) || 10, 99);
-    setWheelNames(generateRandomNames(count));
+    const names = generateRandomNames(count);
+    setWheelNames(names);
     setIsUsingCustomNames(false); // Track that we're using random names
     setShowNameInput(false);
     setShowRandomCountInput(false);
     // Track random names selection
     trackRandomSelection('names', count);
     trackInputMethodSelected('random');
+
+    // Save configuration to database
+    const configId = await saveConfiguration(names, undefined, 'random');
+    setCurrentConfigId(configId);
   };
 
-  const handleSequentialNumbers = () => {
+  const handleSequentialNumbers = async () => {
     const count = Math.min(parseInt(randomNameCount) || 10, 99);
     const numbers = Array.from({ length: count }, (_, i) => (i + 1).toString());
 
@@ -361,6 +371,10 @@ export default function Home() {
     // Track sequential numbers selection
     trackRandomSelection('numbers', count);
     trackInputMethodSelected('numbers');
+
+    // Save configuration to database
+    const configId = await saveConfiguration(shuffledNumbers, undefined, 'numbers');
+    setCurrentConfigId(configId);
   };
 
   // Debounced input change handler to reduce expensive processing
@@ -455,6 +469,11 @@ export default function Home() {
         if (teamName) {
           trackTeamNameSet(true);
         }
+
+        // Save configuration to database
+        saveConfiguration(names, teamName || undefined, 'custom').then(configId => {
+          setCurrentConfigId(configId);
+        });
       }
     } else if (names.length === 1) {
       // Show styled warning modal
@@ -949,19 +968,23 @@ export default function Home() {
                 names={wheelNames.length > 0 ? wheelNames : undefined}
                 includeFreeSpins={false}
                 showBlank={showNameInput}
-              onReset={() => {
-                // Track reset action with context
-                trackWheelReset(isUsingCustomNames);
-                setShowNameInput(true);
-                // Only clear inputValue if we weren't using custom names
-                if (!isUsingCustomNames) {
-                  setInputValue("");
-                  setLocalInputValue("");
-                }
-                setTeamName("");
-                setShowRandomCountInput(false);
-                document.title = "iWheeli.com";
-              }}
+                configId={currentConfigId}
+                onRecordSpin={recordSpin}
+                onUpdateSpinAcknowledgment={updateSpinAcknowledgment}
+                onReset={() => {
+                  // Track reset action with context
+                  trackWheelReset(isUsingCustomNames);
+                  setShowNameInput(true);
+                  // Only clear inputValue if we weren't using custom names
+                  if (!isUsingCustomNames) {
+                    setInputValue("");
+                    setLocalInputValue("");
+                  }
+                  setTeamName("");
+                  setShowRandomCountInput(false);
+                  setCurrentConfigId(null);
+                  document.title = "iWheeli.com";
+                }}
               />
             </Suspense>
           </div>
