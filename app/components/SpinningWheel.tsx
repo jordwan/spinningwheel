@@ -158,9 +158,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     height: 0,
   });
 
-  // Segment gradient caches for performance
-  const segmentGradientsCache = useRef<Map<string, CanvasGradient>>(new Map());
-  const lastWheelConfig = useRef<string>("");
 
   // Performance management
   const [performanceMode, setPerformanceMode] = useState<
@@ -573,7 +570,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
   /** ========= Drag Animation Cleanup ========= */
   useEffect(() => {
-    const segmentCache = segmentGradientsCache.current;
     const audioPool = audioPoolRef.current;
 
     return () => {
@@ -586,7 +582,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       // Clear canvas optimization caches
       pointerGradientCache.current = null;
       lastCanvasSize.current = { width: 0, height: 0 };
-      segmentCache.clear();
 
       // Clear audio pool
       audioPool.sources.forEach((source) => {
@@ -937,41 +932,206 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   }, [canDrag, isDragging]);
 
   /** ========= Draw wheel (HiDPI, labels, pointer) ========= */
-  const colors = useMemo(
+  const colorThemes = useMemo(
     () => [
-      "#f54d4dff",
-      "#205cbdff",
-      "#45B7D1",
-      "#54cb94ff",
-      "#FECA57",
-      "#c810c8ff",
-      "#FF6B9D",
-      "#bea412ff",
+      // Vibrant Theme
+      [
+        "#FF6B35ff", "#F7931Eff", "#FFD23Fff", "#06FFA5ff", "#4ECDC4ff",
+        "#45B7D1ff", "#96CEB4ff", "#FFEAA7ff", "#DDA0DDff", "#98D8C8ff"
+      ],
+      // Ocean Theme
+      [
+        "#0077BEff", "#00A8CCff", "#40E0D0ff", "#1BA3CDff", "#5DADE2ff",
+        "#85C1E9ff", "#A9CCE3ff", "#87CEEBff", "#2E8B57ff", "#20B2AAff"
+      ],
+      // Sunset Theme
+      [
+        "#FF4757ff", "#FF6B9Dff", "#FFA502ff", "#FF7675ff", "#FDCB6Eff",
+        "#E84393ff", "#F39C12ff", "#E74C3Cff", "#FF5722ff", "#FF8A80ff"
+      ],
+      // Forest Theme
+      [
+        "#27AE60ff", "#2ECC71ff", "#58D68Dff", "#82E0AAff", "#A9DFBFff",
+        "#52C41Aff", "#73D13Dff", "#95DE64ff", "#B7EB8Fff", "#D9F7BEff"
+      ],
+      // Royal Theme
+      [
+        "#8E44ADff", "#9B59B6ff", "#BB8FCEff", "#D2B4DEff", "#E8DAEFff",
+        "#6C3483ff", "#7D3C98ff", "#A569BDff", "#CD6155ff", "#F1948Aff"
+      ],
+      // Tropical Theme
+      [
+        "#FF6F61ff", "#6B5B95ff", "#88D8B0ff", "#FFEAA7ff", "#DDA0DDff",
+        "#FFB07Aff", "#98D8C8ff", "#F093FBff", "#4ECDC4ff", "#45B7D1ff"
+      ],
+      // Rainbow Theme
+      [
+        "#FF0000ff", "#FF8000ff", "#FFFF00ff", "#80FF00ff", "#00FF00ff",
+        "#00FF80ff", "#00FFFFff", "#0080FFff", "#0000FFff", "#8000FFff"
+      ],
+      // USA Theme
+      [
+        "#B22234ff", "#FF0000ff", "#DC143Cff", "#8B0000ff", "#CD5C5Cff",
+        "#4169E1ff", "#0000CDff", "#000080ff", "#6495EDff", "#1E90FFff"
+      ],
+      // Indian Theme
+      [
+        "#FF9933ff", "#228B22ff", "#32CD32ff", "#FFD700ff", "#4169E1ff",
+        "#8B4513ff", "#DC143Cff", "#9370DBff", "#20B2AAff", "#800080ff"
+      ],
+      // Neon Theme
+      [
+        "#FF00FFff", "#00FFFFff", "#FFFF00ff", "#FF0080ff", "#80FF00ff",
+        "#FF4000ff", "#4000FFff", "#00FF40ff", "#FF8000ff", "#8000FFff"
+      ],
+      // Nature Theme
+      [
+        "#228B22ff", "#32CD32ff", "#8FBC8Fff", "#2E8B57ff", "#556B2Fff",
+        "#8B4513ff", "#A0522Dff", "#CD853Fff", "#DEB887ff", "#F4A460ff"
+      ]
     ],
     []
   );
 
-  // Cached gradient creation for performance
-  const getCachedGradient = useCallback(
+  // Store the original configId to maintain theme stability during eliminations
+  const originalConfigId = useRef<string | null>(null);
+  const currentTheme = useRef<string[]>(colorThemes[0]);
+
+  // Select a theme based on original wheel configuration - stays stable during eliminations
+  const selectedTheme = useMemo(() => {
+    if (!wheelNames.length) {
+      // Reset when no names
+      originalConfigId.current = null;
+      const fallback = colorThemes[0] || [];
+      currentTheme.current = fallback;
+      return fallback;
+    }
+
+    // Track the original configId (first non-elimination config)
+    if (configId && originalConfigId.current === null) {
+      originalConfigId.current = configId;
+    }
+
+    // Use the original configId for theme selection (not the current elimination configId)
+    const themeConfigId = originalConfigId.current || configId;
+
+    if (themeConfigId) {
+      // Create hash from the original configId to maintain consistent theme
+      let hash = 0;
+      for (let i = 0; i < themeConfigId.length; i++) {
+        const char = themeConfigId.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+
+      const themeIndex = Math.abs(hash) % colorThemes.length;
+      currentTheme.current = colorThemes[themeIndex];
+    }
+
+    // Ensure we always return a valid theme
+    if (!currentTheme.current || currentTheme.current.length === 0) {
+      const fallback = colorThemes[0] || [];
+      currentTheme.current = fallback;
+      return fallback;
+    }
+
+    return currentTheme.current;
+  }, [configId, colorThemes, wheelNames.length]);
+
+  // Reset original configId and color map when wheel is reset/blank
+  useEffect(() => {
+    if (showBlank) {
+      originalConfigId.current = null;
+      originalColorMap.current.clear();
+    }
+  }, [showBlank]);
+
+  // Store the original color assignments to maintain stability during eliminations
+  const originalColorMap = useRef<Map<string, string>>(new Map());
+
+  // Create stable color assignments that persist during eliminations
+  const wheelColors = useMemo(() => {
+    if (!wheelNames.length) {
+      // Reset color map when no names
+      originalColorMap.current.clear();
+      return new Map();
+    }
+
+    // Ensure selectedTheme is available
+    if (!selectedTheme || selectedTheme.length === 0) {
+      const fallbackTheme = colorThemes[0] || ["#FF6B35ff", "#4ECDC4", "#45B7D1"];
+      const colorMap = new Map();
+      wheelNames.forEach((name, index) => {
+        const colorIndex = index % fallbackTheme.length;
+        const color = fallbackTheme[colorIndex];
+        colorMap.set(name, color);
+      });
+      return colorMap;
+    }
+
+    // If this is a new wheel (originalConfigId changed or first load)
+    const shouldRecalculateColors =
+      originalColorMap.current.size === 0 ||
+      !wheelNames.some(name => originalColorMap.current.has(name));
+
+    if (shouldRecalculateColors) {
+      // Create new color assignments for the original wheel configuration
+      const wheelString = wheelNames.join('|');
+      let hash = 0;
+      for (let i = 0; i < wheelString.length; i++) {
+        const char = wheelString.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+
+      // Create shuffled theme colors for even distribution
+      const shuffledTheme = [...selectedTheme];
+      let currentIndex = shuffledTheme.length;
+
+      // Fisher-Yates shuffle with seeded randomness
+      while (currentIndex !== 0) {
+        hash = ((hash * 9301) + 49297) % 233280;
+        const randomIndex = Math.floor((hash / 233280) * currentIndex);
+        currentIndex--;
+        [shuffledTheme[currentIndex], shuffledTheme[randomIndex]] =
+          [shuffledTheme[randomIndex], shuffledTheme[currentIndex]];
+      }
+
+      // Clear and rebuild color map
+      originalColorMap.current.clear();
+      wheelNames.forEach((name, index) => {
+        if (name === "RESPIN") {
+          originalColorMap.current.set(name, selectedTheme[0]);
+        } else {
+          const colorIndex = index % shuffledTheme.length;
+          originalColorMap.current.set(name, shuffledTheme[colorIndex]);
+        }
+      });
+    }
+
+    return originalColorMap.current;
+  }, [wheelNames, selectedTheme]);
+
+  // Get color for a specific name
+  const getColorForName = useCallback((name: string): string => {
+    if (!name) {
+      return "#FF6B35ff"; // Use vibrant fallback instead of gray
+    }
+    const color = wheelColors.get(name);
+    return color || "#FF6B35ff"; // Use vibrant fallback instead of gray
+  }, [wheelColors]);
+
+  // Simplified gradient creation without caching to avoid stale references
+  const createGradient = useCallback(
     (
       ctx: CanvasRenderingContext2D,
       type: string,
-      segmentIndex: number,
       centerX: number,
       centerY: number,
       radius: number,
       midAngle: number,
       color?: string
     ): CanvasGradient => {
-      const cacheKey = `${type}-${segmentIndex}-${centerX}-${centerY}-${radius}-${
-        color || ""
-      }`;
-      const cache = segmentGradientsCache.current;
-
-      if (cache.has(cacheKey)) {
-        return cache.get(cacheKey)!;
-      }
-
       let gradient: CanvasGradient;
 
       if (type === "blank") {
@@ -983,7 +1143,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           centerY,
           radius
         );
-        const cleanColor = color!.slice(0, 7);
+        const cleanColor = (color && color.length >= 7) ? color.slice(0, 7) : "#FF6B35"; // Use vibrant fallback
         gradient.addColorStop(0, cleanColor + "33");
         gradient.addColorStop(0.85, cleanColor + "22");
         gradient.addColorStop(1, cleanColor + "11");
@@ -1009,22 +1169,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           centerY,
           radius
         );
-        const cleanColor = color!.slice(0, 7);
+        const cleanColor = (color && color.length >= 7) ? color.slice(0, 7) : "#FF6B35"; // Use vibrant fallback
         gradient.addColorStop(0, cleanColor);
         gradient.addColorStop(0.85, cleanColor + "dd");
         gradient.addColorStop(1, cleanColor + "99");
       }
 
-      cache.set(cacheKey, gradient);
       return gradient;
     },
     []
   );
-
-  // Clear gradient cache when wheel configuration changes
-  const clearGradientCache = useCallback(() => {
-    segmentGradientsCache.current.clear();
-  }, []);
 
   // Draw wheel segments with performance-aware rendering
   const drawWheelSegments = useCallback(
@@ -1053,15 +1207,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         if (showBlank) {
           // Use simplified or cached gradient for blank segments
           if (useSimplifiedGradients) {
-            const baseColor = colors[i % colors.length];
-            const cleanColor = baseColor.slice(0, 7);
+            const baseColor = getColorForName(name);
+            const cleanColor = (baseColor && baseColor.length >= 7) ? baseColor.slice(0, 7) : "#FF6B35"; // Use vibrant fallback
             ctx.fillStyle = cleanColor + "33";
           } else {
-            const baseColor = colors[i % colors.length];
-            const g = getCachedGradient(
+            const baseColor = getColorForName(name);
+            const g = createGradient(
               ctx,
               "blank",
-              i,
               centerX,
               centerY,
               radius,
@@ -1081,10 +1234,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           if (useSimplifiedGradients) {
             ctx.fillStyle = "#1a1a1a";
           } else {
-            const g = getCachedGradient(
+            const g = createGradient(
               ctx,
               "respin",
-              i,
               centerX,
               centerY,
               radius,
@@ -1116,15 +1268,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         } else {
           // Use simplified or cached gradient for regular segments
           if (useSimplifiedGradients) {
-            const baseColor = colors[i % colors.length];
-            const cleanColor = baseColor.slice(0, 7);
+            const baseColor = getColorForName(name);
+            const cleanColor = (baseColor && baseColor.length >= 7) ? baseColor.slice(0, 7) : "#FF6B35"; // Use vibrant fallback
             ctx.fillStyle = cleanColor;
           } else {
-            const baseColor = colors[i % colors.length];
-            const g = getCachedGradient(
+            const baseColor = getColorForName(name);
+            const g = createGradient(
               ctx,
               "regular",
-              i,
               centerX,
               centerY,
               radius,
@@ -1234,9 +1385,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       wheelGeometry,
       textInfo,
       wheelNames,
-      colors,
+      getColorForName,
       showBlank,
-      getCachedGradient,
+      createGradient,
       performanceMode,
     ]
   );
@@ -1255,17 +1406,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     }
   }, [wheelNames.length]);
 
-  /** ========= Gradient Cache Management ========= */
-  useEffect(() => {
-    // Clear gradient cache when wheel configuration changes
-    const currentConfig = `${wheelNames.join(
-      "-"
-    )}-${canvasCSSSize}-${colors.join("-")}-${showBlank}`;
-    if (lastWheelConfig.current !== currentConfig) {
-      clearGradientCache();
-      lastWheelConfig.current = currentConfig;
-    }
-  }, [wheelNames, canvasCSSSize, colors, showBlank, clearGradientCache]);
 
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
@@ -1408,7 +1548,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       fire(0.1, { spread: 120, startVelocity: 45 });
     } catch (error) {
       // Gracefully handle failed confetti load
-      console.warn("Failed to load confetti:", error);
     }
   };
 
