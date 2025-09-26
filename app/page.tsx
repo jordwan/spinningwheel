@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  lazy,
+  Suspense,
+} from "react";
 import Image from "next/image";
 import { getRandomNames } from "./data/names";
 import {
@@ -13,7 +20,7 @@ import {
   trackWheelReset,
   trackModalClosed,
   startSession,
-  endSession
+  endSession,
 } from "./utils/analytics";
 import { useSession } from "../hooks/useSession";
 
@@ -40,7 +47,8 @@ export default function Home() {
   const [currentConfigId, setCurrentConfigId] = useState<string | null>(null);
 
   // Session tracking
-  const { saveConfiguration, recordSpin, updateSpinAcknowledgment } = useSession();
+  const { saveConfiguration, recordSpin, updateSpinAcknowledgment } =
+    useSession();
 
   // Debouncing refs for performance optimization
   const inputDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -278,6 +286,16 @@ export default function Home() {
     }
   }, [showNameInput, mounted]);
 
+  // Populate input field when modal opens with existing custom names
+  useEffect(() => {
+    if (showNameInput && isUsingCustomNames && wheelNames.length > 0) {
+      // If we have custom names and the modal is opening, repopulate the input
+      const customNamesString = wheelNames.join(", ");
+      setInputValue(customNamesString);
+      setLocalInputValue(customNamesString);
+    }
+  }, [showNameInput]); // Only run when showNameInput changes
+
   // Prevent body scroll when modals are open
   useEffect(() => {
     const body = document.body;
@@ -324,7 +342,7 @@ export default function Home() {
       );
       setShowLongNameWarning(true);
       // Track validation warning
-      trackValidationWarning('long_names', { count: longNames.length });
+      trackValidationWarning("long_names", { count: longNames.length });
       return false;
     }
     return true;
@@ -342,11 +360,11 @@ export default function Home() {
     setShowNameInput(false);
     setShowRandomCountInput(false);
     // Track random names selection
-    trackRandomSelection('names', count);
-    trackInputMethodSelected('random');
+    trackRandomSelection("names", count);
+    trackInputMethodSelected("random");
 
     // Save configuration to database
-    const configId = await saveConfiguration(names, undefined, 'random');
+    const configId = await saveConfiguration(names, undefined, "random");
     setCurrentConfigId(configId);
   };
 
@@ -369,11 +387,15 @@ export default function Home() {
     setShowNameInput(false);
     setShowRandomCountInput(false);
     // Track sequential numbers selection
-    trackRandomSelection('numbers', count);
-    trackInputMethodSelected('numbers');
+    trackRandomSelection("numbers", count);
+    trackInputMethodSelected("numbers");
 
     // Save configuration to database
-    const configId = await saveConfiguration(shuffledNumbers, undefined, 'numbers');
+    const configId = await saveConfiguration(
+      shuffledNumbers,
+      undefined,
+      "numbers"
+    );
     setCurrentConfigId(configId);
   };
 
@@ -448,7 +470,7 @@ export default function Home() {
       );
       setShowDuplicateWarning(true);
       // Track duplicate warning
-      trackValidationWarning('duplicates', { count: duplicatesRemoved });
+      trackValidationWarning("duplicates", { count: duplicatesRemoved });
     }
 
     if (names.length >= 2) {
@@ -465,21 +487,23 @@ export default function Home() {
 
         // Track custom names submission
         trackCustomNamesSubmitted(names.length, !!teamName);
-        trackInputMethodSelected('custom');
+        trackInputMethodSelected("custom");
         if (teamName) {
           trackTeamNameSet(true);
         }
 
         // Save configuration to database
-        saveConfiguration(names, teamName || undefined, 'custom').then(configId => {
-          setCurrentConfigId(configId);
-        });
+        saveConfiguration(names, teamName || undefined, "custom").then(
+          (configId) => {
+            setCurrentConfigId(configId);
+          }
+        );
       }
     } else if (names.length === 1) {
       // Show styled warning modal
       setShowMinNamesWarning(true);
       // Track minimum names warning
-      trackValidationWarning('min_names', { count: names.length });
+      trackValidationWarning("min_names", { count: names.length });
     }
     // Removed the else clause that would show random count input
   };
@@ -572,11 +596,11 @@ export default function Home() {
                   if (showRandomCountInput) {
                     // Go back to custom names input
                     setShowRandomCountInput(false);
-                    trackModalClosed('random_input', 'x_button');
+                    trackModalClosed("random_input", "x_button");
                   } else {
                     // On custom names screen, X button goes to random selector
                     setShowRandomCountInput(true);
-                    trackModalClosed('name_input', 'x_to_random');
+                    trackModalClosed("name_input", "x_to_random");
                   }
                 }}
                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
@@ -606,8 +630,8 @@ export default function Home() {
               {!showRandomCountInput && (
                 <p className="text-gray-600 mb-4">
                   <span className="text-sm text-gray-500">
-                    Input custom names / numbers <br></br>or use random to
-                    select.
+                    Input your own names/numbers <br></br>or use random to
+                    select number of tiles.
                   </span>
                 </p>
               )}
@@ -757,7 +781,7 @@ export default function Home() {
                           setShowRandomCountInput(true);
                         }
                       }}
-                      className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-colors cursor-pointer ${
+                      className={`w-1/3 px-6 py-3 font-semibold rounded-lg transition-colors cursor-pointer ${
                         localInputValue.trim() !== ""
                           ? "bg-blue-500 text-white hover:bg-blue-600"
                           : "bg-green-500 text-white hover:bg-green-600"
@@ -769,7 +793,7 @@ export default function Home() {
                     <button
                       onClick={handleSubmitNames}
                       disabled={localInputValue.trim() === ""}
-                      className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-colors ${
+                      className={`w-2/3 px-6 py-3 font-semibold rounded-lg transition-colors ${
                         localInputValue.trim() === ""
                           ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                           : "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
@@ -963,7 +987,13 @@ export default function Home() {
             </div>
           </div>
           <div className="flex-1 w-full max-w-4xl mx-auto">
-            <Suspense fallback={<div className="flex items-center justify-center h-full">Loading wheel...</div>}>
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center h-full">
+                  Loading wheel...
+                </div>
+              }
+            >
               <SpinningWheel
                 names={wheelNames.length > 0 ? wheelNames : undefined}
                 includeFreeSpins={false}
@@ -975,7 +1005,11 @@ export default function Home() {
                   // Update the wheel names in the parent component
                   setWheelNames(newNames);
                   // Create new configuration with the remaining names
-                  const newConfigId = await saveConfiguration(newNames, teamName || undefined, 'custom');
+                  const newConfigId = await saveConfiguration(
+                    newNames,
+                    teamName || undefined,
+                    "custom"
+                  );
                   setCurrentConfigId(newConfigId);
                   return newConfigId;
                 }}
@@ -983,15 +1017,19 @@ export default function Home() {
                   // Track reset action with context
                   trackWheelReset(isUsingCustomNames);
                   setShowNameInput(true);
-                  // Only clear inputValue if we weren't using custom names
+                  // Preserve custom names and team name when resetting
+                  // They will only be cleared if user explicitly clicks "Clear"
                   if (!isUsingCustomNames) {
+                    // Only clear if we were using random/numbers
                     setInputValue("");
                     setLocalInputValue("");
+                    setTeamName("");
                   }
-                  setTeamName("");
+                  // If using custom names, preserve them but show input modal
+                  // The inputValue and teamName stay as they were
                   setShowRandomCountInput(false);
                   setCurrentConfigId(null);
-                  document.title = "iWheeli.com";
+                  document.title = teamName ? `${teamName} - iWheeli.com` : "iWheeli.com";
                 }}
               />
             </Suspense>

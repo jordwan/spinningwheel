@@ -2060,7 +2060,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
       {/* Fairness Popup */}
       {showFairnessPopup && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-auto backdrop-blur-sm bg-black/20">
+        <div className="fixed inset-0 flex items-center justify-center z-[70] pointer-events-auto backdrop-blur-sm bg-black/20">
           <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl p-6 max-w-lg w-full mx-4 text-center relative border border-gray-700">
             <button
               onClick={() => setShowFairnessPopup(false)}
