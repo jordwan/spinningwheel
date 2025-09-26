@@ -94,7 +94,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {/* Optimized Analytics - Load after page is interactive */}
-        {(process.env.NEXT_PUBLIC_GTM_ID || process.env.NEXT_PUBLIC_GA_TRACKING_ID) && (
+        {(process.env.NEXT_PUBLIC_GTM_ID || process.env.NEXT_PUBLIC_GA_TRACKING_ID || process.env.NEXT_PUBLIC_GOOGLE_ADS_ID) && (
           <Script id="analytics-loader" strategy="lazyOnload">
             {`
               // Initialize dataLayer first
@@ -112,18 +112,28 @@ export default function RootLayout({
                   })(window,document,'script','dataLayer','${process.env.NEXT_PUBLIC_GTM_ID}');
                 ` : ''}
 
-                ${process.env.NEXT_PUBLIC_GA_TRACKING_ID ? `
-                  // Google Analytics
-                  var gaScript = document.createElement('script');
-                  gaScript.async = true;
-                  gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_TRACKING_ID}';
-                  document.head.appendChild(gaScript);
+                ${process.env.NEXT_PUBLIC_GA_TRACKING_ID || process.env.NEXT_PUBLIC_GOOGLE_ADS_ID ? `
+                  // Google Analytics & Google Ads - Use single gtag.js script
+                  var gtagScript = document.createElement('script');
+                  gtagScript.async = true;
+                  // Use GA ID if available, otherwise use Google Ads ID
+                  gtagScript.src = 'https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_TRACKING_ID || process.env.NEXT_PUBLIC_GOOGLE_ADS_ID}';
+                  document.head.appendChild(gtagScript);
 
-                  gaScript.onload = function() {
+                  gtagScript.onload = function() {
                     gtag('js', new Date());
-                    gtag('config', '${process.env.NEXT_PUBLIC_GA_TRACKING_ID}', {
-                      send_page_view: true
-                    });
+
+                    ${process.env.NEXT_PUBLIC_GA_TRACKING_ID ? `
+                      // Configure Google Analytics
+                      gtag('config', '${process.env.NEXT_PUBLIC_GA_TRACKING_ID}', {
+                        send_page_view: true
+                      });
+                    ` : ''}
+
+                    ${process.env.NEXT_PUBLIC_GOOGLE_ADS_ID ? `
+                      // Configure Google Ads
+                      gtag('config', '${process.env.NEXT_PUBLIC_GOOGLE_ADS_ID}');
+                    ` : ''}
 
                     // Make gtag available globally for custom events
                     window.gtag = gtag;

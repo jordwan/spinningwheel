@@ -218,3 +218,61 @@ export const endSession = () => {
     });
   }
 };
+
+/**
+ * Google Ads Conversion Tracking
+ * Track conversion events for Google Ads campaigns
+ */
+export const trackConversion = (
+  conversionLabel: string,
+  value?: number,
+  currency: string = 'USD',
+  transactionId?: string
+) => {
+  if (typeof window !== 'undefined' && window.gtag) {
+    try {
+      const conversionData: any = {
+        'send_to': `${process.env.NEXT_PUBLIC_GOOGLE_ADS_ID}/${conversionLabel}`,
+        'value': value,
+        'currency': currency
+      };
+
+      // Add transaction ID if provided (helps prevent duplicate conversions)
+      if (transactionId) {
+        conversionData['transaction_id'] = transactionId;
+      }
+
+      window.gtag('event', 'conversion', conversionData);
+    } catch (error) {
+      console.error('Conversion tracking error:', error);
+    }
+  }
+};
+
+/**
+ * Common conversion events
+ */
+export const trackWheelUsageConversion = () => {
+  // Track when user successfully completes a wheel spin
+  trackConversion('wheel_usage', 1.0);
+};
+
+export const trackEngagementConversion = (engagementLevel: 'low' | 'medium' | 'high') => {
+  // Track different engagement levels
+  const values = {
+    low: 0.5,
+    medium: 1.0,
+    high: 2.0
+  };
+  trackConversion('user_engagement', values[engagementLevel]);
+};
+
+export const trackSignupConversion = () => {
+  // Track when user signs up (if you add authentication later)
+  trackConversion('signup', 10.0);
+};
+
+export const trackPremiumConversion = (planValue: number) => {
+  // Track premium plan conversions (if you add paid features)
+  trackConversion('premium_purchase', planValue);
+};
