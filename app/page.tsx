@@ -482,7 +482,7 @@ export default function Home() {
 
         // Update document title with team name
         if (teamName) {
-          document.title = `${teamName} - iWheeli.com`;
+          document.title = `${teamName} – iWheeli – Random Name Picker Wheel`;
         }
 
         // Track custom names submission
@@ -1029,7 +1029,7 @@ export default function Home() {
                   // The inputValue and teamName stay as they were
                   setShowRandomCountInput(false);
                   setCurrentConfigId(null);
-                  document.title = teamName ? `${teamName} - iWheeli.com` : "iWheeli.com";
+                  document.title = teamName ? `${teamName} – iWheeli – Random Name Picker Wheel` : "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners";
                 }}
               />
             </Suspense>

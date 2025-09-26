@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "iWheeli.com - Free Random Name Wheel Spinner | Cryptographically Secure",
+  title: "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners",
   description:
     "Free online random name wheel spinner with cryptographically secure randomness. Perfect for classroom activities, team selection, giveaways, and decision making. No ads, no signup required.",
   keywords: "random wheel, name picker, wheel spinner, random name generator, decision wheel, spinner wheel, classroom tool, team selector, raffle wheel, fortune wheel, random picker, free spinner",
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   openGraph: {
-    title: "iWheeli.com - Free Random Name Wheel Spinner",
+    title: "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners",
     description: "Free online random name wheel spinner with cryptographically secure randomness. Perfect for classroom activities, team selection, and decision making.",
     url: "https://iwheeli.com",
     siteName: "iWheeli",
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "iWheeli.com - Free Random Name Wheel Spinner",
+    title: "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners",
     description: "Free online random name wheel spinner with cryptographically secure randomness. No ads, no signup required.",
     images: ["/logo.png"],
   },
