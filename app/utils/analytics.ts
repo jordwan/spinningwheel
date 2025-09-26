@@ -223,6 +223,15 @@ export const endSession = () => {
  * Google Ads Conversion Tracking
  * Track conversion events for Google Ads campaigns
  */
+const GOOGLE_ADS_ID = 'AW-17581138422';
+
+interface ConversionData {
+  send_to: string;
+  value?: number;
+  currency: string;
+  transaction_id?: string;
+}
+
 export const trackConversion = (
   conversionLabel: string,
   value?: number,
@@ -231,8 +240,8 @@ export const trackConversion = (
 ) => {
   if (typeof window !== 'undefined' && window.gtag) {
     try {
-      const conversionData: any = {
-        'send_to': `${process.env.NEXT_PUBLIC_GOOGLE_ADS_ID}/${conversionLabel}`,
+      const conversionData: ConversionData = {
+        'send_to': `${GOOGLE_ADS_ID}/${conversionLabel}`,
         'value': value,
         'currency': currency
       };
