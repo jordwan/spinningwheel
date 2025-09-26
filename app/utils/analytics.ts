@@ -259,6 +259,28 @@ export const trackConversion = (
 };
 
 /**
+ * Track Google Ads conversion for spin button clicks
+ * This is the specific conversion tracking for the outbound click campaign
+ */
+export const trackSpinButtonConversion = (callback?: () => void) => {
+  if (typeof window !== 'undefined' && window.gtag) {
+    try {
+      window.gtag('event', 'conversion', {
+        'send_to': 'AW-17581138422/Gt9zCIS84Z4bEPbDq79B',
+        'event_callback': callback
+      });
+    } catch (error) {
+      console.error('Spin button conversion tracking error:', error);
+      // Call callback even if tracking fails to not break functionality
+      if (callback) callback();
+    }
+  } else {
+    // Call callback even if gtag is not available
+    if (callback) callback();
+  }
+};
+
+/**
  * Common conversion events
  */
 export const trackWheelUsageConversion = () => {

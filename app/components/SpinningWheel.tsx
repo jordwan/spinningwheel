@@ -17,6 +17,7 @@ import {
   trackFairnessChecked,
   trackRespinTriggered,
   incrementSpinCount,
+  trackSpinButtonConversion,
 } from "../utils/analytics";
 
 /** ========= CRYPTO RNG  ========= */
@@ -1586,6 +1587,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     // Track wheel spin event with new tracking function
     trackSpinInitiated(wheelNames.length, speedIndicator);
     incrementSpinCount();
+
+    // Track Google Ads conversion for spin button click
+    trackSpinButtonConversion();
 
     setIsSpinning(true);
     setSelectedName("");
