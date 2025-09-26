@@ -56,6 +56,12 @@ export class DatabaseSync {
     this.adapter = adapter;
     // Only queue the session insert - no aggressive data dump
     this.queueInitialSessionInsert();
+
+    // Immediately sync the session to database
+    // Non-blocking - if it fails, the 30-second loop will retry
+    this.processSyncQueue().catch(err => {
+      console.log('⚠️ Initial session sync failed, will retry in background:', err);
+    });
   }
 
   private setupNetworkListeners(): void {
@@ -144,7 +150,8 @@ export class DatabaseSync {
 
     this.syncQueue.push(operation);
 
-    // No immediate sync - let the 30-second background loop handle it
+    // Immediate sync happens in the calling methods for critical operations
+    // The 30-second background loop handles retries and failures
   }
 
   private async processSyncQueue(): Promise<void> {
@@ -261,6 +268,12 @@ export class DatabaseSync {
       timestamp: new Date().toISOString(),
       retryCount: 0,
     });
+
+    // Immediately sync configuration to database
+    // Non-blocking - if it fails, the 30-second loop will retry
+    this.processSyncQueue().catch(err => {
+      console.log('⚠️ Configuration sync failed, will retry in background:', err);
+    });
   }
 
   /**
@@ -274,6 +287,12 @@ export class DatabaseSync {
       data: spin,
       timestamp: new Date().toISOString(),
       retryCount: 0,
+    });
+
+    // Immediately sync spin result to database
+    // Non-blocking - if it fails, the 30-second loop will retry
+    this.processSyncQueue().catch(err => {
+      console.log('⚠️ Spin sync failed, will retry in background:', err);
     });
   }
 
