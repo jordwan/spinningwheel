@@ -3,6 +3,10 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Dynamic viewport height for mobile browsers */
+  --vh: 1vh;
+  --visual-vh: 1vh;
+  --firefox-vh: 1vh;
 }
 
 @theme inline {
@@ -10,6 +14,42 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
+
+/* Critical styles for mobile performance */
+html {
+  /* Prevent zoom on mobile */
+  touch-action: manipulation;
+  /* Improve scrolling performance */
+  -webkit-overflow-scrolling: touch;
+  /* Fix mobile viewport height issues */
+  height: 100vh;
+  height: calc(var(--vh, 1vh) * 100);
+}
+
+body {
+  /* Optimize for mobile performance */
+  height: 100vh;
+  height: calc(var(--vh, 1vh) * 100);
+  /* Prevent bounce scrolling on iOS */
+  overscroll-behavior: none;
+  /* Improve font rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Force hardware acceleration */
+  transform: translateZ(0);
+  /* Prevent layout shifts */
+  contain: layout style paint;
+}
+
+/* Mobile viewport height fix */
+@supports (-webkit-appearance: none) {
+  html {
+    height: -webkit-fill-available;
+  }
+  body {
+    height: -webkit-fill-available;
+  }
 }
 
 

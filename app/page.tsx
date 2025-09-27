@@ -27,6 +27,54 @@ import { useSession } from "../hooks/useSession";
 // Lazy load the heavy SpinningWheel component
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
 
+// Loading placeholder component for better LCP
+const WheelLoadingPlaceholder = () => (
+  <div className="flex flex-col items-center w-full h-full">
+    {/* Speed indicator placeholder */}
+    <div className="mb-2 w-[min(45vw,300px)] sm:w-[min(60vw,360px)] lg:w-[400px]" style={{ minHeight: '72px' }}>
+      <div className="text-center mb-1 text-[clamp(10px,1.5vw,13px)] font-semibold text-white">
+        Spin Power
+      </div>
+      <div className="relative h-6 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
+        <div className="absolute top-0 bottom-0 w-4 bg-white border-2 border-gray-800 rounded-full shadow-lg animate-pulse" style={{ left: '50%', transform: 'translateX(-50%)' }} />
+      </div>
+      <div className="flex justify-between mt-1 text-[clamp(10px,1.4vw,12px)] text-white">
+        <span>Slow</span>
+        <span>Fast</span>
+      </div>
+    </div>
+
+    {/* Wheel placeholder */}
+    <div className="relative flex items-center justify-center mb-8 flex-1 min-h-0 flex-col justify-center">
+      <div
+        className="rounded-full shadow-xl border border-white/30 bg-gradient-to-br from-blue-500 to-purple-600 animate-pulse"
+        style={{ width: '350px', height: '350px' }}
+      />
+    </div>
+
+    {/* Controls placeholder */}
+    <div className="flex flex-wrap justify-center items-center mx-auto mb-2" style={{ width: '350px', minHeight: '60px' }}>
+      <div className="px-6 py-3 bg-green-500 text-white rounded-lg mr-3 animate-pulse" style={{ minWidth: '120px', height: '48px' }} />
+      <div className="px-3 py-3 bg-blue-500 text-white rounded-lg animate-pulse" style={{ minWidth: '85px', height: '48px' }} />
+    </div>
+
+    {/* Footer placeholder */}
+    <div className="w-full text-center flex-shrink-0" style={{ minHeight: '60px' }}>
+      <div className="pb-1">
+        <div className="text-center space-y-0">
+          <div className="text-[clamp(8px,1.2vw,10px)] text-white/70 animate-pulse bg-white/10 rounded mx-auto" style={{ width: '200px', height: '12px' }} />
+          <div className="relative flex justify-center items-center text-[clamp(8px,1.2vw,10px)] text-white/70 px-1" style={{ minHeight: '14px' }}>
+            <div className="animate-pulse bg-white/10 rounded" style={{ width: '150px', height: '12px' }} />
+          </div>
+        </div>
+        <div className="text-center mt-0">
+          <div className="text-[clamp(10px,1.6vw,12px)] text-white/70 animate-pulse bg-white/10 rounded mx-auto" style={{ width: '60px', height: '16px' }} />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 export default function Home() {
   const [showNameInput, setShowNameInput] = useState(true);
   const [wheelNames, setWheelNames] = useState<string[]>([]);
@@ -988,11 +1036,7 @@ export default function Home() {
           </div>
           <div className="flex-1 w-full max-w-4xl mx-auto">
             <Suspense
-              fallback={
-                <div className="flex items-center justify-center h-full">
-                  Loading wheel...
-                </div>
-              }
+              fallback={<WheelLoadingPlaceholder />}
             >
               <SpinningWheel
                 names={wheelNames.length > 0 ? wheelNames : undefined}

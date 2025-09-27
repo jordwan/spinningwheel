@@ -123,7 +123,15 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   const [selectedName, setSelectedName] = useState<string>("");
   const [showWinnerModal, setShowWinnerModal] = useState(false);
   const [winnerRhyme, setWinnerRhyme] = useState<string>("");
-  const [canvasCSSSize, setCanvasCSSSize] = useState(400);
+  // Start with a reasonable default to avoid CLS
+  const [canvasCSSSize, setCanvasCSSSize] = useState(() => {
+    if (typeof window !== "undefined") {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      return Math.min(Math.min(vw - 48, vh * 0.5), 400);
+    }
+    return 350; // Mobile-first default
+  });
   const [speedIndicator, setSpeedIndicator] = useState(0.5);
   const [showFairnessPopup, setShowFairnessPopup] = useState(false);
   const [fairnessText, setFairnessText] = useState("");
@@ -425,16 +433,16 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     }
   }, [wheelNames, includeFreeSpins, showBlank]);
 
-  /** ========= Idle speed indicator with RAF for smooth animation ========= */
+  /** ========= Idle speed indicator with reduced updates for mobile ========= */
   useEffect(() => {
     if (!isSpinning) {
       let animationId: number;
       let lastTime = 0;
 
       const animate = (currentTime: number) => {
-        // Adaptive frame rate based on device capability
-        // High capability: 8.33ms (120fps), Medium/Low: 16.67ms (60fps)
-        const throttleMs = deviceCapability === "high" ? 8.33 : 16.67;
+        // Much slower update rate for mobile to improve INP
+        const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+        const throttleMs = isMobile ? 100 : (deviceCapability === "high" ? 16.67 : 33.33);
 
         if (currentTime - lastTime >= throttleMs) {
           const t = currentTime / 1000;
@@ -444,10 +452,15 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         animationId = requestAnimationFrame(animate);
       };
 
-      animationId = requestAnimationFrame(animate);
+      // Delay animation start on mobile
+      const delay = typeof window !== "undefined" && window.innerWidth < 768 ? 1000 : 0;
+      const timeoutId = setTimeout(() => {
+        animationId = requestAnimationFrame(animate);
+      }, delay);
 
       return () => {
-        cancelAnimationFrame(animationId);
+        clearTimeout(timeoutId);
+        if (animationId) cancelAnimationFrame(animationId);
       };
     }
   }, [isSpinning, deviceCapability]);
@@ -603,7 +616,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
   /** ========= Lazy Audio Initialization ========= */
   useEffect(() => {
-    // Defer audio initialization to reduce initial load
+    // Defer audio initialization much longer on mobile
+    const isMobile = typeof window !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const delay = isMobile ? 5000 : 100; // 5s for mobile, 100ms for desktop
+
     const timeoutId = setTimeout(() => {
       // Only initialize audio on first user interaction to avoid blocking initial load
       if (typeof window !== "undefined") {
@@ -639,7 +655,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           document.removeEventListener("keydown", initAudioOnInteraction);
         };
       }
-    }, 100); // Defer by 100ms
+    }, delay); // Dynamic defer based on device
 
     return () => {
       clearTimeout(timeoutId);
@@ -1624,9 +1640,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     const animate = () => {
       const now = Date.now();
 
-      // Adaptive frame rate based on device capability
-      // High capability: 8.33ms (120fps), Medium/Low: 16.67ms (60fps)
-      const throttleMs = deviceCapability === "high" ? 8.33 : 16.67;
+      // Much lower frame rate on mobile for better performance
+      const isMobile = window.innerWidth < 768;
+      const throttleMs = isMobile ? 33.33 : (deviceCapability === "high" ? 16.67 : 25);
 
       if (now - lastFrameTime < throttleMs) {
         requestAnimationFrame(animate);
@@ -1746,10 +1762,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       <div aria-live="polite" className="sr-only">
         {ariaAnnouncement}
       </div>
-      {/* Spin Power (≈50% width on mobile, larger on bigger screens) */}
+      {/* Spin Power with fixed dimensions to prevent CLS */}
       <div
         ref={speedRef}
         className="mb-2 w-[min(45vw,300px)] sm:w-[min(60vw,360px)] lg:w-[400px]"
+        style={{ minHeight: '72px' }}
       >
         <div className="text-center mb-1 text-[clamp(10px,1.5vw,13px)] font-semibold text-white">
           Spin Power
@@ -2215,8 +2232,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         </div>
       )}
 
-      {/* Footer - Ultra compact and stable */}
-      <div ref={footerRef} className="w-full text-center flex-shrink-0">
+      {/* Footer - Fixed height to prevent CLS */}
+      <div ref={footerRef} className="w-full text-center flex-shrink-0" style={{ minHeight: '60px' }}>
         <div ref={footerContentRef} className="pb-1">
           {/* Stable content area with skeleton placeholders */}
           <div className="text-center space-y-0">
@@ -2226,7 +2243,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               </div>
             )}
             {/* Always show last winner line to prevent layout shifts */}
-            <div className="relative flex justify-center items-center text-[clamp(8px,1.2vw,10px)] text-white/70 px-1">
+            <div className="relative flex justify-center items-center text-[clamp(8px,1.2vw,10px)] text-white/70 px-1" style={{ minHeight: '14px' }}>
               {/* Centered main winner display */}
               <div className="text-center">
                 Last winner:{" "}

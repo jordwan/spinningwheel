@@ -6,11 +6,17 @@ import "./globals.css";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap", // Improve font loading
+  preload: true,
+  fallback: ["system-ui", "-apple-system", "sans-serif"],
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
+  preload: true,
+  fallback: ["monospace"],
 });
 
 export const metadata: Metadata = {
@@ -130,15 +136,19 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {/* Optimized Analytics - Load after page is interactive */}
+        {/* Optimized Analytics - Load after page is interactive with longer delay for mobile */}
         {(process.env.NEXT_PUBLIC_GTM_ID || process.env.NEXT_PUBLIC_GA_TRACKING_ID || process.env.NEXT_PUBLIC_GOOGLE_ADS_ID) && (
-          <Script id="analytics-loader" strategy="lazyOnload">
+          <Script id="analytics-loader" strategy="afterInteractive">
             {`
               // Initialize dataLayer first
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
 
-              // Load analytics after a small delay to not block main thread
+              // Detect mobile and use longer delay
+              const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+              const delay = isMobile ? 3000 : 100; // 3s for mobile, 100ms for desktop
+
+              // Load analytics after delay to not block main thread
               setTimeout(() => {
                 ${process.env.NEXT_PUBLIC_GTM_ID ? `
                   // Google Tag Manager
@@ -176,7 +186,7 @@ export default function RootLayout({
                     window.gtag = gtag;
                   };
                 ` : ''}
-              }, 100); // Small delay to let critical content load first
+              }, delay); // Dynamic delay based on device type
             `}
           </Script>
         )}

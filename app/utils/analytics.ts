@@ -1,5 +1,38 @@
 // Analytics utility for Google Analytics tracking
 // Provides type-safe event tracking with consistent naming
+// Optimized for mobile performance with batching and throttling
+
+// Performance optimization: Event batching for mobile
+let eventQueue: Array<{ name: string; params: any }> = [];
+let batchTimer: number | null = null;
+
+const flushEvents = () => {
+  if (eventQueue.length === 0) return;
+
+  if (typeof window !== 'undefined' && window.gtag) {
+    try {
+      // Process events in batch
+      eventQueue.forEach(({ name, params }) => {
+        window.gtag('event', name, params);
+      });
+    } catch (error) {
+      console.error('Batch analytics error:', error);
+    }
+  }
+
+  eventQueue = [];
+  batchTimer = null;
+};
+
+const scheduleEventFlush = () => {
+  if (batchTimer) return;
+
+  // Use longer delay on mobile for better performance
+  const isMobile = typeof window !== 'undefined' && /Mobile|Android|iPhone/i.test(navigator.userAgent);
+  const delay = isMobile ? 2000 : 500;
+
+  batchTimer = window.setTimeout(flushEvents, delay);
+};
 
 type EventCategory = 'setup' | 'interaction' | 'engagement' | 'navigation';
 
@@ -35,18 +68,31 @@ type EventParams = SetupEventParams | InteractionEventParams | ValidationEventPa
  * Track an event to Google Analytics
  */
 export const trackEvent = (eventName: string, parameters?: EventParams) => {
-  if (typeof window !== 'undefined' && window.gtag) {
-    try {
-      window.gtag('event', eventName, {
-        ...parameters,
-        // Add timestamp for session tracking
-        event_timestamp: new Date().toISOString(),
-        // Add device type
-        device_type: /Mobile|Android|iPhone/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
-      });
-    } catch (error) {
-      console.error('Analytics tracking error:', error);
+  // Use batching for non-critical events on mobile
+  const isMobile = typeof window !== 'undefined' && /Mobile|Android|iPhone/i.test(navigator.userAgent);
+  const isRealTimeEvent = eventName.includes('conversion') || eventName.includes('page_view');
+
+  const eventParams = {
+    ...parameters,
+    // Add timestamp for session tracking
+    event_timestamp: new Date().toISOString(),
+    // Add device type
+    device_type: isMobile ? 'mobile' : 'desktop',
+  };
+
+  // For real-time events or desktop, send immediately
+  if (!isMobile || isRealTimeEvent) {
+    if (typeof window !== 'undefined' && window.gtag) {
+      try {
+        window.gtag('event', eventName, eventParams);
+      } catch (error) {
+        console.error('Analytics tracking error:', error);
+      }
     }
+  } else {
+    // Batch non-critical events on mobile
+    eventQueue.push({ name: eventName, params: eventParams });
+    scheduleEventFlush();
   }
 };
 
