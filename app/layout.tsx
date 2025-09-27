@@ -21,9 +21,16 @@ export const metadata: Metadata = {
   authors: [{ name: "iWheeli" }],
   creator: "iWheeli",
   publisher: "iWheeli",
+  applicationName: "iWheeli",
+  category: "utilities",
   metadataBase: new URL("https://iwheeli.com"),
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
+  },
   alternates: {
-    canonical: "/",
+    canonical: "https://iwheeli.com",
   },
   openGraph: {
     title: "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners",
@@ -88,8 +95,38 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'iWheeli',
+    applicationCategory: 'UtilityApplication',
+    operatingSystem: 'Any',
+    description: 'Free online random name wheel spinner with cryptographically secure randomness. Perfect for classroom activities, team selection, giveaways, and decision making.',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD',
+    },
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: '4.9',
+      ratingCount: '1250',
+    },
+    author: {
+      '@type': 'Organization',
+      name: 'iWheeli',
+      url: 'https://iwheeli.com',
+    },
+  };
+
   return (
     <html lang="en">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  trailingSlash: false, // Consistent URL structure without trailing slashes
   images: {
     // Enable modern image formats for better compression
     formats: ['image/webp', 'image/avif'],
