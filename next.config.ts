@@ -12,14 +12,12 @@ const nextConfig: NextConfig = {
     unoptimized: false,
   },
   // Performance optimizations
-  swcMinify: true,
   compress: true,
   poweredByHeader: false,
   reactStrictMode: true,
 
   // Optimize for production
   experimental: {
-    optimizeCss: true,
     optimizePackageImports: ['canvas-confetti'],
   },
 
