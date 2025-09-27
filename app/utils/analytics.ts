@@ -3,7 +3,7 @@
 // Optimized for mobile performance with batching and throttling
 
 // Performance optimization: Event batching for mobile
-let eventQueue: Array<{ name: string; params: any }> = [];
+let eventQueue: Array<{ name: string; params: Record<string, unknown> }> = [];
 let batchTimer: number | null = null;
 
 const flushEvents = () => {

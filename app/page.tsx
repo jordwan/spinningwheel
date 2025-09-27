@@ -342,7 +342,7 @@ export default function Home() {
       setInputValue(customNamesString);
       setLocalInputValue(customNamesString);
     }
-  }, [showNameInput]); // Only run when showNameInput changes
+  }, [showNameInput, isUsingCustomNames, wheelNames]); // Include all dependencies
 
   // Prevent body scroll when modals are open
   useEffect(() => {
