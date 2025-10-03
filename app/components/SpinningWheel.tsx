@@ -1539,43 +1539,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     drawWheel();
   }, [drawWheel]);
 
-  /** ========= Confetti ========= */
-  const triggerConfetti = async () => {
-    // Skip confetti entirely if user prefers reduced motion
-    if (prefersReducedMotion) {
-      return;
-    }
-
-    try {
-      // Lazy-load canvas-confetti only when needed
-      const { default: confetti } = await import("canvas-confetti");
-
-      const baseCount = 100; // Reduced from 200 to 100 (50% less)
-      // Scale particle count based on device capability
-      let scaleFactor = 1.0;
-      if (deviceCapability === "low") scaleFactor = 0.3;
-      else if (deviceCapability === "medium") scaleFactor = 0.6;
-      else scaleFactor = 1.0; // high capability
-
-      const count = baseCount * scaleFactor;
-
-      const defaults = {
-        origin: { y: 0.7 },
-        zIndex: 9999,
-        disableForReducedMotion: true, // Respect accessibility settings
-        colors: ["#ffd700"], // Yellow/gold confetti
-      };
-      const fire = (r: number, o: Parameters<typeof confetti>[0]) =>
-        confetti({ ...defaults, ...o, particleCount: Math.floor(count * r) });
-      fire(0.25, { spread: 26, startVelocity: 55 });
-      fire(0.2, { spread: 60 });
-      fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
-      fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
-      fire(0.1, { spread: 120, startVelocity: 45 });
-    } catch {
-      // Gracefully handle failed confetti load
-    }
-  };
 
   /** ========= Spin logic ========= */
   const winnerRhymes = [
@@ -1707,10 +1670,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               const spinId = await onRecordSpin(configId, winner, false, speedIndicator);
               setCurrentSpinId(spinId);
             }
-
-            // Trigger effects (async, non-blocking)
-            triggerConfetti();
-            // Removed winner audio - only show confetti
           }, 0);
         } else {
           // For RESPIN, just do aria announcement
