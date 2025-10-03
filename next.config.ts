@@ -50,13 +50,13 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Different caching for HTML pages
+      // Different caching for HTML pages - allow Google to crawl fresh content
       {
         source: '/(.*)',
         headers: [
           {
             key: 'Cache-Control',
-            value: 's-maxage=31536000, stale-while-revalidate=59',
+            value: 's-maxage=3600, stale-while-revalidate=86400',
           },
         ],
       },
