@@ -1,5 +1,6 @@
 import { getSupabaseClient } from './client';
 import { generateSlug } from '../utils/slug';
+import { WheelConfiguration } from './types';
 
 export interface ShareableWheelConfig {
   id: string;
@@ -32,8 +33,6 @@ export async function createShareableConfig(
     // Insert configuration with slug
     const { data, error } = await supabase
       .from('wheel_configurations')
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore - Extended schema with new columns not yet in generated types
       .insert({
         session_id: sessionId,
         names,
@@ -48,6 +47,11 @@ export async function createShareableConfig(
 
     if (error) {
       console.error('Error creating shareable config:', error);
+      return null;
+    }
+
+    if (!data) {
+      console.error('No data returned from insert');
       return null;
     }
 
@@ -80,7 +84,7 @@ export async function getConfigBySlug(
   try {
     const { data, error } = await supabase
       .from('wheel_configurations')
-      .select('*')
+      .select('id, names, team_name, slug, input_method, created_at')
       .eq('slug', slug)
       .eq('is_public', true)
       .single();
@@ -93,8 +97,8 @@ export async function getConfigBySlug(
     return {
       id: data.id,
       names: data.names,
-      teamName: data.team_name,
-      slug: data.slug,
+      teamName: data.team_name || undefined,
+      slug: data.slug || slug,
       inputMethod: data.input_method,
       createdAt: data.created_at,
     };
@@ -159,7 +163,12 @@ export async function makeConfigShareable(
       return null;
     }
 
-    return data.slug;
+    if (!data) {
+      console.error('No data returned from update');
+      return null;
+    }
+
+    return data.slug || slug;
   } catch (err) {
     console.error('Failed to make config shareable:', err);
     return null;
