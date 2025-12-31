@@ -1027,6 +1027,72 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     []
   );
 
+  // Helper function to convert hex to RGB
+  const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
+  };
+
+  // Helper function to convert RGB to hex
+  const rgbToHex = (r: number, g: number, b: number): string => {
+    const toHex = (n: number) => {
+      const clamped = Math.max(0, Math.min(255, Math.round(n)));
+      const hex = clamped.toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}ff`;
+  };
+
+  // Lighten a color by a percentage (0-1)
+  const lightenColor = (hex: string, percent: number): string => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+
+    const r = rgb.r + (255 - rgb.r) * percent;
+    const g = rgb.g + (255 - rgb.g) * percent;
+    const b = rgb.b + (255 - rgb.b) * percent;
+
+    return rgbToHex(r, g, b);
+  };
+
+  // Darken a color by a percentage (0-1)
+  const darkenColor = (hex: string, percent: number): string => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+
+    const r = rgb.r * (1 - percent);
+    const g = rgb.g * (1 - percent);
+    const b = rgb.b * (1 - percent);
+
+    return rgbToHex(r, g, b);
+  };
+
+  // Generate extended color palette (up to 20 unique colors)
+  const generateExtendedPalette = useCallback((baseColors: string[]): string[] => {
+    const extended: string[] = [];
+
+    // First 10: Original colors
+    baseColors.forEach(color => extended.push(color));
+
+    // Next 10: Variations (alternating lighter/darker)
+    for (let i = 0; i < baseColors.length && extended.length < 20; i++) {
+      const baseColor = baseColors[i];
+      if (i % 2 === 0) {
+        // Even index: lighten
+        extended.push(lightenColor(baseColor, 0.15));
+      } else {
+        // Odd index: darken
+        extended.push(darkenColor(baseColor, 0.15));
+      }
+    }
+
+    return extended;
+  }, []);
+
   // Store the original configId to maintain theme stability during eliminations
   const originalConfigId = useRef<string | null>(null);
   const currentTheme = useRef<string[]>(colorThemes[0]);
@@ -1131,20 +1197,23 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           [shuffledTheme[randomIndex], shuffledTheme[currentIndex]];
       }
 
+      // Generate extended palette (20 unique colors from 10 base colors)
+      const extendedPalette = generateExtendedPalette(shuffledTheme);
+
       // Clear and rebuild color map
       originalColorMap.current.clear();
       wheelNames.forEach((name, index) => {
         if (name === "RESPIN") {
           originalColorMap.current.set(name, selectedTheme[0]);
         } else {
-          const colorIndex = index % shuffledTheme.length;
-          originalColorMap.current.set(name, shuffledTheme[colorIndex]);
+          const colorIndex = index % extendedPalette.length;
+          originalColorMap.current.set(name, extendedPalette[colorIndex]);
         }
       });
     }
 
     return originalColorMap.current;
-  }, [wheelNames, selectedTheme, colorThemes]);
+  }, [wheelNames, selectedTheme, colorThemes, generateExtendedPalette]);
 
   // Get color for a specific name
   const getColorForName = useCallback((name: string): string => {
