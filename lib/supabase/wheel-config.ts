@@ -1,5 +1,6 @@
 import { getSupabaseClient } from './client';
 import { generateSlug } from '../utils/slug';
+import type { Database } from './types';
 
 export interface ShareableWheelConfig {
   id: string;
@@ -30,17 +31,20 @@ export async function createShareableConfig(
     const slug = generateSlug(teamName);
 
     // Insert configuration with slug
+    type InsertPayload = Database['public']['Tables']['wheel_configurations']['Insert'];
+    const payload: InsertPayload = {
+      session_id: sessionId,
+      names,
+      segment_count: names.length,
+      team_name: teamName,
+      slug,
+      is_public: true,
+      input_method: inputMethod,
+    };
+
     const { data, error } = await supabase
       .from('wheel_configurations')
-      .insert({
-        session_id: sessionId,
-        names,
-        segment_count: names.length,
-        team_name: teamName,
-        slug,
-        is_public: true,
-        input_method: inputMethod,
-      })
+      .insert(payload)
       .select()
       .single();
 
@@ -146,13 +150,16 @@ export async function makeConfigShareable(
   try {
     const slug = generateSlug(teamName);
 
+    type UpdatePayload = Database['public']['Tables']['wheel_configurations']['Update'];
+    const payload: UpdatePayload = {
+      slug,
+      is_public: true,
+      team_name: teamName,
+    };
+
     const { data, error } = await supabase
       .from('wheel_configurations')
-      .update({
-        slug,
-        is_public: true,
-        team_name: teamName,
-      })
+      .update(payload)
       .eq('id', configId)
       .select('slug')
       .single();
