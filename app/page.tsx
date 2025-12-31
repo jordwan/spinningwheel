@@ -1031,7 +1031,7 @@ export default function Home() {
           {/* Logo - Fixed in top-left corner */}
           <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-20 flex-shrink-0">
             <div
-              className="relative w-32 h-11 sm:w-40 sm:h-14 lg:w-48 lg:h-16"
+              className="relative w-36 h-12 sm:w-44 sm:h-15 lg:w-52 lg:h-18"
               style={{
                 filter:
                   "drop-shadow(0 0 12px rgba(255, 255, 255, 0.35)) drop-shadow(0 0 24px rgba(255, 255, 255, 0.2))",
@@ -1053,12 +1053,12 @@ export default function Home() {
               <button
                 onClick={handleCreateShare}
                 disabled={isCreatingShare}
-                className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-lg font-semibold transition-all duration-200 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 text-xs sm:text-sm"
+                className="px-4 py-2 sm:px-5 sm:py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 text-sm sm:text-base"
                 style={{ touchAction: "manipulation" }}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-3.5 w-3.5 sm:h-4 sm:w-4"
+                  className="h-4 w-4 sm:h-5 sm:w-5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1070,7 +1070,7 @@ export default function Home() {
                     d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
                   />
                 </svg>
-                <span className="hidden sm:inline">{isCreatingShare ? 'Creating...' : 'Share'}</span>
+                <span>{isCreatingShare ? 'Creating...' : 'Share'}</span>
               </button>
             </div>
           )}
