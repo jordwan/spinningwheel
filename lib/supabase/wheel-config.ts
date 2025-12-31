@@ -1,6 +1,5 @@
 import { getSupabaseClient } from './client';
 import { generateSlug } from '../utils/slug';
-import { WheelConfiguration } from './types';
 
 export interface ShareableWheelConfig {
   id: string;

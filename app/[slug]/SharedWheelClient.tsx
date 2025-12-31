@@ -66,9 +66,6 @@ export default function SharedWheelClient({
   const [currentConfigId, setCurrentConfigId] = useState<string | null>(null);
   const { saveConfiguration, recordSpin, updateSpinAcknowledgment } = useSession();
 
-  // Get the slug from the URL
-  const slug = typeof window !== 'undefined' ? window.location.pathname.substring(1) : '';
-
   useEffect(() => {
     setMounted(true);
 
