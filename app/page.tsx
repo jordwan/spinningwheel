@@ -23,52 +23,49 @@ import {
   endSession,
 } from "./utils/analytics";
 import { useSession } from "../hooks/useSession";
+import { useViewportHeight } from "../hooks/useViewportHeight";
 
 // Lazy load the heavy SpinningWheel component
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
 
 // Loading placeholder component for better LCP
 const WheelLoadingPlaceholder = () => (
-  <div className="flex flex-col items-center w-full h-full">
-    {/* Speed indicator placeholder */}
-    <div className="mb-2 w-[min(45vw,300px)] sm:w-[min(60vw,360px)] lg:w-[400px]" style={{ minHeight: '72px' }}>
-      <div className="text-center mb-1 text-[clamp(10px,1.5vw,13px)] font-semibold text-white">
-        Spin Power
-      </div>
-      <div className="relative h-6 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
-        <div className="absolute top-0 bottom-0 w-4 bg-white border-2 border-gray-800 rounded-full shadow-lg animate-pulse" style={{ left: '50%', transform: 'translateX(-50%)' }} />
-      </div>
-      <div className="flex justify-between mt-1 text-[clamp(10px,1.4vw,12px)] text-white">
-        <span>Slow</span>
-        <span>Fast</span>
+  <div className="flex flex-col items-center w-full h-full justify-center">
+    {/* Wheel - Centered */}
+    <div className="flex flex-col items-center justify-center flex-1 min-h-0 w-full">
+      <div className="relative flex items-center justify-center">
+        <div
+          className="rounded-full shadow-xl border border-white/30 bg-gradient-to-br from-blue-500 to-purple-600 animate-pulse"
+          style={{ width: 'min(450px, 90vw)', height: 'min(450px, 90vw)', maxWidth: '500px', maxHeight: '500px' }}
+        />
       </div>
     </div>
 
-    {/* Wheel placeholder */}
-    <div className="relative flex items-center justify-center mb-8 flex-1 min-h-0 flex-col justify-center">
-      <div
-        className="rounded-full shadow-xl border border-white/30 bg-gradient-to-br from-blue-500 to-purple-600 animate-pulse"
-        style={{ width: '350px', height: '350px' }}
-      />
+    {/* Speed indicator placeholder - below wheel */}
+    <div className="mt-3 mb-2 w-full max-w-[min(85vw,500px)] flex-shrink-0" style={{ minHeight: '40px' }}>
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-white/80 whitespace-nowrap flex-shrink-0">Slow</span>
+        <div className="relative flex-1 h-4 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
+          <div className="absolute top-0 bottom-0 w-3 bg-white border-2 border-gray-800 rounded-full shadow-lg animate-pulse" style={{ left: '50%', transform: 'translateX(-50%)' }} />
+        </div>
+        <span className="text-[10px] text-white/80 whitespace-nowrap flex-shrink-0">Fast</span>
+      </div>
     </div>
 
     {/* Controls placeholder */}
-    <div className="flex flex-wrap justify-center items-center mx-auto mb-2" style={{ width: '350px', minHeight: '60px' }}>
+    <div className="flex flex-wrap justify-center items-center mx-auto mb-0.5 flex-shrink-0" style={{ maxWidth: '450px', minHeight: '60px' }}>
       <div className="px-6 py-3 bg-green-500 text-white rounded-lg mr-3 animate-pulse" style={{ minWidth: '120px', height: '48px' }} />
       <div className="px-3 py-3 bg-blue-500 text-white rounded-lg animate-pulse" style={{ minWidth: '85px', height: '48px' }} />
     </div>
 
     {/* Footer placeholder */}
-    <div className="w-full text-center flex-shrink-0" style={{ minHeight: '60px' }}>
-      <div className="pb-1">
-        <div className="text-center space-y-0">
-          <div className="text-[clamp(8px,1.2vw,10px)] text-white/70 animate-pulse bg-white/10 rounded mx-auto" style={{ width: '200px', height: '12px' }} />
-          <div className="relative flex justify-center items-center text-[clamp(8px,1.2vw,10px)] text-white/70 px-1" style={{ minHeight: '14px' }}>
-            <div className="animate-pulse bg-white/10 rounded" style={{ width: '150px', height: '12px' }} />
-          </div>
-        </div>
-        <div className="text-center mt-0">
-          <div className="text-[clamp(10px,1.6vw,12px)] text-white/70 animate-pulse bg-white/10 rounded mx-auto" style={{ width: '60px', height: '16px' }} />
+    <div className="w-full text-center flex-shrink-0" style={{ minHeight: '40px' }}>
+      <div className="flex flex-col items-center gap-0.5">
+        <div className="text-[10px] text-white/60 animate-pulse bg-white/10 rounded" style={{ width: '150px', height: '10px' }} />
+        <div className="flex items-center gap-2">
+          <div className="animate-pulse bg-white/10 rounded" style={{ width: '80px', height: '10px' }} />
+          <span className="text-white/40">•</span>
+          <div className="animate-pulse bg-white/10 rounded" style={{ width: '50px', height: '10px' }} />
         </div>
       </div>
     </div>
@@ -93,9 +90,14 @@ export default function Home() {
   const [duplicateWarningText, setDuplicateWarningText] = useState("");
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [currentConfigId, setCurrentConfigId] = useState<string | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [isCreatingShare, setIsCreatingShare] = useState(false);
+  const [showCopySuccess, setShowCopySuccess] = useState(false);
+  const [currentShareSlug, setCurrentShareSlug] = useState<string | null>(null);
 
   // Session tracking
-  const { saveConfiguration, recordSpin, updateSpinAcknowledgment } =
+  const { saveConfiguration, recordSpin, updateSpinAcknowledgment, createShareableWheel } =
     useSession();
 
   // Debouncing refs for performance optimization
@@ -133,28 +135,6 @@ export default function Home() {
     };
   }, []);
 
-  // Handle dynamic viewport height for mobile devices
-  useEffect(() => {
-    const updateViewportHeight = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty("--vh", `${vh}px`);
-    };
-
-    // Set initial value
-    updateViewportHeight();
-
-    // Update on resize (handles address bar show/hide on mobile)
-    window.addEventListener("resize", updateViewportHeight, { passive: true });
-    window.addEventListener("orientationchange", updateViewportHeight, {
-      passive: true,
-    });
-
-    return () => {
-      window.removeEventListener("resize", updateViewportHeight);
-      window.removeEventListener("orientationchange", updateViewportHeight);
-    };
-  }, []);
-
   // Cleanup debounce timers on unmount
   useEffect(() => {
     const nameProcessingDebounce = nameProcessingDebounceRef.current;
@@ -169,163 +149,17 @@ export default function Home() {
     };
   }, []);
 
-  // Enhanced Firefox and browser detection
-  const [isFirefox, setIsFirefox] = useState(false);
-  const [hasVisualViewport, setHasVisualViewport] = useState(false);
-
-  // Detect Firefox and capabilities on mount
-  useEffect(() => {
-    const detectFirefox = () => {
-      if (typeof window === "undefined")
-        return { isFirefox: false, version: 0 };
-
-      const userAgent = navigator.userAgent;
-      const firefoxMatch = userAgent.match(/Firefox\/(\d+)/);
-
-      if (firefoxMatch) {
-        const version = parseInt(firefoxMatch[1]);
-        return { isFirefox: true, version };
-      }
-
-      return { isFirefox: false, version: 0 };
-    };
-
-    const { isFirefox: firefoxDetected, version } = detectFirefox();
-    setIsFirefox(firefoxDetected);
-    const hasViewportAPI = "visualViewport" in window;
-    setHasVisualViewport(hasViewportAPI);
-
-    // Debug logging for troubleshooting
-    if (firefoxDetected) {
-      console.log(
-        `Firefox ${version} detected, visualViewport support: ${hasViewportAPI}`
-      );
-    }
-  }, []);
-
-  // Enhanced viewport fix for keyboard issues (iOS 16, Firefox and others)
-  useEffect(() => {
-    // Force viewport recalculation when name input modal closes
-    if (!showNameInput) {
-      // Firefox needs longer delay for consistent keyboard dismissal
-      const delay = isFirefox ? 200 : 100;
-
-      const timer = setTimeout(() => {
-        const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty("--vh", `${vh}px`);
-
-        // Firefox-specific additional custom property
-        if (isFirefox) {
-          document.documentElement.style.setProperty("--firefox-vh", `${vh}px`);
-        }
-
-        // Force a layout recalculation
-        window.dispatchEvent(new Event("resize"));
-
-        // Additional Firefox-specific viewport restore
-        if (isFirefox && window.visualViewport) {
-          const visualVh = window.visualViewport.height * 0.01;
-          document.documentElement.style.setProperty(
-            "--visual-vh",
-            `${visualVh}px`
-          );
-        }
-      }, delay);
-
-      return () => clearTimeout(timer);
-    }
-  }, [showNameInput, isFirefox]);
-
-  // Advanced viewport handling during modal interactions with Firefox support
-  useEffect(() => {
-    if (showNameInput) {
-      let viewportRestoreTimeout: NodeJS.Timeout;
-
-      const handleViewportRestore = () => {
-        // Debounce to prevent excessive calls
-        clearTimeout(viewportRestoreTimeout);
-        viewportRestoreTimeout = setTimeout(
-          () => {
-            const vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty("--vh", `${vh}px`);
-
-            // Firefox-specific handling
-            if (isFirefox) {
-              document.documentElement.style.setProperty(
-                "--firefox-vh",
-                `${vh}px`
-              );
-
-              // Use visualViewport API if available
-              if (hasVisualViewport && window.visualViewport) {
-                const visualVh = window.visualViewport.height * 0.01;
-                document.documentElement.style.setProperty(
-                  "--visual-vh",
-                  `${visualVh}px`
-                );
-              }
-            }
-          },
-          isFirefox ? 50 : 16
-        ); // Firefox needs slight debouncing
-      };
-
-      // Enhanced event handling for Firefox
-      const events = ["focusin", "focusout"];
-
-      // Add visualViewport events for modern Firefox
-      if (hasVisualViewport && window.visualViewport) {
-        window.visualViewport.addEventListener(
-          "resize",
-          handleViewportRestore,
-          { passive: true }
-        );
-      }
-
-      // Traditional events as fallback (focusin/focusout can't be passive as they might need preventDefault)
-      events.forEach((event) => {
-        window.addEventListener(event, handleViewportRestore);
-      });
-
-      // Firefox-specific keyboard detection fallback
-      let lastWindowHeight = window.innerHeight;
-      const firefoxKeyboardDetector = () => {
-        if (isFirefox) {
-          const currentHeight = window.innerHeight;
-          const heightDiff = Math.abs(currentHeight - lastWindowHeight);
-
-          // If significant height change, likely keyboard show/hide
-          if (heightDiff > 150) {
-            handleViewportRestore();
-            lastWindowHeight = currentHeight;
-          }
-        }
-      };
-
-      const firefoxInterval = isFirefox
-        ? setInterval(firefoxKeyboardDetector, 100)
-        : null;
-
-      return () => {
-        clearTimeout(viewportRestoreTimeout);
-
-        if (hasVisualViewport && window.visualViewport) {
-          window.visualViewport.removeEventListener(
-            "resize",
-            handleViewportRestore
-          );
-        }
-
-        events.forEach((event) => {
-          window.removeEventListener(event, handleViewportRestore);
-        });
-
-        if (firefoxInterval) {
-          clearInterval(firefoxInterval);
-        }
-      };
-    }
-  }, [showNameInput, isFirefox, hasVisualViewport]);
+  // Unified viewport management
+  const { isFirefox } = useViewportHeight({
+    enableFirefoxSupport: true,
+    enableKeyboardDetection: true,
+    modalOpen:
+      showNameInput ||
+      showMinNamesWarning ||
+      showLongNameWarning ||
+      showDuplicateWarning ||
+      showShareModal,
+  });
 
   // Track when name input modal opens
   useEffect(() => {
@@ -352,7 +186,8 @@ export default function Home() {
       showNameInput ||
       showMinNamesWarning ||
       showLongNameWarning ||
-      showDuplicateWarning;
+      showDuplicateWarning ||
+      showShareModal;
 
     if (anyModalOpen) {
       body.style.overflow = "hidden";
@@ -373,6 +208,7 @@ export default function Home() {
     showMinNamesWarning,
     showLongNameWarning,
     showDuplicateWarning,
+    showShareModal,
   ]);
 
   // Validate name lengths
@@ -407,6 +243,7 @@ export default function Home() {
     setIsUsingCustomNames(false); // Track that we're using random names
     setShowNameInput(false);
     setShowRandomCountInput(false);
+    setCurrentShareSlug(null); // Clear any existing share slug since config changed
     // Track random names selection
     trackRandomSelection("names", count);
     trackInputMethodSelected("random");
@@ -434,6 +271,7 @@ export default function Home() {
     setIsUsingCustomNames(false); // Track that we're using sequential numbers
     setShowNameInput(false);
     setShowRandomCountInput(false);
+    setCurrentShareSlug(null); // Clear any existing share slug since config changed
     // Track sequential numbers selection
     trackRandomSelection("numbers", count);
     trackInputMethodSelected("numbers");
@@ -527,6 +365,7 @@ export default function Home() {
         setWheelNames(names);
         setIsUsingCustomNames(true); // Track that we're using custom names
         setShowNameInput(false);
+        setCurrentShareSlug(null); // Clear any existing share slug since config changed
 
         // Update document title with team name
         if (teamName) {
@@ -566,6 +405,68 @@ export default function Home() {
     }
   };
 
+  // Handle creating a shareable link
+  const handleCreateShare = async () => {
+    if (wheelNames.length < 2) return;
+
+    setIsCreatingShare(true);
+    try {
+      // Check if we already have a slug for this wheel configuration
+      let slug = currentShareSlug;
+
+      // Only create a new slug if we don't have one yet
+      if (!slug) {
+        slug = await createShareableWheel(
+          wheelNames,
+          teamName || undefined,
+          isUsingCustomNames ? 'custom' : 'random'
+        );
+
+        if (slug) {
+          // Save the slug so we reuse it next time
+          setCurrentShareSlug(slug);
+        }
+      }
+
+      if (slug) {
+        const url = `${window.location.origin}/${slug}`;
+        setShareUrl(url);
+        setShowShareModal(true);
+      } else {
+        alert('Failed to create shareable link. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error creating shareable link:', err);
+      alert('Failed to create shareable link. Please try again.');
+    } finally {
+      setIsCreatingShare(false);
+    }
+  };
+
+  // Copy share URL to clipboard
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShowCopySuccess(true);
+      setTimeout(() => setShowCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy URL:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = shareUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setShowCopySuccess(true);
+        setTimeout(() => setShowCopySuccess(false), 2000);
+      } catch {
+        alert('Failed to copy URL. Please copy manually: ' + shareUrl);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
   // Prevent hydration mismatches by only rendering after client mount
   if (!mounted) {
     return (
@@ -602,7 +503,7 @@ export default function Home() {
 
   return (
     <div
-      className="w-screen overflow-hidden relative min-h-[100svh]"
+      className="w-screen h-[100svh] h-[100vh] overflow-hidden relative"
       style={{
         boxShadow: `
           inset 0 0 40px rgba(255, 255, 255, 0.15),
@@ -633,7 +534,7 @@ export default function Home() {
       </div>
 
       {/* Content overlay - not blurred */}
-      <div className="relative z-10">
+      <div className="relative z-10 h-[100svh] h-[100vh]">
         {/* Name Input Popup (overlay on top of wheel) */}
         {showNameInput && (
           <div className="fixed inset-0 flex items-center justify-center z-[70] p-4 pointer-events-none">
@@ -1016,25 +917,166 @@ export default function Home() {
           </>
         )}
 
-        <main className="h-full w-full flex flex-col p-4">
-          <div className="flex justify-center mb-3">
+        {/* Share Modal */}
+        {showShareModal && (
+          <>
+            <div className="fixed inset-0 backdrop-blur-[2px] z-[59]" />
+            <div className="fixed inset-0 flex items-center justify-center z-[60] p-4 pointer-events-none">
+              <div
+                className="bg-white rounded-2xl p-6 max-w-md w-full pointer-events-auto text-center relative"
+                style={{
+                  boxShadow:
+                    "0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)",
+                }}
+              >
+                {/* Close button */}
+                <button
+                  onClick={() => setShowShareModal(false)}
+                  className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
+                  aria-label="Close"
+                  style={{ touchAction: "manipulation" }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+
+                <div className="mb-4">
+                  <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-3">
+                    <svg
+                      className="w-6 h-6 text-blue-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Share Your Wheel
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Anyone with this link can view and spin this wheel
+                  </p>
+
+                  {/* URL Display */}
+                  <div className="bg-gray-100 rounded-lg p-3 mb-3 break-all text-sm text-gray-700 font-mono">
+                    {shareUrl}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleCopyUrl}
+                  className="w-full px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  style={{ touchAction: "manipulation" }}
+                >
+                  {showCopySuccess ? (
+                    <>
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                      Copy Link
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        <main className="h-full w-full flex flex-col relative">
+          {/* Logo - Fixed in top-left corner */}
+          <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-20 flex-shrink-0">
             <div
-              className="relative w-48 h-16 sm:w-56 sm:h-18 lg:w-64 lg:h-20"
+              className="relative w-32 h-11 sm:w-40 sm:h-14 lg:w-48 lg:h-16"
               style={{
                 filter:
-                  "drop-shadow(0 0 15px rgba(255, 255, 255, 0.25)) drop-shadow(0 0 30px rgba(255, 255, 255, 0.15))",
+                  "drop-shadow(0 0 12px rgba(255, 255, 255, 0.35)) drop-shadow(0 0 24px rgba(255, 255, 255, 0.2))",
               }}
             >
               <Image
                 src="/logo.png"
-                alt="iWxeel"
+                alt="iWheeli"
                 fill
                 className="object-contain"
                 priority
               />
             </div>
           </div>
-          <div className="flex-1 w-full max-w-4xl mx-auto">
+
+          {/* Share button - Fixed in top-right corner when available */}
+          {wheelNames.length >= 2 && !showNameInput && (
+            <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-20 flex-shrink-0">
+              <button
+                onClick={handleCreateShare}
+                disabled={isCreatingShare}
+                className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-lg font-semibold transition-all duration-200 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 text-xs sm:text-sm"
+                style={{ touchAction: "manipulation" }}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-3.5 w-3.5 sm:h-4 sm:w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                  />
+                </svg>
+                <span className="hidden sm:inline">{isCreatingShare ? 'Creating...' : 'Share'}</span>
+              </button>
+            </div>
+          )}
+
+          {/* Wheel container - takes all available space */}
+          <div className="flex-1 w-full max-w-5xl mx-auto min-h-0 flex flex-col overflow-hidden py-2">
             <Suspense
               fallback={<WheelLoadingPlaceholder />}
             >
@@ -1042,12 +1084,14 @@ export default function Home() {
                 names={wheelNames.length > 0 ? wheelNames : undefined}
                 includeFreeSpins={false}
                 showBlank={showNameInput}
+                isFirefox={isFirefox}
                 configId={currentConfigId}
                 onRecordSpin={recordSpin}
                 onUpdateSpinAcknowledgment={updateSpinAcknowledgment}
                 onRemoveWinner={async (newNames: string[]) => {
                   // Update the wheel names in the parent component
                   setWheelNames(newNames);
+                  setCurrentShareSlug(null); // Clear share slug since config changed
                   // Create new configuration with the remaining names
                   const newConfigId = await saveConfiguration(
                     newNames,
@@ -1061,6 +1105,7 @@ export default function Home() {
                   // Track reset action with context
                   trackWheelReset(isUsingCustomNames);
                   setShowNameInput(true);
+                  setCurrentShareSlug(null); // Clear share slug on reset
                   // Preserve custom names and team name when resetting
                   // They will only be cleared if user explicitly clicks "Clear"
                   if (!isUsingCustomNames) {

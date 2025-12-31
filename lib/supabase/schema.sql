@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS public.wheel_configurations (
   session_id UUID NOT NULL REFERENCES public.sessions(id) ON DELETE CASCADE,
   names TEXT[] NOT NULL,
   segment_count INTEGER NOT NULL,
+  team_name TEXT,
+  slug TEXT UNIQUE,
+  is_public BOOLEAN DEFAULT FALSE,
+  input_method TEXT CHECK (input_method IN ('custom', 'random', 'numbers')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -41,6 +45,8 @@ CREATE TABLE IF NOT EXISTS public.spin_results (
 -- Create indexes for better query performance
 CREATE INDEX idx_sessions_created_at ON public.sessions(created_at DESC);
 CREATE INDEX idx_wheel_configurations_session_id ON public.wheel_configurations(session_id);
+CREATE INDEX idx_wheel_configurations_slug ON public.wheel_configurations(slug) WHERE slug IS NOT NULL;
+CREATE INDEX idx_wheel_configurations_public ON public.wheel_configurations(is_public, created_at DESC) WHERE is_public = true;
 CREATE INDEX idx_spin_results_session_id ON public.spin_results(session_id);
 CREATE INDEX idx_spin_results_configuration_id ON public.spin_results(configuration_id);
 CREATE INDEX idx_spin_results_timestamp ON public.spin_results(spin_timestamp DESC);

@@ -3,10 +3,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  /* Dynamic viewport height for mobile browsers */
+  /* Dynamic viewport height - set by useViewportHeight hook */
   --vh: 1vh;
   --visual-vh: 1vh;
-  --firefox-vh: 1vh;
 }
 
 @theme inline {
@@ -75,11 +74,6 @@ input, textarea {
 html {
   /* Prevent pull-to-refresh and rubber band scrolling */
   overscroll-behavior: none;
-  /* Use dynamic viewport height for better mobile support */
-  --vh: 100vh;
-  /* Firefox-specific viewport properties */
-  --firefox-vh: 100vh;
-  --visual-vh: 100vh;
   /* Allow normal document flow */
   margin: 0;
   padding: 0;

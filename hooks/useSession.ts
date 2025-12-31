@@ -2,12 +2,14 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { LocalSession, SpinRecord } from '../lib/session/LocalSession';
 import { DatabaseSync } from '../lib/session/DatabaseSync';
 import { SupabaseAdapter } from '../lib/session/SupabaseAdapter';
+import { createShareableConfig } from '../lib/supabase/wheel-config';
 
 interface UseSessionReturn {
   sessionId: string | null;
   isLoading: boolean;
   error: string | null;
   saveConfiguration: (names: string[], teamName?: string, inputMethod?: 'custom' | 'random' | 'numbers') => Promise<string | null>;
+  createShareableWheel: (names: string[], teamName?: string, inputMethod?: 'custom' | 'random' | 'numbers') => Promise<string | null>;
   recordSpin: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
   updateSpinAcknowledgment: (spinId: string, method: 'button' | 'backdrop' | 'x' | 'remove') => Promise<void>;
   getSessionHistory: () => Promise<SpinRecord[] | null>;
@@ -127,6 +129,23 @@ export function useSession(): UseSessionReturn {
     return localSessionRef.current.getSpinHistory();
   }, []);
 
+  // Create a shareable wheel configuration with public slug
+  const createShareableWheel = useCallback(async (
+    names: string[],
+    teamName?: string,
+    inputMethod?: 'custom' | 'random' | 'numbers'
+  ): Promise<string | null> => {
+    if (!sessionId) return null;
+
+    try {
+      const result = await createShareableConfig(sessionId, names, teamName, inputMethod);
+      return result?.slug || null;
+    } catch (err) {
+      console.error('Failed to create shareable wheel:', err);
+      return null;
+    }
+  }, [sessionId]);
+
   // Get sync status for debugging (optional)
   const getSyncStatus = useCallback(() => {
     return syncServiceRef.current?.getSyncStatus() || null;
@@ -137,6 +156,7 @@ export function useSession(): UseSessionReturn {
     isLoading,
     error,
     saveConfiguration,
+    createShareableWheel,
     recordSpin,
     updateSpinAcknowledgment,
     getSessionHistory,

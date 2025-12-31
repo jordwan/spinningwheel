@@ -16,6 +16,10 @@ export interface WheelConfiguration {
   session_id: string;
   names: string[];
   segment_count: number;
+  team_name?: string;
+  slug?: string;
+  is_public?: boolean;
+  input_method?: 'custom' | 'random' | 'numbers';
   created_at: string;
 }
 
@@ -56,6 +60,10 @@ export interface Database {
           session_id: string;
           names: string[];
           segment_count: number;
+          team_name?: string;
+          slug?: string;
+          is_public?: boolean;
+          input_method?: 'custom' | 'random' | 'numbers';
           created_at?: string;
         };
         Update: Partial<Omit<WheelConfiguration, 'id'>>;

@@ -91,6 +91,7 @@ interface SpinningWheelProps {
   onReset?: () => void;
   includeFreeSpins?: boolean;
   showBlank?: boolean;
+  isFirefox?: boolean;
   configId?: string | null;
   onRecordSpin?: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
   onUpdateSpinAcknowledgment?: (spinId: string, method: 'button' | 'backdrop' | 'x' | 'remove') => Promise<void>;
@@ -102,6 +103,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   onReset,
   includeFreeSpins = true,
   showBlank = false,
+  isFirefox = false,
   configId,
   onRecordSpin,
   onUpdateSpinAcknowledgment,
@@ -139,7 +141,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   const [winnerHistory, setWinnerHistory] = useState<string[]>([]);
   const [isIOS16, setIsIOS16] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [isFirefox, setIsFirefox] = useState(false);
   const [currentSpinId, setCurrentSpinId] = useState<string | null>(null);
   const [deviceCapability, setDeviceCapability] = useState<
     "high" | "medium" | "low"
@@ -470,66 +471,64 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     if (typeof window === "undefined") return;
 
     const vw = window.innerWidth;
-    // Enhanced viewport height calculation with Firefox support
+
+    // Simplified viewport height retrieval with clear priority chain
     let vh: number;
 
-    if (isFirefox) {
-      // Try Firefox-specific viewport first, then fallback
-      const firefoxVh =
-        parseInt(
-          getComputedStyle(document.documentElement)
-            .getPropertyValue("--firefox-vh")
-            .replace("px", "")
-        ) * 100;
-      const visualVh =
-        parseInt(
-          getComputedStyle(document.documentElement)
-            .getPropertyValue("--visual-vh")
-            .replace("px", "")
-        ) * 100;
-      const standardVh =
-        parseInt(
-          getComputedStyle(document.documentElement)
-            .getPropertyValue("--vh")
-            .replace("px", "")
-        ) * 100;
-
-      vh = firefoxVh || visualVh || standardVh || window.innerHeight;
+    if (window.visualViewport) {
+      // Priority 1: visualViewport API (most accurate for mobile)
+      vh = window.visualViewport.height;
     } else {
-      // Use standard dynamic viewport height for non-Firefox browsers
-      vh =
-        parseInt(
-          getComputedStyle(document.documentElement)
-            .getPropertyValue("--vh")
-            .replace("px", "")
-        ) * 100 || window.innerHeight;
+      // Priority 2: CSS custom property (set by useViewportHeight hook)
+      const vhProperty = isFirefox ? '--visual-vh' : '--vh';
+      const customVhStr = getComputedStyle(document.documentElement)
+        .getPropertyValue(vhProperty)
+        .replace('px', '');
+      const customVh = parseFloat(customVhStr) * 100;
+
+      // Priority 3: Use if valid (not NaN, not zero)
+      if (!isNaN(customVh) && customVh > 0) {
+        vh = customVh;
+      } else {
+        // Priority 4: Final fallback
+        vh = window.innerHeight;
+      }
     }
 
-    // Conservative fallbacks so first pass doesn't oversize the wheel:
-    const speedH = Math.max(speedRef.current?.offsetHeight ?? 0, 72);
-    const controlsH = Math.max(controlsRef.current?.offsetHeight ?? 0, 88);
-    // Increased footer fallback to account for dynamic content (fairness text + last winner)
-    const footerH = Math.max(footerRef.current?.offsetHeight ?? 0, 80);
+    // Conservative fallbacks - power meter is now below the wheel
+    const speedH = Math.max(speedRef.current?.offsetHeight ?? 0, 40);
+    const controlsH = Math.max(controlsRef.current?.offsetHeight ?? 0, 60);
+    // Footer fallback matching actual minHeight
+    const footerH = Math.max(footerRef.current?.offsetHeight ?? 0, 40);
 
-    const buffers = 32;
+    const buffers = 12;
 
-    // Available area for the wheel
-    const availableH = Math.max(0, vh - speedH - controlsH - footerH - buffers);
+    // Available area for the wheel container (flex-1)
+    // Subtract: speed meter (40px) + its margins (mt-3=12px + mb-2=8px=20px) + controls + footer + buffers
+    const availableH = Math.max(0, vh - speedH - 20 - controlsH - footerH - buffers);
+
     const sidePadding = vw < 768 ? 24 : 96;
     const availableW = Math.max(0, vw - sidePadding);
 
     let target = Math.min(availableW, availableH);
 
-    // Desktop guard: allow slightly bigger wheel on XL screens
-    const vhCap = Math.floor(
-      vh * (vw >= 1280 ? 0.62 : vw >= 1024 ? 0.58 : 0.62)
-    );
+    // Optimized VH caps for better space utilization across screen sizes
+    const vhCapPercentage =
+      vw >= 1536 ? 0.65 :  // XL screens (4K): 65%
+      vw >= 1280 ? 0.62 :  // Large screens: 62%
+      vw >= 1024 ? 0.60 :  // Desktop: 60%
+      vw >= 768 ? 0.62 :   // Tablet: 62%
+      0.68;                // Mobile: 68% (better space usage)
+    const vhCap = Math.floor(vh * vhCapPercentage);
     target = Math.min(target, vhCap);
 
-    // Global clamps - keep consistent sizes
-    // Reduce size when showing blank wheel with modal overlay
+    // Improved min/max with screen-responsive scaling
     const minSize = showBlank ? 250 : 280;
-    const maxSize = showBlank ? 450 : 600; // Smaller max for blank state
+    const maxSize = showBlank ? 450 :
+      vw >= 1536 ? 650 :  // XL screens: 650px
+      vw >= 1280 ? 600 :  // Large screens: 600px
+      vw >= 1024 ? 550 :  // Desktop: 550px
+      500;                // Mobile/Tablet: 500px
     target = Math.max(minSize, Math.min(maxSize, target));
 
     setCanvasCSSSize(target);
@@ -682,7 +681,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
       // Batch browser detection
       const isIOS = /iPad|iPhone|iPod/.test(userAgent);
-      const isFirefox = /Firefox/.test(userAgent);
 
       // iOS 16 specific detection
       let isIOS16 = false;
@@ -702,7 +700,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       // Batch state updates
       setIsIOS16(isIOS16);
       setIsIOS(isIOS);
-      setIsFirefox(isFirefox);
       setPrefersReducedMotion(!!lowMotion);
       setDeviceCapability(lowMotion ? "low" : cores >= 8 ? "high" : "medium");
 
@@ -1699,7 +1696,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   return (
     <div
       ref={rootRef}
-      className="flex flex-col items-center w-full h-full"
+      className="flex flex-col items-center w-full h-full justify-center"
       role="application"
       aria-label="Spinning wheel"
       tabIndex={0}
@@ -1721,37 +1718,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       <div aria-live="polite" className="sr-only">
         {ariaAnnouncement}
       </div>
-      {/* Spin Power with fixed dimensions to prevent CLS */}
-      <div
-        ref={speedRef}
-        className="mb-2 w-[min(45vw,300px)] sm:w-[min(60vw,360px)] lg:w-[400px]"
-        style={{ minHeight: '72px' }}
-      >
-        <div className="text-center mb-1 text-[clamp(10px,1.5vw,13px)] font-semibold text-white">
-          Spin Power
-        </div>
-        <div className="relative h-6 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
-          <div
-            className="absolute top-0 bottom-0 w-4 bg-white border-2 border-gray-800 rounded-full shadow-lg"
-            style={{
-              left: `${
-                (lockedSpeed !== null ? lockedSpeed : speedIndicator) * 100
-              }%`,
-              transform: "translateX(-50%)",
-            }}
-          />
-        </div>
-        <div className="flex justify-between mt-1 text-[clamp(10px,1.4vw,12px)] text-white">
-          <span>Slow</span>
-          <span>Fast</span>
-        </div>
-      </div>
 
-      {/* Wheel */}
-      <div
-        ref={wheelWrapRef}
-        className="relative flex items-center justify-center mb-8 flex-1 min-h-0 flex-col justify-center"
-      >
+      {/* Wheel - Centered */}
+      <div className="flex flex-col items-center justify-center flex-1 min-h-0 w-full">
+        <div
+          ref={wheelWrapRef}
+          className="relative flex items-center justify-center"
+        >
         <canvas
           ref={canvasRef}
           className="rounded-full shadow-xl border border-white/30"
@@ -1786,12 +1759,36 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         />
+        </div>
+      </div>
+
+      {/* Spin Power - Compact horizontal slider positioned below wheel */}
+      <div
+        ref={speedRef}
+        className="mt-3 mb-2 w-full max-w-[min(85vw,500px)] flex-shrink-0"
+        style={{ minHeight: '40px' }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-white/80 whitespace-nowrap flex-shrink-0">Slow</span>
+          <div className="relative flex-1 h-4 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
+            <div
+              className="absolute top-0 bottom-0 w-3 bg-white border-2 border-gray-800 rounded-full shadow-lg"
+              style={{
+                left: `${
+                  (lockedSpeed !== null ? lockedSpeed : speedIndicator) * 100
+                }%`,
+                transform: "translateX(-50%)",
+              }}
+            />
+          </div>
+          <span className="text-[10px] text-white/80 whitespace-nowrap flex-shrink-0">Fast</span>
+        </div>
       </div>
 
       {/* Controls — width locked to wheel, wrap when needed */}
       <div
         ref={controlsRef}
-        className="flex flex-wrap justify-center items-center mx-auto mb-2 relative z-[60]"
+        className="flex flex-wrap justify-center items-center mx-auto mb-0.5 relative z-[60] flex-shrink-0"
         style={{
           width: `max(${canvasCSSSize}px, 200px)`,
           maxWidth: isFirefox ? "600px" : "95vw",
@@ -1862,12 +1859,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         {onReset && (
           <button
             onClick={() => {
-              // Save winner when user resets (acknowledging the win)
-              if (selectedName && selectedName !== "RESPIN") {
-                setWinnerHistory((prev) => [...prev, selectedName]);
-              }
-              setShowWinnerModal(false); // Close winner modal first
+              // Don't add to history on reset - it's already been added when modal was closed
+              // Reset just closes any open modal and resets the wheel
+              setShowWinnerModal(false);
               setWinnerRhyme("");
+              setSelectedName(""); // Clear selected name
               onReset();
             }}
             disabled={isSpinning || showBlank}
@@ -1918,7 +1914,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       {/* Winner Modal */}
       {showWinnerModal && selectedName && (
         <div
-          className="fixed inset-0 flex items-center justify-center z-50 pointer-events-auto p-4"
+          className="fixed inset-0 flex items-center justify-center z-50 pointer-events-auto p-4 bg-black/40 backdrop-blur-sm"
           onClick={(e) => {
             // Close modal when clicking backdrop
             if (e.target === e.currentTarget) {
@@ -1967,8 +1963,59 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             >
               {selectedName}
             </p>
-            <div className="mt-6 flex gap-2">
-              {selectedName !== "RESPIN" && wheelNames.length > 2 && onRemoveWinner && (
+
+            {/* Main buttons */}
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  // Save winner when user acknowledges the win
+                  if (selectedName && selectedName !== "RESPIN") {
+                    setWinnerHistory((prev) => [...prev, selectedName]);
+                  }
+                  setShowWinnerModal(false);
+                  setWinnerRhyme("");
+                  // Track winner acknowledged via button
+                  trackWinnerAcknowledged("button");
+                  // Update spin acknowledgment in database
+                  if (onUpdateSpinAcknowledgment && currentSpinId) {
+                    onUpdateSpinAcknowledgment(currentSpinId, "button");
+                  }
+                }}
+                className="flex-1 px-6 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors"
+                style={{ touchAction: "manipulation" }}
+              >
+                Close
+              </button>
+
+              <button
+                onClick={() => {
+                  // Save winner to history before respinning
+                  if (selectedName && selectedName !== "RESPIN") {
+                    setWinnerHistory((prev) => [...prev, selectedName]);
+                  }
+                  // Close modal
+                  setShowWinnerModal(false);
+                  setWinnerRhyme("");
+                  // Track winner acknowledged via respin
+                  trackWinnerAcknowledged("button");
+                  if (onUpdateSpinAcknowledgment && currentSpinId) {
+                    onUpdateSpinAcknowledgment(currentSpinId, "button");
+                  }
+                  // Automatically spin again
+                  setTimeout(() => {
+                    spin();
+                  }, 100);
+                }}
+                className="flex-1 px-6 py-2.5 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors"
+                style={{ touchAction: "manipulation" }}
+              >
+                Respin
+              </button>
+            </div>
+
+            {/* Remove link underneath */}
+            {selectedName !== "RESPIN" && wheelNames.length > 2 && onRemoveWinner && (
+              <div className="mt-3">
                 <button
                   onClick={async () => {
                     // Remove the winner from the wheel
@@ -1992,34 +2039,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                       onUpdateSpinAcknowledgment(currentSpinId, "remove");
                     }
                   }}
-                  className="flex-shrink-0 w-20 px-2 py-2 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition-colors flex flex-col items-center justify-center leading-tight"
+                  className="text-sm text-red-600 hover:underline transition-all"
                   style={{ touchAction: "manipulation" }}
                 >
-                  <span>Remove</span>
-                  <span className="truncate max-w-full">{selectedName.length > 8 ? selectedName.substring(0, 8) + '...' : selectedName}</span>
+                  Remove {selectedName}
                 </button>
-              )}
-              <button
-                onClick={() => {
-                  // Save winner when user acknowledges the win
-                  if (selectedName && selectedName !== "RESPIN") {
-                    setWinnerHistory((prev) => [...prev, selectedName]);
-                  }
-                  setShowWinnerModal(false);
-                  setWinnerRhyme("");
-                  // Track winner acknowledged via button
-                  trackWinnerAcknowledged("button");
-                  // Update spin acknowledgment in database
-                  if (onUpdateSpinAcknowledgment && currentSpinId) {
-                    onUpdateSpinAcknowledgment(currentSpinId, "button");
-                  }
-                }}
-                className="flex-1 min-w-[100px] px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                style={{ touchAction: "manipulation" }}
-              >
-                Close
-              </button>
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2191,54 +2217,33 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         </div>
       )}
 
-      {/* Footer - Fixed height to prevent CLS */}
-      <div ref={footerRef} className="w-full text-center flex-shrink-0" style={{ minHeight: '60px' }}>
-        <div ref={footerContentRef} className="pb-1">
-          {/* Stable content area with skeleton placeholders */}
-          <div className="text-center space-y-0">
-            {fairnessText && (
-              <div className="text-[clamp(8px,1.2vw,10px)] text-white/70 whitespace-nowrap">
-                {fairnessText}
-              </div>
-            )}
-            {/* Always show last winner line to prevent layout shifts */}
-            <div className="relative flex justify-center items-center text-[clamp(8px,1.2vw,10px)] text-white/70 px-1" style={{ minHeight: '14px' }}>
-              {/* Centered main winner display */}
-              <div className="text-center">
-                Last winner:{" "}
-                {winnerHistory.length > 0 ? (
-                  <span className="text-white font-semibold">
-                    {winnerHistory[winnerHistory.length - 1]}
-                  </span>
-                ) : (
-                  <span className="text-white/40 italic">—</span>
-                )}
-              </div>
-              {/* History extending to the right with proper spacing */}
-              {winnerHistory.length > 1 && (
-                <div
-                  className="absolute text-white/50 font-normal whitespace-nowrap overflow-hidden"
-                  style={{ left: "calc(50% + 10ch)", maxWidth: "40%" }}
-                >
-                  ←{" "}
-                  {winnerHistory
-                    .slice(0, -1)
-                    .reverse()
-                    .slice(0, 24)
-                    .join(" ← ")}
-                  {winnerHistory.length > 25 && " ..."}
-                </div>
-              )}
+      {/* Footer - Compact single line */}
+      <div ref={footerRef} className="w-full text-center flex-shrink-0" style={{ minHeight: '40px' }}>
+        <div ref={footerContentRef} className="flex flex-col items-center gap-0.5">
+          {/* Fairness stats in one line */}
+          {fairnessText && (
+            <div className="text-[9px] sm:text-[10px] text-white/60">
+              {fairnessText}
             </div>
-          </div>
-          <div className="text-center mt-0">
+          )}
+          {/* Last winner and fairness link combined */}
+          <div className="flex items-center gap-2 text-[9px] sm:text-[10px] text-white/70">
+            <span className="whitespace-nowrap">
+              Last: {winnerHistory.length > 0 ? (
+                <span className="text-white font-semibold">
+                  {winnerHistory[winnerHistory.length - 1]}
+                </span>
+              ) : (
+                <span className="text-white/40">—</span>
+              )}
+            </span>
+            <span className="text-white/40">•</span>
             <button
               onClick={() => {
                 setShowFairnessPopup(true);
-                // Track fairness popup view with new tracking function
                 trackFairnessChecked();
               }}
-              className="text-[clamp(10px,1.6vw,12px)] text-white/70 hover:text-white underline min-h-[24px] px-2 py-1"
+              className="text-white/70 hover:text-white underline"
               style={{ touchAction: "manipulation" }}
             >
               fairness
