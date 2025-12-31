@@ -338,11 +338,10 @@ export default function Home() {
     // This function now only handles custom names
     // Random generation is handled by separate functions
 
-    // Use optimized name processing
-    const rawNames = inputValue
-      .split(/[,\s]+/)
-      .map((name) => name.trim())
-      .filter((name) => name.length > 0);
+    // Parse raw names using the same logic as processNames for accurate comparison
+    const rawNames = inputValue.includes(",")
+      ? inputValue.split(",").map((name) => name.trim()).filter((name) => name.length > 0)
+      : inputValue.split(/\s+/).map((name) => name.trim()).filter((name) => name.length > 0);
 
     const names = processNames(inputValue);
 
