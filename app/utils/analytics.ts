@@ -230,6 +230,25 @@ export const trackModalClosed = (modalType: string, closeMethod: string) => {
 };
 
 /**
+ * Share Events
+ */
+export const trackWhatsAppShare = (url: string, hasTeamName: boolean) => {
+  trackEvent('whatsapp_share', {
+    event_category: 'engagement',
+    event_label: hasTeamName ? 'shared_with_team_name' : 'shared_without_team_name',
+    has_team_name: hasTeamName,
+    value: 1
+  });
+};
+
+export const trackShareModalOpened = (method: 'button' | 'auto') => {
+  trackEvent('share_modal_opened', {
+    event_category: 'engagement',
+    event_label: `opened_via_${method}`
+  });
+};
+
+/**
  * Session Events
  */
 let sessionStartTime: number | null = null;
