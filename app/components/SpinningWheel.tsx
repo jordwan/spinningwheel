@@ -2289,9 +2289,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       )}
 
       {/* Footer - Compact single line */}
-      <div ref={footerRef} className="w-full text-center flex-shrink-0 pb-6 sm:pb-4" style={{
+      <div ref={footerRef} className="w-full text-center flex-shrink-0 pb-8 sm:pb-4" style={{
         minHeight: '40px',
-        paddingBottom: isIOS ? 'max(1.75rem, calc(1rem + env(safe-area-inset-bottom)))' : undefined
+        paddingBottom: isIOS ? 'max(2.5rem, calc(1.5rem + env(safe-area-inset-bottom)))' : undefined
       }}>
         <div ref={footerContentRef} className="flex flex-col items-center gap-0.5">
           {/* Fairness stats in one line */}
