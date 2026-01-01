@@ -1857,10 +1857,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       {/* Controls — width locked to wheel, wrap when needed */}
       <div
         ref={controlsRef}
-        className="flex flex-wrap justify-center items-center mx-auto mb-0.5 relative z-[60] flex-shrink-0"
+        className="flex flex-wrap justify-center items-center mx-auto mb-4 sm:mb-6 relative z-[60] flex-shrink-0"
         style={{
           width: `max(${canvasCSSSize}px, 200px)`,
           maxWidth: isFirefox ? "600px" : "95vw",
+          // Add safe area padding for iOS to prevent button cutoff
+          paddingBottom: isIOS ? 'max(1rem, env(safe-area-inset-bottom))' : undefined,
           // iOS 16 layout fixes
           ...(isIOS16
             ? {
@@ -2287,7 +2289,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       )}
 
       {/* Footer - Compact single line */}
-      <div ref={footerRef} className="w-full text-center flex-shrink-0" style={{ minHeight: '40px' }}>
+      <div ref={footerRef} className="w-full text-center flex-shrink-0 pb-3 sm:pb-4" style={{
+        minHeight: '40px',
+        paddingBottom: isIOS ? 'max(1rem, env(safe-area-inset-bottom))' : undefined
+      }}>
         <div ref={footerContentRef} className="flex flex-col items-center gap-0.5">
           {/* Fairness stats in one line */}
           {fairnessText && (
