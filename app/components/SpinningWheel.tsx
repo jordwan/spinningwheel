@@ -1843,10 +1843,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         </div>
       </div>
 
-      {/* Controls — width locked to wheel, wrap when needed */}
+      {/* Controls — width locked to wheel, wrap when needed; spin history appears underneath */}
+      <div ref={controlsRef} className="flex flex-col items-center mb-4 sm:mb-6 relative z-[60] flex-shrink-0">
       <div
-        ref={controlsRef}
-        className="flex flex-wrap justify-center items-center mx-auto mb-4 sm:mb-6 relative z-[60] flex-shrink-0"
+        className="flex flex-wrap justify-center items-center mx-auto"
         style={{
           width: `max(${canvasCSSSize}px, 200px)`,
           maxWidth: isFirefox ? "600px" : "95vw",
@@ -1962,6 +1962,25 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             {showBlank ? "Add names" : "Reset"}
           </button>
         )}
+      </div>
+
+      {/* Spin history - space is reserved so the wheel doesn't jump on the first spin */}
+      <div
+        className={`mt-2 ${winnerHistory.length > 0 ? "" : "invisible pointer-events-none"}`}
+        aria-hidden={winnerHistory.length === 0}
+      >
+        <button
+          onClick={() => setShowHistoryPopup(true)}
+          tabIndex={winnerHistory.length > 0 ? 0 : -1}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/30 border border-white/25 text-white text-xs font-medium transition-colors cursor-pointer"
+          style={{ touchAction: "manipulation", minHeight: 30 }}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Spin history ({winnerHistory.length})
+        </button>
+      </div>
       </div>
 
       {/* Winner Modal */}
@@ -2342,18 +2361,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                 <span className="text-white/40">—</span>
               )}
             </span>
-            <span className="text-white/40">•</span>
-            <button
-              onClick={() => setShowHistoryPopup(true)}
-              aria-label={`Spin history, ${winnerHistory.length} ${winnerHistory.length === 1 ? "spin" : "spins"}`}
-              className="inline-flex items-center gap-1 px-2.5 py-1 -my-1 rounded-full bg-white/15 hover:bg-white/30 border border-white/25 text-white text-[11px] sm:text-xs font-medium transition-colors cursor-pointer"
-              style={{ touchAction: "manipulation", minHeight: 28 }}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              history{winnerHistory.length > 0 ? ` (${winnerHistory.length})` : ""}
-            </button>
             <span className="text-white/40">•</span>
             <button
               onClick={() => {

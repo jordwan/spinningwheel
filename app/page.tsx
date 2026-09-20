@@ -28,7 +28,7 @@ import {
 import { useSession } from "../hooks/useSession";
 import { useViewportHeight } from "../hooks/useViewportHeight";
 import HuePicker from "./components/HuePicker";
-import { accentHexFromHue, hexToHsl, isValidHexColor } from "../lib/utils/palette";
+import { accentHexFromHue, hexToHsl, hslToHex, isValidHexColor } from "../lib/utils/palette";
 
 // Lazy load the heavy SpinningWheel component
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
@@ -148,6 +148,8 @@ export default function Home() {
     setShowShareModal(false);
   }, []);
   const accentColor = useCustomColor ? accentHexFromHue(accentHue) : null;
+  // A darker cut of the accent so it reads as text on white (blue when automatic)
+  const accentTextColor = useCustomColor ? hslToHex(accentHue, 70, 38) : "#2563eb";
 
   // Session tracking
   const {
@@ -1231,17 +1233,29 @@ export default function Home() {
                       />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                    Share Your Wheel
-                  </h3>
-                  {teamName.trim() && (
-                    <p className="text-base font-semibold text-blue-600 mb-1 truncate" title={teamName}>
-                      {teamName}
-                    </p>
+                  {teamName.trim() ? (
+                    <>
+                      <h3
+                        className="text-2xl font-bold mb-1 truncate"
+                        style={{ color: accentTextColor }}
+                        title={teamName}
+                      >
+                        {teamName}
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Share this wheel. Anyone with the link can view and spin it
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                        Share Your Wheel
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Anyone with this link can view and spin this wheel
+                      </p>
+                    </>
                   )}
-                  <p className="text-sm text-gray-600 mb-4">
-                    Anyone with this link can view and spin {teamName.trim() ? "it" : "this wheel"}
-                  </p>
 
                   {/* URL Display */}
                   <div className="bg-gray-100 rounded-lg p-3 mb-3 break-all text-sm text-gray-700 font-mono">
