@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
@@ -19,6 +19,16 @@ const geistMono = Geist_Mono({
   fallback: ["monospace"],
 });
 
+const SITE_URL = "https://iwheeli.com";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const HAS_ANALYTICS = Boolean(
+  process.env.NEXT_PUBLIC_GTM_ID ||
+    process.env.NEXT_PUBLIC_GA_TRACKING_ID ||
+    process.env.NEXT_PUBLIC_GOOGLE_ADS_ID
+);
+
+// Social preview images come from app/opengraph-image.tsx (and app/[slug]/opengraph-image.tsx
+// for shared wheels); Next.js wires those into the OpenGraph/Twitter tags automatically.
 export const metadata: Metadata = {
   title: "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners",
   description:
@@ -29,28 +39,20 @@ export const metadata: Metadata = {
   publisher: "iWheeli",
   applicationName: "iWheeli",
   category: "utilities",
-  metadataBase: new URL("https://iwheeli.com"),
+  metadataBase: new URL(SITE_URL),
   formatDetection: {
     telephone: false,
     email: false,
     address: false,
   },
   alternates: {
-    canonical: "https://iwheeli.com",
+    canonical: SITE_URL,
   },
   openGraph: {
     title: "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners",
     description: "Free online random name wheel spinner with cryptographically secure randomness. Perfect for classroom activities, team selection, and decision making.",
-    url: "https://iwheeli.com",
+    url: SITE_URL,
     siteName: "iWheeli",
-    images: [
-      {
-        url: "/logo.png",
-        width: 1200,
-        height: 630,
-        alt: "iWheeli - Random Name Wheel Spinner",
-      },
-    ],
     locale: "en_US",
     type: "website",
   },
@@ -58,7 +60,6 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners",
     description: "Free online random name wheel spinner with cryptographically secure randomness. No ads, no signup required.",
-    images: ["/logo.png"],
   },
   robots: {
     index: true,
@@ -77,17 +78,18 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.ico" },
-      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+      { url: "/icons/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
     ],
-    apple: [
-      { url: "/favicon.png", sizes: "180x180" },
-    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
     shortcut: "/favicon.ico",
   },
   manifest: "/manifest.json",
 };
 
-export const viewport = {
+// Pinch-zoom is intentionally disabled: the wheel is a drag/spin surface and
+// accidental zooms on mobile break the interaction.
+export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -105,29 +107,33 @@ export default function RootLayout({
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
     name: 'iWheeli',
+    url: SITE_URL,
     applicationCategory: 'UtilityApplication',
     operatingSystem: 'Any',
+    browserRequirements: 'Requires JavaScript',
     description: 'Free online random name wheel spinner with cryptographically secure randomness. Perfect for classroom activities, team selection, giveaways, and decision making.',
     offers: {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
     },
-    aggregateRating: {
-      '@type': 'AggregateRating',
-      ratingValue: '4.9',
-      ratingCount: '1250',
-    },
     author: {
       '@type': 'Organization',
       name: 'iWheeli',
-      url: 'https://iwheeli.com',
+      url: SITE_URL,
     },
   };
 
   return (
     <html lang="en">
       <head>
+        {/* Warm up connections we will use shortly after load */}
+        {SUPABASE_URL && (
+          <link rel="preconnect" href={SUPABASE_URL} crossOrigin="anonymous" />
+        )}
+        {HAS_ANALYTICS && (
+          <link rel="preconnect" href="https://www.googletagmanager.com" />
+        )}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -137,7 +143,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {/* Optimized Analytics - Load after page is interactive with longer delay for mobile */}
-        {(process.env.NEXT_PUBLIC_GTM_ID || process.env.NEXT_PUBLIC_GA_TRACKING_ID || process.env.NEXT_PUBLIC_GOOGLE_ADS_ID) && (
+        {HAS_ANALYTICS && (
           <Script id="analytics-loader" strategy="afterInteractive">
             {`
               // Initialize dataLayer first

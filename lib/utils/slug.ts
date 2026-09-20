@@ -17,11 +17,15 @@ export function generateRandomSuffix(length: number = 4): string {
 /**
  * Converts a string to URL-safe slug format
  * Example: "Team Winners!" -> "team-winners"
+ * Example: "Sorteo Señoras" -> "sorteo-senoras"
  */
 export function sanitizeSlug(input: string): string {
   return input
     .toLowerCase()
     .trim()
+    // Strip accents: "señoras" -> "senoras" instead of "seoras"
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
     // Replace spaces and underscores with hyphens
     .replace(/[\s_]+/g, '-')
     // Remove all non-alphanumeric characters except hyphens
@@ -31,7 +35,9 @@ export function sanitizeSlug(input: string): string {
     // Remove leading/trailing hyphens
     .replace(/^-+|-+$/g, '')
     // Limit length to 50 characters
-    .substring(0, 50);
+    .substring(0, 50)
+    // substring can leave a trailing hyphen behind
+    .replace(/-+$/g, '');
 }
 
 /**
@@ -39,10 +45,9 @@ export function sanitizeSlug(input: string): string {
  * Example: "Team Winners" -> "team-winners-a1b2"
  */
 export function generateSlug(teamName: string | undefined): string {
-  // Use a default if no team name provided
-  const baseName = teamName && teamName.trim()
-    ? sanitizeSlug(teamName)
-    : 'wheel';
+  // Use a default if no team name provided (or one that sanitises to nothing, e.g. "!!!")
+  const sanitized = teamName ? sanitizeSlug(teamName) : '';
+  const baseName = sanitized || 'wheel';
 
   const suffix = generateRandomSuffix(4);
 

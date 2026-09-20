@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getSupabaseClient } from './client';
-import { generateSlug } from '../utils/slug';
+import { generateSlug, validateSlug } from '../utils/slug';
 
 export interface ShareableWheelConfig {
   id: string;
@@ -98,7 +98,10 @@ export async function getConfigBySlug(
       .single();
 
     if (error || !data) {
-      console.error('Config not found for slug:', slug, error);
+      // PGRST116 = no rows matched. That's an ordinary 404, not an error worth logging.
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching config for slug:', slug, error);
+      }
       return null;
     }
 
@@ -113,6 +116,39 @@ export async function getConfigBySlug(
   } catch (err) {
     console.error('Failed to fetch config by slug:', err);
     return null;
+  }
+}
+
+/**
+ * Lists the most recently created public wheels (for the sitemap)
+ */
+export async function getRecentPublicSlugs(
+  limit: number = 500
+): Promise<{ slug: string; createdAt: string }[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return [];
+
+  try {
+    const client: any = supabase;
+    const { data, error } = await client
+      .from('wheel_configurations')
+      .select('slug, created_at')
+      .eq('is_public', true)
+      .not('slug', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error || !data) {
+      if (error) console.error('Error listing public wheels:', error);
+      return [];
+    }
+
+    return (data as { slug: string; created_at: string }[])
+      .filter((row) => validateSlug(row.slug))
+      .map((row) => ({ slug: row.slug, createdAt: row.created_at }));
+  } catch (err) {
+    console.error('Failed to list public wheels:', err);
+    return [];
   }
 }
 

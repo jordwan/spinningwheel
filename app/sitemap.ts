@@ -1,16 +1,28 @@
 import { MetadataRoute } from 'next';
+import { getRecentPublicSlugs } from '@/lib/supabase/wheel-config';
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://iwheeli.com';
+// Rebuild the sitemap at most once an hour so new shared wheels get picked up
+// without hitting the database on every crawler request.
+export const revalidate = 3600;
+
+const BASE_URL = 'https://iwheeli.com';
+const MAX_SHARED_WHEELS = 500;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const sharedWheels = await getRecentPublicSlugs(MAX_SHARED_WHEELS);
 
   return [
     {
-      url: baseUrl,
+      url: BASE_URL,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 1.0,
     },
-    // Add more pages here as your app grows
-    // For now, we have a single-page application
+    ...sharedWheels.map((wheel) => ({
+      url: `${BASE_URL}/${wheel.slug}`,
+      lastModified: new Date(wheel.createdAt),
+      changeFrequency: 'monthly' as const,
+      priority: 0.5,
+    })),
   ];
 }
