@@ -20,6 +20,7 @@ export interface WheelConfiguration {
   slug?: string;
   is_public?: boolean;
   input_method?: 'custom' | 'random' | 'numbers';
+  accent_color?: string | null;
   created_at: string;
 }
 
@@ -64,6 +65,7 @@ export interface Database {
           slug?: string;
           is_public?: boolean;
           input_method?: 'custom' | 'random' | 'numbers';
+          accent_color?: string | null;
           created_at?: string;
         };
         Update: Partial<Omit<WheelConfiguration, 'id'>>;

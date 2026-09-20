@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getSupabaseClient } from './client';
 import { generateSlug, validateSlug } from '../utils/slug';
+import { isValidHexColor } from '../utils/palette';
 
 export interface ShareableWheelConfig {
   id: string;
@@ -8,8 +9,14 @@ export interface ShareableWheelConfig {
   teamName?: string;
   slug: string;
   inputMethod?: 'custom' | 'random' | 'numbers';
+  accentColor?: string | null;
   createdAt: string;
 }
+
+// accent_color migration not applied yet: Postgres says 42703 for a SELECT of an unknown
+// column, PostgREST says PGRST204 for an unknown column in an INSERT body.
+const isMissingColumnError = (error: { code?: string } | null | undefined): boolean =>
+  !!error && (error.code === '42703' || error.code === 'PGRST204');
 
 /**
  * Creates a shareable wheel configuration in the database
@@ -18,7 +25,8 @@ export async function createShareableConfig(
   sessionId: string,
   names: string[],
   teamName?: string,
-  inputMethod?: 'custom' | 'random' | 'numbers'
+  inputMethod?: 'custom' | 'random' | 'numbers',
+  accentColor?: string | null
 ): Promise<ShareableWheelConfig | null> {
   const supabase = getSupabaseClient();
   if (!supabase) {
@@ -31,7 +39,7 @@ export async function createShareableConfig(
     const slug = generateSlug(teamName);
 
     // Insert configuration with slug
-    const payload = {
+    const payload: Record<string, unknown> = {
       session_id: sessionId,
       names,
       segment_count: names.length,
@@ -40,15 +48,26 @@ export async function createShareableConfig(
       is_public: true,
       input_method: inputMethod,
     };
+    if (isValidHexColor(accentColor)) payload.accent_color = accentColor;
 
     // Cast to any to bypass TypeScript strict type checking
     // Runtime safety preserved via null check above
     const client: any = supabase;
-    const { data, error } = await client
+    let { data, error } = await client
       .from('wheel_configurations')
       .insert(payload)
       .select()
       .single();
+
+    // Migration not applied yet: share the wheel without its colour rather than fail
+    if (isMissingColumnError(error) && 'accent_color' in payload) {
+      delete payload.accent_color;
+      ({ data, error } = await client
+        .from('wheel_configurations')
+        .insert(payload)
+        .select()
+        .single());
+    }
 
     if (error) {
       console.error('Error creating shareable config:', error);
@@ -66,6 +85,7 @@ export async function createShareableConfig(
       teamName: data.team_name,
       slug: data.slug,
       inputMethod: data.input_method,
+      accentColor: isValidHexColor(data.accent_color) ? data.accent_color : null,
       createdAt: data.created_at,
     };
   } catch (err) {
@@ -90,12 +110,23 @@ export async function getConfigBySlug(
     // Cast to any to bypass TypeScript strict type checking
     // Runtime safety preserved via null check above
     const client: any = supabase;
-    const { data, error} = await client
+    const baseColumns = 'id, names, team_name, slug, input_method, created_at';
+    let { data, error } = await client
       .from('wheel_configurations')
-      .select('id, names, team_name, slug, input_method, created_at')
+      .select(`${baseColumns}, accent_color`)
       .eq('slug', slug)
       .eq('is_public', true)
       .single();
+
+    // Migration not applied yet: read the wheel without its colour
+    if (isMissingColumnError(error)) {
+      ({ data, error } = await client
+        .from('wheel_configurations')
+        .select(baseColumns)
+        .eq('slug', slug)
+        .eq('is_public', true)
+        .single());
+    }
 
     if (error || !data) {
       // PGRST116 = no rows matched. That's an ordinary 404, not an error worth logging.
@@ -111,6 +142,7 @@ export async function getConfigBySlug(
       teamName: data.team_name || undefined,
       slug: data.slug || slug,
       inputMethod: data.input_method,
+      accentColor: isValidHexColor(data.accent_color) ? data.accent_color : null,
       createdAt: data.created_at,
     };
   } catch (err) {

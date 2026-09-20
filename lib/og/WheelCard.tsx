@@ -6,6 +6,8 @@
  * segment style without needing conic gradients (unsupported by Satori).
  */
 
+import { generatePaletteFromColor } from "../utils/palette";
+
 export const OG_SIZE = { width: 1200, height: 630 };
 
 // Mirrors the "Vibrant" theme in SpinningWheel.tsx
@@ -25,12 +27,21 @@ function segmentPath(cx: number, cy: number, r: number, start: number, end: numb
   return `M ${cx} ${cy} L ${a.x} ${a.y} A ${r} ${r} 0 ${largeArc} 1 ${b.x} ${b.y} Z`;
 }
 
-function WheelGraphic({ segments, size }: { segments: number; size: number }) {
+function WheelGraphic({
+  segments,
+  size,
+  accentColor,
+}: {
+  segments: number;
+  size: number;
+  accentColor?: string | null;
+}) {
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - 14;
   const count = Math.max(2, Math.min(segments, 20));
   const slice = (2 * Math.PI) / count;
+  const colors = accentColor ? generatePaletteFromColor(accentColor, count) : SEGMENT_COLORS;
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -40,7 +51,7 @@ function WheelGraphic({ segments, size }: { segments: number; size: number }) {
         <path
           key={i}
           d={segmentPath(cx, cy, r, i * slice - Math.PI / 2, (i + 1) * slice - Math.PI / 2)}
-          fill={SEGMENT_COLORS[i % SEGMENT_COLORS.length]}
+          fill={colors[i % colors.length]}
           stroke="#ffffff"
           strokeWidth={3}
         />
@@ -62,9 +73,10 @@ interface WheelCardProps {
   title: string;
   subtitle: string;
   names?: string[];
+  accentColor?: string | null;
 }
 
-export function WheelCard({ title, subtitle, names = [] }: WheelCardProps) {
+export function WheelCard({ title, subtitle, names = [], accentColor = null }: WheelCardProps) {
   const shownNames = names.slice(0, 8);
   const hiddenCount = names.length - shownNames.length;
 
@@ -145,7 +157,7 @@ export function WheelCard({ title, subtitle, names = [] }: WheelCardProps) {
         )}
       </div>
       <div style={{ display: "flex", flexShrink: 0 }}>
-        <WheelGraphic segments={names.length || 8} size={440} />
+        <WheelGraphic segments={names.length || 8} size={440} accentColor={accentColor} />
       </div>
     </div>
   );

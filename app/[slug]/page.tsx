@@ -70,6 +70,7 @@ export default async function SharedWheelPage({ params }: PageProps) {
       names={config.names}
       teamName={config.teamName}
       inputMethod={config.inputMethod}
+      accentColor={config.accentColor ?? null}
     />
   );
 }

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS public.wheel_configurations (
   slug TEXT UNIQUE,
   is_public BOOLEAN DEFAULT FALSE,
   input_method TEXT CHECK (input_method IN ('custom', 'random', 'numbers')),
+  accent_color TEXT CHECK (accent_color IS NULL OR accent_color ~ '^#[0-9a-fA-F]{6}$'),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 

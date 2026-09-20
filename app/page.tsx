@@ -26,6 +26,13 @@ import {
 } from "./utils/analytics";
 import { useSession } from "../hooks/useSession";
 import { useViewportHeight } from "../hooks/useViewportHeight";
+import HuePicker from "./components/HuePicker";
+import {
+  accentHexFromHue,
+  generatePaletteFromColor,
+  hexToHsl,
+  isValidHexColor,
+} from "../lib/utils/palette";
 
 // Lazy load the heavy SpinningWheel component
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
@@ -96,6 +103,10 @@ export default function Home() {
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [showCopySuccess, setShowCopySuccess] = useState(false);
   const [currentShareSlug, setCurrentShareSlug] = useState<string | null>(null);
+  // Wheel colours: automatic theme, or a user-picked accent hue
+  const [accentHue, setAccentHue] = useState(210);
+  const [useCustomColor, setUseCustomColor] = useState(false);
+  const accentColor = useCustomColor ? accentHexFromHue(accentHue) : null;
 
   // Session tracking
   const {
@@ -122,6 +133,10 @@ export default function Home() {
     if (last && last.inputMethod === "custom" && last.names.length >= 2) {
       setLocalInputValue(last.names.join(", "));
       if (last.teamName) setTeamName(last.teamName);
+    }
+    if (last && isValidHexColor(last.accentColor)) {
+      setAccentHue(Math.round(hexToHsl(last.accentColor).h));
+      setUseCustomColor(true);
     }
 
     // Detect mobile device
@@ -271,7 +286,7 @@ export default function Home() {
     trackInputMethodSelected("random");
 
     // Save configuration to database
-    const configId = await saveConfiguration(names, undefined, "random");
+    const configId = await saveConfiguration(names, undefined, "random", accentColor);
     setCurrentConfigId(configId);
   };
 
@@ -302,7 +317,8 @@ export default function Home() {
     const configId = await saveConfiguration(
       shuffledNumbers,
       undefined,
-      "numbers"
+      "numbers",
+      accentColor
     );
     setCurrentConfigId(configId);
   };
@@ -358,6 +374,19 @@ export default function Home() {
   );
   const previewNames = parsedInput.names;
 
+  // Changing colours invalidates the share link and the saved config (both carry the colour)
+  const handleAccentHueChange = (hue: number) => {
+    setAccentHue(hue);
+    setUseCustomColor(true);
+    setCurrentShareSlug(null);
+    setCurrentConfigId(null);
+  };
+  const handleAutoColors = () => {
+    setUseCustomColor(false);
+    setCurrentShareSlug(null);
+    setCurrentConfigId(null);
+  };
+
   // Close the setup card and keep whatever wheel is behind it (or a blank one to play with)
   const handleCloseNameInput = () => {
     setShowNameInput(false);
@@ -368,7 +397,8 @@ export default function Home() {
       saveConfiguration(
         wheelNames,
         teamName || undefined,
-        isUsingCustomNames ? "custom" : "random"
+        isUsingCustomNames ? "custom" : "random",
+        accentColor
       ).then((configId) => setCurrentConfigId(configId));
     }
   };
@@ -411,7 +441,7 @@ export default function Home() {
         }
 
         // Save configuration to database
-        saveConfiguration(names, teamName || undefined, "custom").then(
+        saveConfiguration(names, teamName || undefined, "custom", accentColor).then(
           (configId) => {
             setCurrentConfigId(configId);
           }
@@ -450,7 +480,8 @@ export default function Home() {
         slug = await createShareableWheel(
           wheelNames,
           teamName || undefined,
-          isUsingCustomNames ? 'custom' : 'random'
+          isUsingCustomNames ? 'custom' : 'random',
+          accentColor
         );
 
         if (slug) {
@@ -694,6 +725,48 @@ export default function Home() {
                 autoCapitalize="none"
                 spellCheck={false}
               />
+
+              {/* 3. Colors */}
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <span className="text-sm font-medium text-gray-700">Colors</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleAutoColors}
+                    aria-pressed={!useCustomColor}
+                    className={`px-3 py-1.5 text-sm font-semibold rounded-full border-2 transition-colors cursor-pointer ${
+                      !useCustomColor
+                        ? "border-blue-500 text-blue-600 bg-blue-50"
+                        : "border-gray-300 text-gray-600 hover:border-blue-400"
+                    }`}
+                    style={{ touchAction: "manipulation" }}
+                  >
+                    Auto
+                  </button>
+                  <HuePicker
+                    hue={accentHue}
+                    active={useCustomColor}
+                    onChange={handleAccentHueChange}
+                    onActivate={() => {
+                      if (!useCustomColor) handleAccentHueChange(accentHue);
+                    }}
+                    size={44}
+                  />
+                  {/* Preview of the resulting palette */}
+                  <div className="flex -space-x-1.5 w-[4.5rem] justify-end" aria-hidden="true">
+                    {(accentColor
+                      ? generatePaletteFromColor(accentColor, 5)
+                      : ["#FF6B35", "#E91E63", "#FFD23F", "#06FFA5", "#45B7D1"]
+                    ).map((c, i) => (
+                      <span
+                        key={i}
+                        className="inline-block w-4 h-4 rounded-full border-2 border-white shadow-sm"
+                        style={{ background: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
 
               {/* Actions */}
               <div className="flex gap-3">
@@ -1203,6 +1276,7 @@ export default function Home() {
                 }
                 showBlank={!(showNameInput && previewNames.length >= 2) && wheelNames.length < 2}
                 controlsDisabled={showNameInput}
+                accentColor={accentColor}
                 isFirefox={isFirefox}
                 configId={currentConfigId}
                 onRecordSpin={recordSpin}
@@ -1215,7 +1289,8 @@ export default function Home() {
                   const newConfigId = await saveConfiguration(
                     newNames,
                     teamName || undefined,
-                    "custom"
+                    "custom",
+                    accentColor
                   );
                   setCurrentConfigId(newConfigId);
                   return newConfigId;

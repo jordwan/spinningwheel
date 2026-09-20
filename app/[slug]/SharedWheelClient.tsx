@@ -55,12 +55,14 @@ interface SharedWheelClientProps {
   names: string[];
   teamName?: string;
   inputMethod?: 'custom' | 'random' | 'numbers';
+  accentColor?: string | null;
 }
 
 export default function SharedWheelClient({
   names,
   teamName,
   inputMethod,
+  accentColor = null,
 }: SharedWheelClientProps) {
   const [mounted, setMounted] = useState(false);
   const [currentConfigId, setCurrentConfigId] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export default function SharedWheelClient({
 
     // Save the shared configuration to the visitor's session
     if (names.length > 0) {
-      saveConfiguration(names, teamName, inputMethod).then((configId) => {
+      saveConfiguration(names, teamName, inputMethod, accentColor).then((configId) => {
         setCurrentConfigId(configId);
       });
     }
@@ -82,7 +84,7 @@ export default function SharedWheelClient({
     if (teamName) {
       document.title = `${teamName} – iWheeli – Random Name Picker Wheel`;
     }
-  }, [names, teamName, inputMethod, saveConfiguration]);
+  }, [names, teamName, inputMethod, accentColor, saveConfiguration]);
 
   // Unified viewport management
   const { isFirefox } = useViewportHeight({
@@ -182,6 +184,7 @@ export default function SharedWheelClient({
               <SpinningWheel
                 names={currentNames}
                 showBlank={false}
+                accentColor={accentColor}
                 isFirefox={isFirefox}
                 configId={currentConfigId}
                 onRecordSpin={recordSpin}
@@ -191,7 +194,8 @@ export default function SharedWheelClient({
                   const newConfigId = await saveConfiguration(
                     newNames,
                     teamName,
-                    inputMethod
+                    inputMethod,
+                    accentColor
                   );
                   setCurrentConfigId(newConfigId);
                   return newConfigId;
@@ -199,7 +203,7 @@ export default function SharedWheelClient({
                 onReset={() => {
                   // Shared wheels can't be edited: Reset puts the original list back
                   setCurrentNames(names);
-                  saveConfiguration(names, teamName, inputMethod).then((configId) =>
+                  saveConfiguration(names, teamName, inputMethod, accentColor).then((configId) =>
                     setCurrentConfigId(configId)
                   );
                 }}

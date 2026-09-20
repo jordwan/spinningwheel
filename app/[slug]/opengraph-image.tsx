@@ -34,6 +34,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         title={title}
         subtitle={`${count} ${count === 1 ? 'option' : 'options'} on the wheel. Tap to spin!`}
         names={config.names}
+        accentColor={config.accentColor ?? null}
       />
     ),
     size

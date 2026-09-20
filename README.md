@@ -46,6 +46,7 @@ Without the Supabase vars the wheel still works; the Share button will fail and 
 
 - Fresh project: run `lib/supabase/schema.sql` in the Supabase SQL editor.
 - Existing project created before shareable wheels: run `lib/supabase/migration-add-shareable-wheels.sql`.
+- Existing project created before the colour picker (Sept 2026): run `lib/supabase/migration-add-accent-color.sql`. Until it runs, wheels still work and share, they just don't remember their colour (the app retries writes without the column).
 
 See `SUPABASE_SETUP.md` and `SHAREABLE_WHEELS_README.md` for details.
 

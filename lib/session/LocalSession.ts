@@ -18,6 +18,7 @@ export interface WheelConfig {
   segmentCount: number;
   teamName?: string;
   inputMethod?: 'custom' | 'random' | 'numbers';
+  accentColor?: string | null;
   createdAt: string;
   [key: string]: unknown; // Allow additional properties for database compatibility
 }
@@ -174,7 +175,12 @@ export class LocalSession {
   /**
    * Save a wheel configuration - returns immediately with ID
    */
-  saveConfiguration(names: string[], teamName?: string, inputMethod?: 'custom' | 'random' | 'numbers'): string {
+  saveConfiguration(
+    names: string[],
+    teamName?: string,
+    inputMethod?: 'custom' | 'random' | 'numbers',
+    accentColor?: string | null
+  ): string {
     const configId = uuidv4();
 
     // Update session data if provided
@@ -193,6 +199,7 @@ export class LocalSession {
       segmentCount: names.length,
       teamName,
       inputMethod,
+      accentColor: accentColor ?? null,
       createdAt: new Date().toISOString(),
     };
 

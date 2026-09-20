@@ -105,15 +105,23 @@ export class SupabaseAdapter {
 
     try {
       const client: any = this.client;
-      const { error } = await client
-        .from('wheel_configurations')
-        .insert([{
-          id: configData.id,
-          session_id: configData.sessionId,
-          names: configData.names,
-          segment_count: configData.segmentCount,
-          created_at: configData.createdAt,
-        }]);
+      const row: Record<string, unknown> = {
+        id: configData.id,
+        session_id: configData.sessionId,
+        names: configData.names,
+        segment_count: configData.segmentCount,
+        created_at: configData.createdAt,
+      };
+      if (configData.accentColor) row.accent_color = configData.accentColor;
+
+      let { error } = await client.from('wheel_configurations').insert([row]);
+
+      // Column missing (42703 from Postgres, PGRST204 from PostgREST): the accent_color
+      // migration hasn't run yet. Store the wheel without its colour rather than lose it.
+      if (error && (error.code === '42703' || error.code === 'PGRST204') && 'accent_color' in row) {
+        delete row.accent_color;
+        ({ error } = await client.from('wheel_configurations').insert([row]));
+      }
 
       if (error) {
         // Only log actual errors, not constraint violations (which are expected)

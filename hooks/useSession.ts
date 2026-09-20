@@ -11,8 +11,8 @@ interface UseSessionReturn {
   sessionId: string | null;
   isLoading: boolean;
   error: string | null;
-  saveConfiguration: (names: string[], teamName?: string, inputMethod?: 'custom' | 'random' | 'numbers') => Promise<string | null>;
-  createShareableWheel: (names: string[], teamName?: string, inputMethod?: 'custom' | 'random' | 'numbers') => Promise<string | null>;
+  saveConfiguration: (names: string[], teamName?: string, inputMethod?: 'custom' | 'random' | 'numbers', accentColor?: string | null) => Promise<string | null>;
+  createShareableWheel: (names: string[], teamName?: string, inputMethod?: 'custom' | 'random' | 'numbers', accentColor?: string | null) => Promise<string | null>;
   recordSpin: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
   updateSpinAcknowledgment: (spinId: string, method: 'button' | 'backdrop' | 'x' | 'remove') => Promise<void>;
   getSessionHistory: () => Promise<SpinRecord[] | null>;
@@ -80,12 +80,13 @@ export function useSession(): UseSessionReturn {
   const saveConfiguration = useCallback(async (
     names: string[],
     teamName?: string,
-    inputMethod?: 'custom' | 'random' | 'numbers'
+    inputMethod?: 'custom' | 'random' | 'numbers',
+    accentColor?: string | null
   ): Promise<string | null> => {
     if (!localSessionRef.current) return null;
 
     // Save immediately to local storage
-    const configId = localSessionRef.current.saveConfiguration(names, teamName, inputMethod);
+    const configId = localSessionRef.current.saveConfiguration(names, teamName, inputMethod, accentColor);
 
     // Background sync happens automatically via DatabaseSync
     return configId;
@@ -132,12 +133,13 @@ export function useSession(): UseSessionReturn {
   const createShareableWheel = useCallback(async (
     names: string[],
     teamName?: string,
-    inputMethod?: 'custom' | 'random' | 'numbers'
+    inputMethod?: 'custom' | 'random' | 'numbers',
+    accentColor?: string | null
   ): Promise<string | null> => {
     if (!sessionId) return null;
 
     try {
-      const result = await createShareableConfig(sessionId, names, teamName, inputMethod);
+      const result = await createShareableConfig(sessionId, names, teamName, inputMethod, accentColor);
       return result?.slug || null;
     } catch (err) {
       console.error('Failed to create shareable wheel:', err);
