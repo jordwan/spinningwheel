@@ -401,11 +401,11 @@ export default function Home() {
         // silently chopping "Alexander Hamilton Jr" to 20 characters.
       };
 
-      // Delimiter priority: commas, then one-name-per-line (pasted rosters like
-      // "Mary Ann\nJohn Smith"), then plain whitespace.
+      // Delimiter priority: commas and/or new lines (Enter after each name, or a pasted
+      // roster like "Mary Ann\nJohn Smith"), then plain whitespace.
       const trimmed = input.trim();
       const separator = trimmed.includes(",")
-        ? ","
+        ? /[,\r\n]+/
         : /\r?\n/.test(trimmed)
         ? /\r?\n/
         : /\s+/;
@@ -516,14 +516,31 @@ export default function Home() {
     // Removed the else clause that would show random count input
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+
+    // Ctrl/Cmd+Enter always creates the wheel
+    if (e.metaKey || e.ctrlKey) {
       e.preventDefault();
-      // Only submit if there's input or we're on the random count screen
-      if (localInputValue.trim() !== "" || showRandomCountInput) {
+      if (previewNames.length >= 2) handleSubmitNames();
+      return;
+    }
+
+    // Plain Enter "commits" the current name by starting a new line. Pressing Enter
+    // again on an empty line (or with the caret on one) means "I'm done": create the wheel.
+    const el = e.currentTarget;
+    const beforeCaret = el.value.slice(0, el.selectionStart ?? el.value.length);
+    const currentLine = beforeCaret.slice(beforeCaret.lastIndexOf("\n") + 1);
+    if (currentLine.trim() === "") {
+      e.preventDefault();
+      if (previewNames.length >= 2) {
         handleSubmitNames();
+      } else if (previewNames.length === 1) {
+        setShowMinNamesWarning(true);
+        trackValidationWarning("min_names", { count: 1 });
       }
     }
+    // otherwise let the newline through
   };
 
   // Handle creating a shareable link
@@ -705,7 +722,7 @@ export default function Home() {
                 value={localInputValue}
                 onChange={(e) => handleInputChange(e.target.value)}
                 onKeyDown={handleKeyPress}
-                placeholder="mike, cindy, jamal, wayne"
+                placeholder={"mike\ncindy\njamal\nwayne"}
                 aria-label="Names for the wheel"
                 aria-describedby="names-help"
                 className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
@@ -731,11 +748,11 @@ export default function Home() {
                   aria-live="polite"
                 >
                   {localInputValue.trim() === ""
-                    ? "Separate names with commas, or put one per line"
+                    ? "Press Enter after each name, or separate with commas"
                     : previewNames.length === 0
                     ? "Keep typing\u2026"
                     : previewNames.length === 1
-                    ? "1 name so far. Add at least one more"
+                    ? "1 name so far. Press Enter and add at least one more"
                     : `${previewNames.length} names ready${
                         parsedInput.duplicatesRemoved > 0
                           ? ` (${parsedInput.duplicatesRemoved} duplicate${
