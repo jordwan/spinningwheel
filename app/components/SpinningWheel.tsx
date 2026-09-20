@@ -350,6 +350,8 @@ interface SpinningWheelProps {
   controlsDisabled?: boolean;
   /** User-chosen accent colour (#rrggbb). null = automatic theme */
   accentColor?: string | null;
+  /** Wheel name shown above the wheel */
+  title?: string | null;
   isFirefox?: boolean;
   configId?: string | null;
   onRecordSpin?: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
@@ -363,6 +365,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   showBlank = false,
   controlsDisabled = false,
   accentColor = null,
+  title = null,
   isFirefox = false,
   configId,
   onRecordSpin,
@@ -378,6 +381,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   const speedRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
   const footerContentRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
 
   /** ========= State ========= */
   const [isSpinning, setIsSpinning] = useState(false);
@@ -742,12 +746,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     const controlsH = Math.max(controlsRef.current?.offsetHeight ?? 0, 60);
     // Footer fallback matching actual minHeight
     const footerH = Math.max(footerRef.current?.offsetHeight ?? 0, 40);
+    const titleH = titleRef.current?.offsetHeight ?? 0;
 
     const buffers = 12;
 
     // Available area for the wheel container (flex-1)
-    // Subtract: speed meter (40px) + its margins (mt-3=12px + mb-2=8px=20px) + controls + footer + buffers
-    const availableH = Math.max(0, vh - speedH - 20 - controlsH - footerH - buffers);
+    // Subtract: title + speed meter (40px) + its margins (mt-3=12px + mb-2=8px=20px) + controls + footer + buffers
+    const availableH = Math.max(0, vh - titleH - speedH - 20 - controlsH - footerH - buffers);
 
     const sidePadding = vw < 768 ? 24 : 96;
     const availableW = Math.max(0, vw - sidePadding);
@@ -781,6 +786,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     recomputeSize();
 
     const ro = new ResizeObserver(() => recomputeSize());
+    if (titleRef.current) ro.observe(titleRef.current);
     if (speedRef.current) ro.observe(speedRef.current);
     if (controlsRef.current) ro.observe(controlsRef.current);
     if (footerRef.current) ro.observe(footerRef.current);
@@ -800,7 +806,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
     };
-  }, [recomputeSize, wheelNames.length]); // Add dependency on names count
+  }, [recomputeSize, wheelNames.length, title]); // re-observe when the title mounts/unmounts
 
   /** ========= Footer content observer for dynamic layout ========= */
   useEffect(() => {
@@ -1817,6 +1823,19 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         {ariaAnnouncement}
       </div>
 
+      {/* Wheel name. On phones it sits below the logo/share row; wider screens have room beside them */}
+      {title && !showBlank && (
+        <div ref={titleRef} className="flex-shrink-0 w-full px-4 pt-14 sm:pt-1 pb-1 text-center">
+          <h1
+            className="mx-auto max-w-[85vw] sm:max-w-[60vw] truncate text-white font-bold text-lg sm:text-2xl leading-tight"
+            style={{ textShadow: "0 2px 10px rgba(0,0,0,0.45)" }}
+            title={title}
+          >
+            {title}
+          </h1>
+        </div>
+      )}
+
       {/* Wheel - Centered */}
       <div className="flex flex-col items-center justify-center flex-1 min-h-0 w-full">
         <div
@@ -2139,6 +2158,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                   Remove {selectedName}
                 </button>
               )}
+
+              <button
+                onClick={() => acknowledgeWinner("button")}
+                className="w-full px-6 py-2.5 rounded-lg bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition-colors cursor-pointer"
+                style={{ touchAction: "manipulation" }}
+              >
+                Close
+              </button>
             </div>
 
           </div>

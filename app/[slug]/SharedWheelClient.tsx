@@ -185,6 +185,7 @@ export default function SharedWheelClient({
                 names={currentNames}
                 showBlank={false}
                 accentColor={accentColor}
+                title={teamName ?? null}
                 isFirefox={isFirefox}
                 configId={currentConfigId}
                 onRecordSpin={recordSpin}

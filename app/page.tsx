@@ -1028,7 +1028,7 @@ export default function Home() {
                   }`}
                   style={{ touchAction: "manipulation" }}
                 >
-                  Create wheel
+                  {wheelNames.length >= 2 ? "Update wheel" : "Create wheel"}
                 </button>
               </div>
 
@@ -1484,6 +1484,7 @@ export default function Home() {
                 showBlank={!(showNameInput && previewNames.length >= 2) && wheelNames.length < 2}
                 controlsDisabled={showNameInput}
                 accentColor={accentColor}
+                title={wheelNames.length >= 2 && teamName.trim() ? teamName.trim() : null}
                 isFirefox={isFirefox}
                 configId={currentConfigId}
                 onRecordSpin={recordSpin}
