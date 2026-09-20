@@ -6,7 +6,7 @@ import { getRecentPublicSlugs } from '@/lib/supabase/wheel-config';
 export const revalidate = 3600;
 
 const BASE_URL = 'https://iwheeli.com';
-const MAX_SHARED_WHEELS = 500;
+const MAX_SHARED_WHEELS = 50;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const sharedWheels = await getRecentPublicSlugs(MAX_SHARED_WHEELS);

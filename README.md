@@ -57,7 +57,7 @@ app/
   layout.tsx                Metadata, fonts, analytics loader, JSON-LD
   opengraph-image.tsx       Generated 1200x630 social preview card (see lib/og)
   not-found.tsx, error.tsx  Branded 404 and error screens
-  sitemap.ts, robots.ts     Sitemap includes the 500 newest shared wheels (hourly)
+  sitemap.ts, robots.ts     Sitemap includes the 50 newest shared wheels (hourly)
   api/ip/route.ts           Returns the visitor's IP from the proxy headers (same-origin, no third party)
   [slug]/                   Public shared-wheel pages (ISR, 404 if unknown) + their OG image
   components/SpinningWheel.tsx   Canvas wheel: drawing, drag/momentum, spin, audio, winner modal
