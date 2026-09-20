@@ -36,9 +36,11 @@ export class SupabaseAdapter {
     try {
       // TypeScript workaround for Supabase client type complexity
       const client: any = this.client;
+      // Sessions live 30 days in localStorage, so the same id is "inserted" on every
+      // visit. Upsert-ignore keeps that idempotent instead of a 409 in the console.
       const { error } = await client
         .from('sessions')
-        .insert([{
+        .upsert([{
           id: sessionData.id,
           team_name: sessionData.teamName || null,
           input_method: sessionData.inputMethod || null,
@@ -48,7 +50,7 @@ export class SupabaseAdapter {
             : null,
           ip_address: sessionData.ipAddress || null,
           created_at: sessionData.createdAt,
-        }]);
+        }], { onConflict: 'id', ignoreDuplicates: true });
 
       if (error) {
         // Only log actual errors, not constraint violations (which are expected)

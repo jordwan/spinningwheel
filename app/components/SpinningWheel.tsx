@@ -15,7 +15,6 @@ import {
   trackSpinCompleted,
   trackWinnerAcknowledged,
   trackFairnessChecked,
-  trackRespinTriggered,
   incrementSpinCount,
   trackSpinButtonConversion,
 } from "../utils/analytics";
@@ -29,6 +28,15 @@ const cryptoRandom = (): number => {
   }
   return Math.random();
 };
+
+/** ========= TUNING ========= */
+const SPIN_DURATION_MS = 6000;
+// Drag release faster than this (radians/second) counts as a flick and starts a real spin
+const FLICK_THRESHOLD = 6;
+// Velocity at which a flick maps to 100% power
+const FLICK_MAX_VELOCITY = 30;
+const BLANK_SEGMENTS = 10;
+const MUTE_STORAGE_KEY = "wheel_muted";
 
 /** ========= DRAG UTILITIES ========= */
 const getAngleFromPoint = (
@@ -131,11 +139,156 @@ const darkenColor = (hex: string, percent: number): string => {
   return rgbToHex(r, g, b);
 };
 
+// Generate extended color palette (up to 20 unique colors)
+const generateExtendedPalette = (baseColors: string[]): string[] => {
+  const extended: string[] = [];
+
+  // First 10: Original colors
+  baseColors.forEach(color => extended.push(color));
+
+  // Next 10: Variations (alternating lighter/darker)
+  for (let i = 0; i < baseColors.length && extended.length < 20; i++) {
+    const baseColor = baseColors[i];
+    if (i % 2 === 0) {
+      // Even index: lighten
+      extended.push(lightenColor(baseColor, 0.15));
+    } else {
+      // Odd index: darken
+      extended.push(darkenColor(baseColor, 0.15));
+    }
+  }
+
+  return extended;
+};
+
+// Deterministic shuffle of a palette, seeded by the wheel's names
+const seededShuffle = (colors: string[], seedString: string): string[] => {
+  let hash = 0;
+  for (let i = 0; i < seedString.length; i++) {
+    const char = seedString.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+
+  const shuffled = [...colors];
+  let currentIndex = shuffled.length;
+  while (currentIndex !== 0) {
+    hash = ((hash * 9301) + 49297) % 233280;
+    const randomIndex = Math.floor((hash / 233280) * currentIndex);
+    currentIndex--;
+    [shuffled[currentIndex], shuffled[randomIndex]] =
+      [shuffled[randomIndex], shuffled[currentIndex]];
+  }
+  return shuffled;
+};
+
+const COLOR_THEMES: string[][] = [
+  // Vibrant Theme
+  [
+    "#FF6B35ff", "#E91E63ff", "#FFD23Fff", "#06FFA5ff", "#4ECDC4ff",
+    "#45B7D1ff", "#96CEB4ff", "#FFEAA7ff", "#DDA0DDff", "#98D8C8ff"
+  ],
+  // Ocean Theme
+  [
+    "#0077BEff", "#00A8CCff", "#40E0D0ff", "#1BA3CDff", "#5DADE2ff",
+    "#85C1E9ff", "#A9CCE3ff", "#87CEEBff", "#2E8B57ff", "#20B2AAff"
+  ],
+  // Sunset Theme
+  [
+    "#FF4757ff", "#FF6B9Dff", "#FFA502ff", "#FF7675ff", "#FDCB6Eff",
+    "#E84393ff", "#F39C12ff", "#E74C3Cff", "#FF5722ff", "#FF8A80ff"
+  ],
+  // Forest Theme
+  [
+    "#27AE60ff", "#2ECC71ff", "#58D68Dff", "#82E0AAff", "#A9DFBFff",
+    "#52C41Aff", "#73D13Dff", "#95DE64ff", "#B7EB8Fff", "#D9F7BEff"
+  ],
+  // Royal Theme
+  [
+    "#8E44ADff", "#9B59B6ff", "#BB8FCEff", "#D2B4DEff", "#E8DAEFff",
+    "#6C3483ff", "#7D3C98ff", "#A569BDff", "#CD6155ff", "#F1948Aff"
+  ],
+  // Tropical Theme
+  [
+    "#FF6F61ff", "#6B5B95ff", "#88D8B0ff", "#FFEAA7ff", "#DDA0DDff",
+    "#FFB07Aff", "#98D8C8ff", "#F093FBff", "#4ECDC4ff", "#45B7D1ff"
+  ],
+  // Rainbow Theme
+  [
+    "#FF0000ff", "#FF8000ff", "#FFFF00ff", "#80FF00ff", "#00FF00ff",
+    "#00FF80ff", "#00FFFFff", "#0080FFff", "#0000FFff", "#8000FFff"
+  ],
+  // USA Theme
+  [
+    "#B22234ff", "#FF0000ff", "#DC143Cff", "#8B0000ff", "#CD5C5Cff",
+    "#4169E1ff", "#0000CDff", "#000080ff", "#6495EDff", "#1E90FFff"
+  ],
+  // Indian Theme
+  [
+    "#FF9933ff", "#228B22ff", "#32CD32ff", "#FFD700ff", "#4169E1ff",
+    "#8B4513ff", "#DC143Cff", "#9370DBff", "#20B2AAff", "#800080ff"
+  ],
+  // Neon Theme
+  [
+    "#FF00FFff", "#00FFFFff", "#FFFF00ff", "#FF0080ff", "#80FF00ff",
+    "#FF4000ff", "#4000FFff", "#00FF40ff", "#9D00FFff", "#8000FFff"
+  ],
+  // Nature Theme
+  [
+    "#228B22ff", "#32CD32ff", "#8FBC8Fff", "#2E8B57ff", "#556B2Fff",
+    "#8B4513ff", "#4682B4ff", "#CD853Fff", "#2F4F4Fff", "#6B8E23ff"
+  ],
+  // Cyberpunk Theme
+  [
+    "#00FFFFff", "#FF00FFff", "#39FF14ff", "#6600CCff", "#0033FFff",
+    "#FFFF00ff", "#FF1493ff", "#FF6600ff", "#9D00FFff", "#FF073Aff"
+  ],
+  // Pastel Dream Theme
+  [
+    "#FFD1DCff", "#AEC6CFff", "#FDFD96ff", "#B2D8B2ff", "#E6E6FAff",
+    "#FFDAB9ff", "#AAF0D1ff", "#E0BBE4ff", "#FFB5C5ff", "#87CEEBff"
+  ],
+  // Autumn Harvest Theme
+  [
+    "#CC5500ff", "#8B0000ff", "#FFD700ff", "#8B4513ff", "#FF7518ff",
+    "#800020ff", "#228B22ff", "#B87333ff", "#4B0082ff", "#DC143Cff"
+  ],
+  // Galaxy Theme
+  [
+    "#4B0082ff", "#FF1493ff", "#C0C0C0ff", "#000080ff", "#00FF7Fff",
+    "#FF4500ff", "#1C1C1Cff", "#008B8Bff", "#DC143Cff", "#8A2BE2ff"
+  ]
+];
+
+const WINNER_RHYMES = [
+  "Winner Winner, Chicken Dinner",
+  "The chosen one is...",
+  "Victory Royale!",
+  "Winner = Declared",
+  "Absolute legend pick",
+  "Throw some W's in the chat",
+  "The Wheel has spoken",
+  "Randomly selected winner is...",
+  "Jackpot!!!",
+  "Shout-Out",
+  "The Algorithm was in favor of...",
+];
+
+const readStoredMute = (): boolean => {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(MUTE_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
 interface SpinningWheelProps {
   names?: string[];
   onReset?: () => void;
-  includeFreeSpins?: boolean;
+  /** Show a colourful placeholder wheel with no labels (nothing to spin yet) */
   showBlank?: boolean;
+  /** Disable the SPIN / Reset buttons, e.g. while the setup modal is open on top */
+  controlsDisabled?: boolean;
   isFirefox?: boolean;
   configId?: string | null;
   onRecordSpin?: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
@@ -146,8 +299,8 @@ interface SpinningWheelProps {
 const SpinningWheel: React.FC<SpinningWheelProps> = ({
   names,
   onReset,
-  includeFreeSpins = true,
   showBlank = false,
+  controlsDisabled = false,
   isFirefox = false,
   configId,
   onRecordSpin,
@@ -179,11 +332,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     }
     return 350; // Mobile-first default
   });
+  // Spin power 0..1. Drifts on its own until the user drags the slider (locks it).
   const [speedIndicator, setSpeedIndicator] = useState(0.5);
+  const [speedLocked, setSpeedLocked] = useState(false);
   const [showFairnessPopup, setShowFairnessPopup] = useState(false);
+  const [showHistoryPopup, setShowHistoryPopup] = useState(false);
   const [fairnessText, setFairnessText] = useState("");
-  const [lockedSpeed, setLockedSpeed] = useState<number | null>(null);
   const [winnerHistory, setWinnerHistory] = useState<string[]>([]);
+  const [muted, setMuted] = useState<boolean>(readStoredMute);
   const [isIOS16, setIsIOS16] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [currentSpinId, setCurrentSpinId] = useState<string | null>(null);
@@ -213,6 +369,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     height: 0,
   });
 
+  // Whether the current winner has already been pushed to history (prevents double entries)
+  const historyRecordedRef = useRef(false);
+  // Mirror of `muted` for use inside animation closures
+  const mutedRef = useRef(muted);
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
 
   // Performance management
   const [performanceMode, setPerformanceMode] = useState<
@@ -298,8 +461,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           }, 0);
         });
       }
-
-      // No longer need tada buffer generation since we're using MP3 file
     } catch (error) {
       console.warn("Audio buffer creation failed:", error);
     } finally {
@@ -349,6 +510,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
   const playTickSound = useCallback(
     async (v = 0.1) => {
+      if (mutedRef.current) return;
       try {
         const ctx = await ensureAudio();
         if (!ctx || !clickBufferRef.current) return;
@@ -390,30 +552,27 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     [ensureAudio, initializeAudioPool]
   );
 
-  /** ========= Names + RESPIN placement ========= */
+  const toggleMute = useCallback(() => {
+    setMuted((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(MUTE_STORAGE_KEY, next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  /** ========= Names ========= */
   const wheelNames = useMemo(() => {
-    // If showing blank state, use empty placeholder names
+    // Blank state: coloured placeholder slices with no labels
     if (showBlank) {
-      const placeholderCount = 8;
-      return Array(placeholderCount).fill("");
+      return Array(BLANK_SEGMENTS).fill("");
     }
 
-    const base =
-      names && names.length
-        ? names
-        : ["Name 1", "Name 2", "Name 3", "Name 4", "Name 5", "Name 6"];
-
-    if (!includeFreeSpins) {
-      return base;
-    }
-
-    const totalSlots = base.length + 2;
-    const mid = Math.floor(totalSlots / 2);
-    const result = [...base];
-    result.splice(0, 0, "RESPIN");
-    result.splice(mid, 0, "RESPIN");
-    return result;
-  }, [names, includeFreeSpins, showBlank]);
+    return names && names.length
+      ? names
+      : ["Name 1", "Name 2", "Name 3", "Name 4", "Name 5", "Name 6"];
+  }, [names, showBlank]);
 
   /** ========= Memoized wheel geometry calculations ========= */
   const wheelGeometry = useMemo(() => {
@@ -439,9 +598,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     // Detect if we're showing numbers (all segments are numeric)
     const isNumbers =
       wheelNames.length > 0 &&
-      wheelNames.every(
-        (name) => name !== "RESPIN" && name !== "" && /^\d+$/.test(name)
-      );
+      wheelNames.every((name) => name !== "" && /^\d+$/.test(name));
 
     const fontSize = getSimpleFontSize(wheelNames.length, isNumbers);
 
@@ -450,7 +607,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       wheelNames.length <= 10 ? 20 : wheelNames.length <= 20 ? 15 : 12;
 
     const displayTexts = wheelNames.map((name) => {
-      if (name === "RESPIN" || name === "") return name;
+      if (name === "") return name;
       return simpleTextTruncate(name, maxLength);
     });
 
@@ -463,53 +620,54 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       setFairnessText("");
       return;
     }
+    setFairnessText(`Each name ${((1 / wheelNames.length) * 100).toFixed(2)}% chance`);
+  }, [wheelNames, showBlank]);
 
-    const total = wheelNames.length;
-    const respinCount = wheelNames.filter((n) => n === "RESPIN").length;
-
-    if (!includeFreeSpins || respinCount === 0) {
-      setFairnessText(`Each name ${((1 / total) * 100).toFixed(2)}% chance`);
-    } else {
-      setFairnessText(
-        `Each name ${((1 / total) * 100).toFixed(2)}% chance, Free Spin ${(
-          (respinCount / total) *
-          100
-        ).toFixed(2)}% chance`
-      );
-    }
-  }, [wheelNames, includeFreeSpins, showBlank]);
-
-  /** ========= Idle speed indicator with reduced updates for mobile ========= */
+  /** ========= Winner history follows the wheel ========= */
+  // A brand-new set of names (no overlap with the previous one) starts a fresh history.
+  // Removing winners or adding a name keeps it.
+  const previousNamesRef = useRef<string[] | null>(null);
   useEffect(() => {
-    if (!isSpinning) {
-      let animationId: number;
-      let lastTime = 0;
-
-      const animate = (currentTime: number) => {
-        // Much slower update rate for mobile to improve INP
-        const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-        const throttleMs = isMobile ? 100 : (deviceCapability === "high" ? 16.67 : 33.33);
-
-        if (currentTime - lastTime >= throttleMs) {
-          const t = currentTime / 1000;
-          setSpeedIndicator((Math.sin(t * 1.5) + 1) / 2);
-          lastTime = currentTime;
-        }
-        animationId = requestAnimationFrame(animate);
-      };
-
-      // Delay animation start on mobile
-      const delay = typeof window !== "undefined" && window.innerWidth < 768 ? 1000 : 0;
-      const timeoutId = setTimeout(() => {
-        animationId = requestAnimationFrame(animate);
-      }, delay);
-
-      return () => {
-        clearTimeout(timeoutId);
-        if (animationId) cancelAnimationFrame(animationId);
-      };
+    if (showBlank || !names || names.length === 0) return;
+    const previous = previousNamesRef.current;
+    if (previous && previous.length > 0) {
+      const overlap = names.some((n) => previous.includes(n));
+      if (!overlap) setWinnerHistory([]);
     }
-  }, [isSpinning, deviceCapability]);
+    previousNamesRef.current = names;
+  }, [names, showBlank]);
+
+  /** ========= Idle speed indicator (drifts until the user locks a speed) ========= */
+  useEffect(() => {
+    if (isSpinning || speedLocked) return;
+
+    let animationId: number;
+    let lastTime = 0;
+
+    const animate = (currentTime: number) => {
+      // Much slower update rate for mobile to improve INP
+      const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+      const throttleMs = isMobile ? 100 : (deviceCapability === "high" ? 16.67 : 33.33);
+
+      if (currentTime - lastTime >= throttleMs) {
+        const t = currentTime / 1000;
+        setSpeedIndicator((Math.sin(t * 1.5) + 1) / 2);
+        lastTime = currentTime;
+      }
+      animationId = requestAnimationFrame(animate);
+    };
+
+    // Delay animation start on mobile
+    const delay = typeof window !== "undefined" && window.innerWidth < 768 ? 1000 : 0;
+    const timeoutId = setTimeout(() => {
+      animationId = requestAnimationFrame(animate);
+    }, delay);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (animationId) cancelAnimationFrame(animationId);
+    };
+  }, [isSpinning, speedLocked, deviceCapability]);
 
   /** ========= Responsive sizing with ResizeObserver ========= */
   const recomputeSize = useCallback(() => {
@@ -776,334 +934,17 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     });
   }, []);
 
-  /** ========= DRAG INTERACTION HANDLERS ========= */
-  // Allow drag when wheel is visible and not spinning, even if blank
-  const canDrag = !isSpinning && !showWinnerModal;
-
-  const startDrag = useCallback(
-    (clientX: number, clientY: number) => {
-      if (!canDrag || !canvasRef.current) return;
-
-      const canvas = canvasRef.current;
-      const rect = canvas.getBoundingClientRect();
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
-
-      // Check if click/touch is within wheel area
-      const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
-      const wheelRadius = Math.min(centerX, centerY) - 18;
-
-      if (distance <= wheelRadius) {
-        const angle = getAngleFromPoint(centerX, centerY, x, y);
-        setIsDragging(true);
-        setLastDragAngle(angle);
-        setDragVelocity(0);
-        setLastDragTime(Date.now());
-
-        // Cancel any existing momentum
-        if (momentumAnimationRef.current) {
-          cancelAnimationFrame(momentumAnimationRef.current);
-          momentumAnimationRef.current = null;
-        }
-
-        // Track drag start
-        trackWheelDragStart();
-      }
-    },
-    [canDrag]
-  );
-
-  // RAF-throttled drag update for better performance
-  const performDragUpdate = useCallback(
-    (clientX: number, clientY: number) => {
-      if (!isDragging || !canvasRef.current || lastDragAngle === null) return;
-
-      const canvas = canvasRef.current;
-      const rect = canvas.getBoundingClientRect();
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
-
-      const currentAngle = getAngleFromPoint(centerX, centerY, x, y);
-      const angleDiff = normalizeAngleDifference(currentAngle - lastDragAngle);
-
-      // Calculate velocity for momentum
-      const currentTime = Date.now();
-      const timeDiff = currentTime - lastDragTime;
-      if (timeDiff > 0) {
-        setDragVelocity((angleDiff / timeDiff) * 1000); // radians per second
-      }
-
-      setRotation((prev) => prev + angleDiff);
-      setLastDragAngle(currentAngle);
-      setLastDragTime(currentTime);
-    },
-    [isDragging, lastDragAngle, lastDragTime]
-  );
-
-  const updateDrag = useCallback(
-    (clientX: number, clientY: number) => {
-      // Store the latest coordinates
-      pendingDragUpdate.current = { clientX, clientY };
-
-      // Only schedule a new RAF if one isn't already pending
-      if (dragUpdateRef.current === null) {
-        dragUpdateRef.current = requestAnimationFrame(() => {
-          if (pendingDragUpdate.current) {
-            const { clientX: x, clientY: y } = pendingDragUpdate.current;
-            performDragUpdate(x, y);
-            pendingDragUpdate.current = null;
-          }
-          dragUpdateRef.current = null;
-        });
-      }
-    },
-    [performDragUpdate]
-  );
-
-  const endDrag = useCallback(() => {
-    if (!isDragging) return;
-
-    // Cancel any pending drag updates
-    if (dragUpdateRef.current !== null) {
-      cancelAnimationFrame(dragUpdateRef.current);
-      dragUpdateRef.current = null;
-    }
-    pendingDragUpdate.current = null;
-
-    setIsDragging(false);
-    setLastDragAngle(null);
-
-    // Track drag end with velocity
-    trackWheelDragEnd(dragVelocity);
-
-    // Start momentum animation if there's significant velocity
-    if (Math.abs(dragVelocity) > 0.5) {
-      let currentVelocity = dragVelocity;
-      const friction = 0.95; // Friction coefficient
-      let prev = performance.now();
-
-      const animateMomentum = (now: number) => {
-        const dt = (now - prev) / 1000; // Delta time in seconds
-        prev = now;
-        currentVelocity *= Math.pow(friction, dt * 60); // Normalized to 60fps equivalent
-
-        // Continue if velocity is significant
-        if (Math.abs(currentVelocity) > 0.01 && canDrag) {
-          setRotation((r) => r + currentVelocity * dt);
-          momentumAnimationRef.current = requestAnimationFrame(animateMomentum);
-        } else {
-          momentumAnimationRef.current = null;
-          setDragVelocity(0);
-        }
-      };
-
-      momentumAnimationRef.current = requestAnimationFrame(animateMomentum);
-    }
-  }, [isDragging, dragVelocity, canDrag]);
-
-  // Mouse event handlers
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      startDrag(e.clientX, e.clientY);
-    },
-    [startDrag]
-  );
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (isDragging) {
-        updateDrag(e.clientX, e.clientY);
-      }
-    },
-    [isDragging, updateDrag]
-  );
-
-  const handleMouseUp = useCallback(() => {
-    endDrag();
-  }, [endDrag]);
-
-  // Touch event handlers
-  const handleTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      e.preventDefault();
-      if (e.touches.length === 1) {
-        const touch = e.touches[0];
-        startDrag(touch.clientX, touch.clientY);
-      }
-    },
-    [startDrag]
-  );
-
-  const handleTouchMove = useCallback(
-    (e: React.TouchEvent) => {
-      e.preventDefault();
-      if (e.touches.length === 1) {
-        const touch = e.touches[0];
-        updateDrag(touch.clientX, touch.clientY);
-      }
-    },
-    [updateDrag]
-  );
-
-  const handleTouchEnd = useCallback(
-    (e: React.TouchEvent) => {
-      e.preventDefault();
-      endDrag();
-    },
-    [endDrag]
-  );
-
-  // Global mouse event handlers for smooth dragging
-  useEffect(() => {
-    if (isDragging) {
-      const handleGlobalMouseMove = (e: MouseEvent) => {
-        updateDrag(e.clientX, e.clientY);
-      };
-
-      const handleGlobalMouseUp = () => {
-        endDrag();
-      };
-
-      document.addEventListener("mousemove", handleGlobalMouseMove);
-      document.addEventListener("mouseup", handleGlobalMouseUp);
-
-      return () => {
-        document.removeEventListener("mousemove", handleGlobalMouseMove);
-        document.removeEventListener("mouseup", handleGlobalMouseUp);
-      };
-    }
-  }, [isDragging, updateDrag, endDrag]);
-
-  // Cancel drag when entering restricted states
-  useEffect(() => {
-    if (!canDrag && isDragging) {
-      setIsDragging(false);
-      setLastDragAngle(null);
-      setDragVelocity(0);
-      if (momentumAnimationRef.current) {
-        cancelAnimationFrame(momentumAnimationRef.current);
-        momentumAnimationRef.current = null;
-      }
-    }
-  }, [canDrag, isDragging]);
-
-  /** ========= Draw wheel (HiDPI, labels, pointer) ========= */
-  const colorThemes = useMemo(
-    () => [
-      // Vibrant Theme
-      [
-        "#FF6B35ff", "#E91E63ff", "#FFD23Fff", "#06FFA5ff", "#4ECDC4ff",
-        "#45B7D1ff", "#96CEB4ff", "#FFEAA7ff", "#DDA0DDff", "#98D8C8ff"
-      ],
-      // Ocean Theme
-      [
-        "#0077BEff", "#00A8CCff", "#40E0D0ff", "#1BA3CDff", "#5DADE2ff",
-        "#85C1E9ff", "#A9CCE3ff", "#87CEEBff", "#2E8B57ff", "#20B2AAff"
-      ],
-      // Sunset Theme
-      [
-        "#FF4757ff", "#FF6B9Dff", "#FFA502ff", "#FF7675ff", "#FDCB6Eff",
-        "#E84393ff", "#F39C12ff", "#E74C3Cff", "#FF5722ff", "#FF8A80ff"
-      ],
-      // Forest Theme
-      [
-        "#27AE60ff", "#2ECC71ff", "#58D68Dff", "#82E0AAff", "#A9DFBFff",
-        "#52C41Aff", "#73D13Dff", "#95DE64ff", "#B7EB8Fff", "#D9F7BEff"
-      ],
-      // Royal Theme
-      [
-        "#8E44ADff", "#9B59B6ff", "#BB8FCEff", "#D2B4DEff", "#E8DAEFff",
-        "#6C3483ff", "#7D3C98ff", "#A569BDff", "#CD6155ff", "#F1948Aff"
-      ],
-      // Tropical Theme
-      [
-        "#FF6F61ff", "#6B5B95ff", "#88D8B0ff", "#FFEAA7ff", "#DDA0DDff",
-        "#FFB07Aff", "#98D8C8ff", "#F093FBff", "#4ECDC4ff", "#45B7D1ff"
-      ],
-      // Rainbow Theme
-      [
-        "#FF0000ff", "#FF8000ff", "#FFFF00ff", "#80FF00ff", "#00FF00ff",
-        "#00FF80ff", "#00FFFFff", "#0080FFff", "#0000FFff", "#8000FFff"
-      ],
-      // USA Theme
-      [
-        "#B22234ff", "#FF0000ff", "#DC143Cff", "#8B0000ff", "#CD5C5Cff",
-        "#4169E1ff", "#0000CDff", "#000080ff", "#6495EDff", "#1E90FFff"
-      ],
-      // Indian Theme
-      [
-        "#FF9933ff", "#228B22ff", "#32CD32ff", "#FFD700ff", "#4169E1ff",
-        "#8B4513ff", "#DC143Cff", "#9370DBff", "#20B2AAff", "#800080ff"
-      ],
-      // Neon Theme
-      [
-        "#FF00FFff", "#00FFFFff", "#FFFF00ff", "#FF0080ff", "#80FF00ff",
-        "#FF4000ff", "#4000FFff", "#00FF40ff", "#9D00FFff", "#8000FFff"
-      ],
-      // Nature Theme
-      [
-        "#228B22ff", "#32CD32ff", "#8FBC8Fff", "#2E8B57ff", "#556B2Fff",
-        "#8B4513ff", "#4682B4ff", "#CD853Fff", "#2F4F4Fff", "#6B8E23ff"
-      ],
-      // Cyberpunk Theme
-      [
-        "#00FFFFff", "#FF00FFff", "#39FF14ff", "#6600CCff", "#0033FFff",
-        "#FFFF00ff", "#FF1493ff", "#FF6600ff", "#9D00FFff", "#FF073Aff"
-      ],
-      // Pastel Dream Theme
-      [
-        "#FFD1DCff", "#AEC6CFff", "#FDFD96ff", "#B2D8B2ff", "#E6E6FAff",
-        "#FFDAB9ff", "#AAF0D1ff", "#E0BBE4ff", "#FFB5C5ff", "#87CEEBff"
-      ],
-      // Autumn Harvest Theme
-      [
-        "#CC5500ff", "#8B0000ff", "#FFD700ff", "#8B4513ff", "#FF7518ff",
-        "#800020ff", "#228B22ff", "#B87333ff", "#4B0082ff", "#DC143Cff"
-      ],
-      // Galaxy Theme
-      [
-        "#4B0082ff", "#FF1493ff", "#C0C0C0ff", "#000080ff", "#00FF7Fff",
-        "#FF4500ff", "#1C1C1Cff", "#008B8Bff", "#DC143Cff", "#8A2BE2ff"
-      ]
-    ],
-    []
-  );
-
-  // Generate extended color palette (up to 20 unique colors)
-  const generateExtendedPalette = useCallback((baseColors: string[]): string[] => {
-    const extended: string[] = [];
-
-    // First 10: Original colors
-    baseColors.forEach(color => extended.push(color));
-
-    // Next 10: Variations (alternating lighter/darker)
-    for (let i = 0; i < baseColors.length && extended.length < 20; i++) {
-      const baseColor = baseColors[i];
-      if (i % 2 === 0) {
-        // Even index: lighten
-        extended.push(lightenColor(baseColor, 0.15));
-      } else {
-        // Odd index: darken
-        extended.push(darkenColor(baseColor, 0.15));
-      }
-    }
-
-    return extended;
-  }, []);
-
+  /** ========= Theme + colours ========= */
   // Store the original configId to maintain theme stability during eliminations
   const originalConfigId = useRef<string | null>(null);
-  const currentTheme = useRef<string[]>(colorThemes[0]);
+  const currentTheme = useRef<string[]>(COLOR_THEMES[0]);
 
   // Select a theme based on original wheel configuration - stays stable during eliminations
   const selectedTheme = useMemo(() => {
     if (!wheelNames.length) {
       // Reset when no names
       originalConfigId.current = null;
-      const fallback = colorThemes[0] || [];
+      const fallback = COLOR_THEMES[0] || [];
       currentTheme.current = fallback;
       return fallback;
     }
@@ -1125,19 +966,22 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         hash = hash & hash;
       }
 
-      const themeIndex = Math.abs(hash) % colorThemes.length;
-      currentTheme.current = colorThemes[themeIndex];
+      const themeIndex = Math.abs(hash) % COLOR_THEMES.length;
+      currentTheme.current = COLOR_THEMES[themeIndex];
     }
 
     // Ensure we always return a valid theme
     if (!currentTheme.current || currentTheme.current.length === 0) {
-      const fallback = colorThemes[0] || [];
+      const fallback = COLOR_THEMES[0] || [];
       currentTheme.current = fallback;
       return fallback;
     }
 
     return currentTheme.current;
-  }, [configId, colorThemes, wheelNames.length]);
+  }, [configId, wheelNames.length]);
+
+  // Store the original color assignments to maintain stability during eliminations
+  const originalColorMap = useRef<Map<string, string>>(new Map());
 
   // Reset original configId and color map when wheel is reset/blank
   useEffect(() => {
@@ -1147,74 +991,40 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     }
   }, [showBlank]);
 
-  // Store the original color assignments to maintain stability during eliminations
-  const originalColorMap = useRef<Map<string, string>>(new Map());
-
-  // Create stable color assignments that persist during eliminations
+  // Stable colour per name. Existing names keep their colour when the list is edited
+  // (winner removed, a name added); a completely new list gets a fresh assignment.
   const wheelColors = useMemo(() => {
+    const map = originalColorMap.current;
+
     if (!wheelNames.length) {
-      // Reset color map when no names
-      originalColorMap.current.clear();
-      return new Map();
+      map.clear();
+      return map;
     }
 
-    // Ensure selectedTheme is available
-    if (!selectedTheme || selectedTheme.length === 0) {
-      const fallbackTheme = colorThemes[0] || ["#FF6B35ff", "#4ECDC4", "#45B7D1"];
-      const colorMap = new Map();
+    const theme = selectedTheme && selectedTheme.length ? selectedTheme : COLOR_THEMES[0];
+    const palette = generateExtendedPalette(seededShuffle(theme, wheelNames.join('|')));
+
+    const missing = wheelNames.filter((name) => !map.has(name));
+    const isNewWheel = map.size === 0 || missing.length === wheelNames.length;
+
+    if (isNewWheel) {
+      map.clear();
       wheelNames.forEach((name, index) => {
-        const colorIndex = index % fallbackTheme.length;
-        const color = fallbackTheme[colorIndex];
-        colorMap.set(name, color);
+        map.set(name, palette[index % palette.length]);
       });
-      return colorMap;
-    }
-
-    // If this is a new wheel (originalConfigId changed or first load)
-    const shouldRecalculateColors =
-      originalColorMap.current.size === 0 ||
-      !wheelNames.some(name => originalColorMap.current.has(name));
-
-    if (shouldRecalculateColors) {
-      // Create new color assignments for the original wheel configuration
-      const wheelString = wheelNames.join('|');
-      let hash = 0;
-      for (let i = 0; i < wheelString.length; i++) {
-        const char = wheelString.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-      }
-
-      // Create shuffled theme colors for even distribution
-      const shuffledTheme = [...selectedTheme];
-      let currentIndex = shuffledTheme.length;
-
-      // Fisher-Yates shuffle with seeded randomness
-      while (currentIndex !== 0) {
-        hash = ((hash * 9301) + 49297) % 233280;
-        const randomIndex = Math.floor((hash / 233280) * currentIndex);
-        currentIndex--;
-        [shuffledTheme[currentIndex], shuffledTheme[randomIndex]] =
-          [shuffledTheme[randomIndex], shuffledTheme[currentIndex]];
-      }
-
-      // Generate extended palette (20 unique colors from 10 base colors)
-      const extendedPalette = generateExtendedPalette(shuffledTheme);
-
-      // Clear and rebuild color map
-      originalColorMap.current.clear();
-      wheelNames.forEach((name, index) => {
-        if (name === "RESPIN") {
-          originalColorMap.current.set(name, selectedTheme[0]);
-        } else {
-          const colorIndex = index % extendedPalette.length;
-          originalColorMap.current.set(name, extendedPalette[colorIndex]);
-        }
+    } else if (missing.length > 0) {
+      // Give newly added names colours that aren't already on the wheel where possible
+      const used = new Set(wheelNames.map((n) => map.get(n)).filter(Boolean));
+      missing.forEach((name, i) => {
+        const free = palette.find((c) => !used.has(c));
+        const color = free ?? palette[(map.size + i) % palette.length];
+        used.add(color);
+        map.set(name, color);
       });
     }
 
-    return originalColorMap.current;
-  }, [wheelNames, selectedTheme, colorThemes, generateExtendedPalette]);
+    return map;
+  }, [wheelNames, selectedTheme]);
 
   // Get color for a specific name
   const getColorForName = useCallback((name: string): string => {
@@ -1225,60 +1035,28 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     return color || "#FF6B35ff"; // Use vibrant fallback instead of gray
   }, [wheelColors]);
 
-  // Simplified gradient creation without caching to avoid stale references
+  // Radial gradient for a segment
   const createGradient = useCallback(
     (
       ctx: CanvasRenderingContext2D,
-      type: string,
       centerX: number,
       centerY: number,
       radius: number,
       midAngle: number,
       color?: string
     ): CanvasGradient => {
-      let gradient: CanvasGradient;
-
-      if (type === "blank") {
-        gradient = ctx.createRadialGradient(
-          centerX + Math.cos(midAngle) * radius * 0.5,
-          centerY + Math.sin(midAngle) * radius * 0.5,
-          0,
-          centerX,
-          centerY,
-          radius
-        );
-        const cleanColor = (color && color.length >= 7) ? color.slice(0, 7) : "#FF6B35"; // Use vibrant fallback
-        gradient.addColorStop(0, cleanColor + "33");
-        gradient.addColorStop(0.85, cleanColor + "22");
-        gradient.addColorStop(1, cleanColor + "11");
-      } else if (type === "respin") {
-        gradient = ctx.createRadialGradient(
-          centerX + Math.cos(midAngle) * radius * 0.5,
-          centerY + Math.sin(midAngle) * radius * 0.5,
-          0,
-          centerX,
-          centerY,
-          radius
-        );
-        gradient.addColorStop(0, "#2a2a2a");
-        gradient.addColorStop(0.7, "#0f0f0f");
-        gradient.addColorStop(1, "#000000");
-      } else {
-        // regular segment
-        gradient = ctx.createRadialGradient(
-          centerX + Math.cos(midAngle) * radius * 0.5,
-          centerY + Math.sin(midAngle) * radius * 0.5,
-          0,
-          centerX,
-          centerY,
-          radius
-        );
-        const cleanColor = (color && color.length >= 7) ? color.slice(0, 7) : "#FF6B35"; // Use vibrant fallback
-        gradient.addColorStop(0, cleanColor);
-        gradient.addColorStop(0.85, cleanColor + "dd");
-        gradient.addColorStop(1, cleanColor + "99");
-      }
-
+      const gradient = ctx.createRadialGradient(
+        centerX + Math.cos(midAngle) * radius * 0.5,
+        centerY + Math.sin(midAngle) * radius * 0.5,
+        0,
+        centerX,
+        centerY,
+        radius
+      );
+      const cleanColor = (color && color.length >= 7) ? color.slice(0, 7) : "#FF6B35"; // Use vibrant fallback
+      gradient.addColorStop(0, cleanColor);
+      gradient.addColorStop(0.85, cleanColor + "dd");
+      gradient.addColorStop(1, cleanColor + "99");
       return gradient;
     },
     []
@@ -1307,102 +1085,32 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         ctx.arc(centerX, centerY, radius, start, end);
         ctx.closePath();
 
-        if (showBlank) {
-          // Use simplified or cached gradient for blank segments
-          if (useSimplifiedGradients) {
-            const baseColor = getColorForName(name);
-            const cleanColor = (baseColor && baseColor.length >= 7) ? baseColor.slice(0, 7) : "#FF6B35"; // Use vibrant fallback
-            ctx.fillStyle = cleanColor + "33";
-          } else {
-            const baseColor = getColorForName(name);
-            const g = createGradient(
-              ctx,
-              "blank",
-              centerX,
-              centerY,
-              radius,
-              midAngle,
-              baseColor
-            );
-            ctx.fillStyle = g;
-          }
-          ctx.fill();
+        // Blank placeholder slices cycle through the theme; real slices use their assigned colour
+        const baseColor = showBlank
+          ? selectedTheme[i % selectedTheme.length]
+          : getColorForName(name);
 
-          // Lighter border for blank state
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        } else if (name === "RESPIN") {
-          // Use simplified or cached gradient for RESPIN
-          if (useSimplifiedGradients) {
-            ctx.fillStyle = "#1a1a1a";
-          } else {
-            const g = createGradient(
-              ctx,
-              "respin",
-              centerX,
-              centerY,
-              radius,
-              midAngle
-            );
-            ctx.fillStyle = g;
-          }
-          ctx.fill();
+        if (useSimplifiedGradients) {
+          const cleanColor = (baseColor && baseColor.length >= 7) ? baseColor.slice(0, 7) : "#FF6B35";
+          ctx.fillStyle = cleanColor;
+        } else {
+          ctx.fillStyle = createGradient(ctx, centerX, centerY, radius, midAngle, baseColor);
+        }
+        ctx.fill();
 
-          // Standard white border to match other segments
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 2;
-          ctx.stroke();
+        // White border with shadow
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-          // Save and clip to segment for inner golden border
+        // Inner glow (skip in performance mode)
+        if (!skipInnerGlow) {
           ctx.save();
           ctx.clip();
-
-          // Draw golden inner border (closer to edge to avoid gap)
-          ctx.beginPath();
-          ctx.moveTo(centerX, centerY);
-          ctx.arc(centerX, centerY, radius - 2, start, end);
-          ctx.closePath();
-          ctx.strokeStyle = "#ffd700";
-          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+          ctx.lineWidth = 4;
           ctx.stroke();
-
           ctx.restore();
-        } else {
-          // Use simplified or cached gradient for regular segments
-          if (useSimplifiedGradients) {
-            const baseColor = getColorForName(name);
-            const cleanColor = (baseColor && baseColor.length >= 7) ? baseColor.slice(0, 7) : "#FF6B35"; // Use vibrant fallback
-            ctx.fillStyle = cleanColor;
-          } else {
-            const baseColor = getColorForName(name);
-            const g = createGradient(
-              ctx,
-              "regular",
-              centerX,
-              centerY,
-              radius,
-              midAngle,
-              baseColor
-            );
-            ctx.fillStyle = g;
-          }
-          ctx.fill();
-
-          // White border with shadow
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-
-          // Inner glow (skip in performance mode)
-          if (!skipInnerGlow) {
-            ctx.save();
-            ctx.clip();
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-            ctx.lineWidth = 4;
-            ctx.stroke();
-            ctx.restore();
-          }
         }
 
         // Labels (skip for blank segments)
@@ -1412,35 +1120,22 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           ctx.rotate(start + sliceAngle / 2);
           ctx.textAlign = "right";
 
-          if (name === "RESPIN") {
-            const text = "FREE SPIN";
-            const fs = Math.max(8, fontSize - 2); // Slightly smaller than regular text
+          // Use simple pre-calculated font size and display text
+          const displayText = displayTexts[i] || name;
+          const fs = fontSize;
 
-            ctx.font = `bold ${fs}px Arial`;
-            ctx.strokeStyle = "#000";
-            ctx.lineWidth = Math.max(1, fs / 8);
-            const paddingFromEdge = 15;
-            ctx.strokeText(text, radius - paddingFromEdge, fs / 3);
-            ctx.fillStyle = "#ffff00";
-            ctx.fillText(text, radius - paddingFromEdge, fs / 3);
-          } else {
-            // Use simple pre-calculated font size and display text
-            const displayText = displayTexts[i] || name;
-            const fs = fontSize;
+          ctx.fillStyle = "#fff";
+          ctx.font = `bold ${fs}px Arial`;
 
-            ctx.fillStyle = "#fff";
-            ctx.font = `bold ${fs}px Arial`;
+          // Position text consistently from edge, regardless of length
+          const paddingFromEdge = 15; // Consistent padding from wheel edge
 
-            // Position text consistently from edge, regardless of length
-            const paddingFromEdge = 15; // Consistent padding from wheel edge
+          // Super thin black outline for better legibility on light colors
+          ctx.strokeStyle = "#000";
+          ctx.lineWidth = 0.5; // As thin as possible
+          ctx.strokeText(displayText, radius - paddingFromEdge, fs / 3);
 
-            // Super thin black outline for better legibility on light colors
-            ctx.strokeStyle = "#000";
-            ctx.lineWidth = 0.5; // As thin as possible
-            ctx.strokeText(displayText, radius - paddingFromEdge, fs / 3);
-
-            ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
-          }
+          ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
           ctx.restore();
         }
       });
@@ -1479,6 +1174,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       textInfo,
       wheelNames,
       getColorForName,
+      selectedTheme,
       showBlank,
       createGradient,
       performanceMode,
@@ -1498,7 +1194,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       setPerformanceMode("performance"); // Simplified rendering for high counts
     }
   }, [wheelNames.length]);
-
 
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
@@ -1606,168 +1301,374 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     drawWheel();
   }, [drawWheel]);
 
-
-  /** ========= Spin logic ========= */
-  const winnerRhymes = [
-    "Winner Winner, Chicken Dinner",
-    "The chosen one is...",
-    "Victory Royale!",
-    "Winner = Declared",
-    "Absolute legend pick",
-    "Throw some W's in the chat",
-    "The Wheel has spoken",
-    "Randomly selected winner is...",
-    "Jackpot!!!",
-    "Shout-Out",
-    "The Algorithm was in favor of...",
-  ];
-
-  const spin = () => {
-    if (isSpinning || showBlank) return;
-
-    // If there's a current winner being shown, save it to history before spinning again
-    if (showWinnerModal && selectedName && selectedName !== "RESPIN") {
+  /** ========= Winner history ========= */
+  const recordWinnerInHistory = useCallback(() => {
+    if (historyRecordedRef.current) return;
+    if (selectedName) {
+      historyRecordedRef.current = true;
       setWinnerHistory((prev) => [...prev, selectedName]);
     }
+  }, [selectedName]);
 
-    // Track wheel spin event with new tracking function
-    trackSpinInitiated(wheelNames.length, speedIndicator);
-    incrementSpinCount();
+  /** ========= Spin logic ========= */
+  const spin = useCallback(
+    (powerOverride?: number, direction: 1 | -1 = 1) => {
+      if (isSpinning || showBlank) return;
 
-    // Track Google Ads conversion for spin button click
-    trackSpinButtonConversion();
-
-    setIsSpinning(true);
-    setSelectedName("");
-    setShowWinnerModal(false);
-    setShowFairnessPopup(false);
-    setLockedSpeed(speedIndicator);
-
-    // Enhanced aria announcement for spin start
-    setAriaAnnouncement(
-      `Spinning wheel with ${wheelNames.length} options at ${Math.round(
-        speedIndicator * 100
-      )}% power`
-    );
-
-    const spinStrength = speedIndicator;
-
-    // Dynamic rotations based on number of names - fewer names spin faster (more rotations)
-    const extraRotations = wheelNames.length < 5 ? (5 - wheelNames.length) * 1.5 : 0;
-    const baseRotations = 2.5 + spinStrength * 5 + extraRotations; // 2 names = 7-12 rotations, 3 names = 5.5-10.5, 4 names = 4-9, 5+ names = 2.5-7.5
-
-    const spinDuration = 10000; // Fixed 10 second duration for all
-
-    // Simple random spin - let wheel land wherever it naturally stops
-    const finalRotation =
-      rotation + Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
-
-    const startTime = Date.now();
-    let lastFrameTime = 0;
-    const segmentSize = (2 * Math.PI) / wheelNames.length;
-    let lastSegment = -1;
-
-    const animate = () => {
-      const now = Date.now();
-
-      // Much lower frame rate on mobile for better performance
-      const isMobile = window.innerWidth < 768;
-      const throttleMs = isMobile ? 33.33 : (deviceCapability === "high" ? 16.67 : 25);
-
-      if (now - lastFrameTime < throttleMs) {
-        requestAnimationFrame(animate);
-        return;
-      }
-      lastFrameTime = now;
-
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / spinDuration, 1);
-      const easeOut = 1 - Math.pow(1 - progress, 4);
-
-      const currentRotation = rotation + (finalRotation - rotation) * easeOut;
-      setRotation(currentRotation);
-
-      // Calculate which segment is currently under the pointer (using same logic as final result)
-      const normalized =
-        (2 * Math.PI - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
-      const currentSegment = Math.floor(normalized / segmentSize);
-
-      // Play click sound on every segment crossing with optimized audio system
-      if (currentSegment !== lastSegment) {
-        // Calculate speed-based volume (louder when faster)
-        const speed = 1 - easeOut;
-        const vol = Math.max(0.01, Math.min(0.08, 0.01 + speed * 0.07));
-
-        playTickSound(vol).catch(() => {}); // Use pooled audio system
-        lastSegment = currentSegment;
+      // If a winner is still on screen (e.g. Space pressed), make sure it lands in history
+      if (showWinnerModal && selectedName) {
+        recordWinnerInHistory();
       }
 
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
+      const power = Math.max(0, Math.min(1, powerOverride ?? speedIndicator));
+      if (powerOverride !== undefined) setSpeedIndicator(power);
+
+      // Track wheel spin event
+      trackSpinInitiated(wheelNames.length, power);
+      incrementSpinCount();
+
+      // Track Google Ads conversion for spin button click
+      trackSpinButtonConversion();
+
+      setIsSpinning(true);
+      setSelectedName("");
+      setShowWinnerModal(false);
+      setShowFairnessPopup(false);
+      setShowHistoryPopup(false);
+      historyRecordedRef.current = false;
+
+      // Enhanced aria announcement for spin start
+      setAriaAnnouncement(
+        `Spinning wheel with ${wheelNames.length} options at ${Math.round(
+          power * 100
+        )}% power`
+      );
+
+      // Dynamic rotations based on number of names - fewer names spin faster (more rotations)
+      const extraRotations = wheelNames.length < 5 ? (5 - wheelNames.length) * 1.5 : 0;
+      const baseRotations = 2.5 + power * 5 + extraRotations;
+
+      // Where the wheel stops is decided purely by the CSPRNG. The extra two full
+      // turns of random make the landing angle uniform regardless of power.
+      const finalRotation =
+        rotation + direction * Math.PI * 2 * (baseRotations + cryptoRandom() * 2);
+
+      const startTime = Date.now();
+      let lastFrameTime = 0;
+      const segmentSize = (2 * Math.PI) / wheelNames.length;
+      let lastSegment = -1;
+      const namesAtSpin = wheelNames;
+
+      const animate = () => {
+        const now = Date.now();
+
+        // Much lower frame rate on mobile for better performance
+        const isMobile = window.innerWidth < 768;
+        const throttleMs = isMobile ? 33.33 : (deviceCapability === "high" ? 16.67 : 25);
+
+        if (now - lastFrameTime < throttleMs) {
+          requestAnimationFrame(animate);
+          return;
+        }
+        lastFrameTime = now;
+
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / SPIN_DURATION_MS, 1);
+        const easeOut = 1 - Math.pow(1 - progress, 4);
+
+        const currentRotation = rotation + (finalRotation - rotation) * easeOut;
+        setRotation(currentRotation);
+
+        // Which segment is under the pointer right now (same maths as the final result)
+        const normalized =
+          (2 * Math.PI - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
+        const currentSegment = Math.floor(normalized / segmentSize);
+
+        // Tick on every segment crossing
+        if (currentSegment !== lastSegment) {
+          const speed = 1 - easeOut;
+          const vol = Math.max(0.01, Math.min(0.08, 0.01 + speed * 0.07));
+          playTickSound(vol).catch(() => {});
+          lastSegment = currentSegment;
+        }
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+          return;
+        }
+
         setIsSpinning(false);
-        setLockedSpeed(null);
 
         // Calculate winner based on where the wheel actually stopped
         const normalizedRotation =
           (2 * Math.PI - (finalRotation % (2 * Math.PI))) % (2 * Math.PI);
         const selectedIndex = Math.floor(normalizedRotation / segmentSize);
-        const winner = wheelNames[selectedIndex % wheelNames.length];
+        const winner = namesAtSpin[selectedIndex % namesAtSpin.length];
         setSelectedName(winner);
 
-        if (winner !== "RESPIN") {
-          // Show winner modal IMMEDIATELY - this is what user sees
-          const rhyme =
-            winnerRhymes[Math.floor(cryptoRandom() * winnerRhymes.length)];
-          setWinnerRhyme(rhyme);
-          setShowWinnerModal(true);
+        // Show winner modal IMMEDIATELY - this is what user sees
+        const rhyme = WINNER_RHYMES[Math.floor(cryptoRandom() * WINNER_RHYMES.length)];
+        setWinnerRhyme(rhyme);
+        setShowWinnerModal(true);
 
-          // Everything else happens asynchronously (non-blocking)
-          setTimeout(async () => {
-            // Enhanced aria announcement for result
-            setAriaAnnouncement(
-              `Winner selected: ${winner}. The wheel has stopped spinning.`
-            );
+        // Everything else happens asynchronously (non-blocking)
+        setTimeout(async () => {
+          setAriaAnnouncement(
+            `Winner selected: ${winner}. The wheel has stopped spinning.`
+          );
+          trackSpinCompleted(winner, namesAtSpin.length, false);
 
-            // Track winner selection with new tracking function
-            trackSpinCompleted(winner, wheelNames.length, false);
+          if (onRecordSpin && configId) {
+            const spinId = await onRecordSpin(configId, winner, false, power);
+            setCurrentSpinId(spinId);
+          }
+        }, 0);
+      };
 
-            // Record spin in database
-            if (onRecordSpin && configId) {
-              const spinId = await onRecordSpin(configId, winner, false, speedIndicator);
-              setCurrentSpinId(spinId);
-            }
-          }, 0);
-        } else {
-          // For RESPIN, just do aria announcement
-          setTimeout(async () => {
-            setAriaAnnouncement(
-              "Free spin! The wheel landed on a respin. You get another turn."
-            );
+      requestAnimationFrame(animate);
+    },
+    [
+      isSpinning,
+      showBlank,
+      showWinnerModal,
+      selectedName,
+      recordWinnerInHistory,
+      speedIndicator,
+      wheelNames,
+      rotation,
+      deviceCapability,
+      playTickSound,
+      onRecordSpin,
+      configId,
+    ]
+  );
 
-            // Track respin selection with new tracking functions
-            trackSpinCompleted(winner, wheelNames.length, true);
-            trackRespinTriggered();
+  /** ========= DRAG INTERACTION HANDLERS ========= */
+  // Allow drag when wheel is visible and not spinning, even if blank
+  const canDrag = !isSpinning && !showWinnerModal;
 
-            // Record respin in database
-            if (onRecordSpin && configId) {
-              const spinId = await onRecordSpin(configId, winner, true, speedIndicator);
-              setCurrentSpinId(spinId);
-            }
-          }, 0);
+  const startDrag = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!canDrag || !canvasRef.current) return;
+
+      const canvas = canvasRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
+
+      // Check if click/touch is within wheel area
+      const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+      const wheelRadius = Math.min(centerX, centerY) - 18;
+
+      if (distance <= wheelRadius) {
+        const angle = getAngleFromPoint(centerX, centerY, x, y);
+        setIsDragging(true);
+        setLastDragAngle(angle);
+        setDragVelocity(0);
+        setLastDragTime(Date.now());
+
+        // Cancel any existing momentum
+        if (momentumAnimationRef.current) {
+          cancelAnimationFrame(momentumAnimationRef.current);
+          momentumAnimationRef.current = null;
         }
-      }
-    };
 
-    requestAnimationFrame(animate);
-  };
+        // Track drag start
+        trackWheelDragStart();
+      }
+    },
+    [canDrag]
+  );
+
+  // RAF-throttled drag update for better performance
+  const performDragUpdate = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!isDragging || !canvasRef.current || lastDragAngle === null) return;
+
+      const canvas = canvasRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const { x, y } = getCanvasCoordinates(canvas, clientX, clientY);
+
+      const currentAngle = getAngleFromPoint(centerX, centerY, x, y);
+      const angleDiff = normalizeAngleDifference(currentAngle - lastDragAngle);
+
+      // Calculate velocity for momentum
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastDragTime;
+      if (timeDiff > 0) {
+        setDragVelocity((angleDiff / timeDiff) * 1000); // radians per second
+      }
+
+      setRotation((prev) => prev + angleDiff);
+      setLastDragAngle(currentAngle);
+      setLastDragTime(currentTime);
+    },
+    [isDragging, lastDragAngle, lastDragTime]
+  );
+
+  const updateDrag = useCallback(
+    (clientX: number, clientY: number) => {
+      // Store the latest coordinates
+      pendingDragUpdate.current = { clientX, clientY };
+
+      // Only schedule a new RAF if one isn't already pending
+      if (dragUpdateRef.current === null) {
+        dragUpdateRef.current = requestAnimationFrame(() => {
+          if (pendingDragUpdate.current) {
+            const { clientX: x, clientY: y } = pendingDragUpdate.current;
+            performDragUpdate(x, y);
+            pendingDragUpdate.current = null;
+          }
+          dragUpdateRef.current = null;
+        });
+      }
+    },
+    [performDragUpdate]
+  );
+
+  const endDrag = useCallback(() => {
+    if (!isDragging) return;
+
+    // Cancel any pending drag updates
+    if (dragUpdateRef.current !== null) {
+      cancelAnimationFrame(dragUpdateRef.current);
+      dragUpdateRef.current = null;
+    }
+    pendingDragUpdate.current = null;
+
+    setIsDragging(false);
+    setLastDragAngle(null);
+
+    // Track drag end with velocity
+    trackWheelDragEnd(dragVelocity);
+
+    const speed = Math.abs(dragVelocity);
+
+    // A real flick starts a real spin, in the direction of the flick.
+    if (speed >= FLICK_THRESHOLD && !showBlank) {
+      const flickPower = Math.min(
+        1,
+        Math.max(0.2, (speed - FLICK_THRESHOLD) / (FLICK_MAX_VELOCITY - FLICK_THRESHOLD))
+      );
+      setDragVelocity(0);
+      // A locked slider is an explicit choice; otherwise power comes from how hard they flicked
+      spin(speedLocked ? undefined : flickPower, dragVelocity > 0 ? 1 : -1);
+      return;
+    }
+
+    // Gentle release: coast to a stop without picking a winner
+    if (speed > 0.5) {
+      let currentVelocity = dragVelocity;
+      const friction = 0.95; // Friction coefficient
+      let prev = performance.now();
+
+      const animateMomentum = (now: number) => {
+        const dt = (now - prev) / 1000; // Delta time in seconds
+        prev = now;
+        currentVelocity *= Math.pow(friction, dt * 60); // Normalized to 60fps equivalent
+
+        // Continue if velocity is significant
+        if (Math.abs(currentVelocity) > 0.01 && canDrag) {
+          setRotation((r) => r + currentVelocity * dt);
+          momentumAnimationRef.current = requestAnimationFrame(animateMomentum);
+        } else {
+          momentumAnimationRef.current = null;
+          setDragVelocity(0);
+        }
+      };
+
+      momentumAnimationRef.current = requestAnimationFrame(animateMomentum);
+    }
+  }, [isDragging, dragVelocity, canDrag, showBlank, speedLocked, spin]);
+
+  // Mouse event handlers
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      startDrag(e.clientX, e.clientY);
+    },
+    [startDrag]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (isDragging) {
+        updateDrag(e.clientX, e.clientY);
+      }
+    },
+    [isDragging, updateDrag]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    endDrag();
+  }, [endDrag]);
+
+  // Touch event handlers
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        startDrag(touch.clientX, touch.clientY);
+      }
+    },
+    [startDrag]
+  );
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        updateDrag(touch.clientX, touch.clientY);
+      }
+    },
+    [updateDrag]
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    endDrag();
+  }, [endDrag]);
+
+  // Global mouse event handlers for smooth dragging
+  useEffect(() => {
+    if (isDragging) {
+      const handleGlobalMouseMove = (e: MouseEvent) => {
+        updateDrag(e.clientX, e.clientY);
+      };
+
+      const handleGlobalMouseUp = () => {
+        endDrag();
+      };
+
+      document.addEventListener("mousemove", handleGlobalMouseMove);
+      document.addEventListener("mouseup", handleGlobalMouseUp);
+
+      return () => {
+        document.removeEventListener("mousemove", handleGlobalMouseMove);
+        document.removeEventListener("mouseup", handleGlobalMouseUp);
+      };
+    }
+  }, [isDragging, updateDrag, endDrag]);
+
+  // Cancel drag when entering restricted states
+  useEffect(() => {
+    if (!canDrag && isDragging) {
+      setIsDragging(false);
+      setLastDragAngle(null);
+      setDragVelocity(0);
+      if (momentumAnimationRef.current) {
+        cancelAnimationFrame(momentumAnimationRef.current);
+        momentumAnimationRef.current = null;
+      }
+    }
+  }, [canDrag, isDragging]);
 
   /** ========= Winner acknowledgement (Close / backdrop / Escape / Respin / Remove) ========= */
   const acknowledgeWinner = useCallback(
     (method: "button" | "backdrop" | "x" | "remove") => {
-      if (selectedName && selectedName !== "RESPIN") {
-        setWinnerHistory((prev) => [...prev, selectedName]);
-      }
+      recordWinnerInHistory();
       setShowWinnerModal(false);
       setWinnerRhyme("");
       trackWinnerAcknowledged(method);
@@ -1775,23 +1676,28 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         onUpdateSpinAcknowledgment(currentSpinId, method);
       }
     },
-    [selectedName, currentSpinId, onUpdateSpinAcknowledgment]
+    [recordWinnerInHistory, currentSpinId, onUpdateSpinAcknowledgment]
   );
 
-  // Escape dismisses the fairness popup, then the winner modal
+  // Escape dismisses popups, then the winner modal
   useEffect(() => {
-    if (!showWinnerModal && !showFairnessPopup) return;
+    if (!showWinnerModal && !showFairnessPopup && !showHistoryPopup) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (showFairnessPopup) {
         setShowFairnessPopup(false);
+      } else if (showHistoryPopup) {
+        setShowHistoryPopup(false);
       } else if (showWinnerModal) {
         acknowledgeWinner("x");
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showWinnerModal, showFairnessPopup, acknowledgeWinner]);
+  }, [showWinnerModal, showFairnessPopup, showHistoryPopup, acknowledgeWinner]);
+
+  const spinDisabled = isSpinning || showBlank || controlsDisabled;
+  const resetDisabled = isSpinning || controlsDisabled;
 
   /** ========= UI ========= */
   return (
@@ -1802,7 +1708,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       aria-label="Spinning wheel"
       tabIndex={0}
       onKeyDown={(e) => {
-        if ((e.key === " " || e.key === "Enter") && !isSpinning && !showBlank) {
+        if ((e.key === " " || e.key === "Enter") && !spinDisabled) {
+          // Don't hijack Space/Enter when the user is on the slider or a button
+          const target = e.target as HTMLElement;
+          if (target.tagName === "INPUT" || target.tagName === "BUTTON") return;
           e.preventDefault();
           setAriaAnnouncement("Activating spin with keyboard");
           spin();
@@ -1863,7 +1772,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         </div>
       </div>
 
-      {/* Spin Power - Compact horizontal slider positioned below wheel */}
+      {/* Spin Power - drifts on its own; drag it to lock a speed */}
       <div
         ref={speedRef}
         className="mt-3 mb-2 w-full max-w-[min(85vw,500px)] flex-shrink-0"
@@ -1871,18 +1780,37 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       >
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-white/80 whitespace-nowrap flex-shrink-0">Slow</span>
-          <div className="relative flex-1 h-4 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full overflow-hidden shadow-inner">
-            <div
-              className="absolute top-0 bottom-0 w-3 bg-white border-2 border-gray-800 rounded-full shadow-lg"
-              style={{
-                left: `${
-                  (lockedSpeed !== null ? lockedSpeed : speedIndicator) * 100
-                }%`,
-                transform: "translateX(-50%)",
+          <div className="relative flex-1 h-4 bg-gradient-to-r from-blue-400 via-yellow-400 to-red-500 rounded-full shadow-inner">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={Math.round(speedIndicator * 100)}
+              disabled={isSpinning}
+              aria-label="Spin power"
+              aria-valuetext={`${Math.round(speedIndicator * 100)}% power${speedLocked ? ", locked" : ", drifting"}`}
+              title={speedLocked ? "Spin power (locked)" : "Drag to set spin power"}
+              onChange={(e) => {
+                setSpeedIndicator(Number(e.target.value) / 100);
+                setSpeedLocked(true);
               }}
+              className="speed-slider absolute inset-0 w-full h-full m-0"
             />
           </div>
           <span className="text-[10px] text-white/80 whitespace-nowrap flex-shrink-0">Fast</span>
+          <button
+            type="button"
+            onClick={() => setSpeedLocked(false)}
+            aria-hidden={!speedLocked}
+            tabIndex={speedLocked ? 0 : -1}
+            className={`text-[9px] text-white/60 hover:text-white underline whitespace-nowrap flex-shrink-0 transition-opacity ${
+              speedLocked && !isSpinning ? "opacity-100" : "opacity-0 pointer-events-none"
+            }`}
+            style={{ touchAction: "manipulation" }}
+          >
+            auto
+          </button>
         </div>
       </div>
 
@@ -1916,8 +1844,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         }}
       >
         <button
-          onClick={spin}
-          disabled={isSpinning || showBlank}
+          onClick={() => spin()}
+          disabled={spinDisabled}
           className={`
             ${
               isFirefox
@@ -1926,24 +1854,21 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             }
             font-bold text-white rounded-lg shadow-lg transition-all
             ${
-              isSpinning || showBlank
+              spinDisabled
                 ? "bg-green-500"
                 : "bg-green-500 hover:bg-green-600 hover:scale-[1.02] active:scale-95 cursor-pointer"
             }
           `}
           style={{
             touchAction: "manipulation",
-            opacity: isSpinning || showBlank ? "0.5" : "1",
-            pointerEvents: isSpinning || showBlank ? "none" : "auto",
+            opacity: spinDisabled ? "0.5" : "1",
+            pointerEvents: spinDisabled ? "none" : "auto",
             // iOS opacity fixes
-            ...(isIOS && (isSpinning || showBlank)
+            ...(isIOS && spinDisabled
               ? {
                   WebkitOpacity: "0.5",
                   filter: "opacity(0.5)",
-                  backgroundColor:
-                    isSpinning || showBlank
-                      ? "rgba(34, 197, 94, 0.5)"
-                      : undefined,
+                  backgroundColor: "rgba(34, 197, 94, 0.5)",
                 }
               : {}),
             // iOS 16 button fixes
@@ -1962,14 +1887,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         {onReset && (
           <button
             onClick={() => {
-              // Don't add to history on reset - it's already been added when modal was closed
-              // Reset just closes any open modal and resets the wheel
+              // Reset just closes any open modal and hands control back to the parent
               setShowWinnerModal(false);
               setWinnerRhyme("");
               setSelectedName(""); // Clear selected name
               onReset();
             }}
-            disabled={isSpinning || showBlank}
+            disabled={resetDisabled}
             className={`
               ${
                 isFirefox
@@ -1979,24 +1903,21 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               font-bold text-white rounded-lg shadow-lg
               transition-all hover:scale-[1.02] active:scale-95
               ${
-                isSpinning || showBlank
+                resetDisabled
                   ? "bg-blue-500"
                   : "bg-blue-500 hover:bg-blue-600 cursor-pointer"
               }
             `}
             style={{
               touchAction: "manipulation",
-              opacity: isSpinning || showBlank ? "0.5" : "1",
-              pointerEvents: isSpinning || showBlank ? "none" : "auto",
+              opacity: resetDisabled ? "0.5" : "1",
+              pointerEvents: resetDisabled ? "none" : "auto",
               // iOS opacity fixes
-              ...(isIOS && (isSpinning || showBlank)
+              ...(isIOS && resetDisabled
                 ? {
                     WebkitOpacity: "0.5",
                     filter: "opacity(0.5)",
-                    backgroundColor:
-                      isSpinning || showBlank
-                        ? "rgba(59, 130, 246, 0.5)"
-                        : undefined,
+                    backgroundColor: "rgba(59, 130, 246, 0.5)",
                   }
                 : {}),
               // iOS 16 button fixes
@@ -2009,7 +1930,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                 : {}),
             }}
           >
-            Reset
+            {showBlank ? "Add names" : "Reset"}
           </button>
         )}
       </div>
@@ -2044,7 +1965,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             </h2>
             <p
               id="winner-name"
-              className={`font-bold text-green-600 animate-pulse mb-6 leading-tight break-words ${
+              className={`font-bold text-green-600 mb-6 leading-tight break-words ${
                 selectedName.length > 15
                   ? "text-2xl sm:text-3xl"
                   : selectedName.length > 10
@@ -2086,12 +2007,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             </div>
 
             {/* Remove link underneath */}
-            {selectedName !== "RESPIN" && wheelNames.length > 2 && onRemoveWinner && (
+            {wheelNames.length > 2 && onRemoveWinner && (
               <div className="mt-3">
                 <button
                   onClick={async () => {
                     // Remove the winner from the wheel
-                    const newNames = wheelNames.filter(name => name !== selectedName && name !== "RESPIN");
+                    const newNames = wheelNames.filter(name => name !== selectedName);
                     acknowledgeWinner("remove");
 
                     // Create new configuration with remaining names
@@ -2108,12 +2029,75 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         </div>
       )}
 
-      {/* Free Spin Indicator */}
-      {selectedName === "RESPIN" && !isSpinning && (
-        <div className="fixed inset-0 flex items-center justify-center z-40 pointer-events-none">
-          <div className="bg-gradient-to-br from-yellow-400 to-yellow-600 text-black rounded-2xl shadow-2xl p-8 transform scale-100 animate-bounce-in text-center border-4 border-red-600">
-            <h2 className="text-4xl font-bold mb-2">FREE SPIN!</h2>
-            <p className="text-xl font-semibold">Try one more time...</p>
+      {/* Winner history popup */}
+      {showHistoryPopup && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-[70] pointer-events-auto backdrop-blur-sm bg-black/20 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowHistoryPopup(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="history-title"
+            className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center relative"
+          >
+            <button
+              onClick={() => setShowHistoryPopup(false)}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
+              aria-label="Close"
+              style={{ touchAction: "manipulation" }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h3 id="history-title" className="text-lg font-semibold text-gray-900 mb-1">
+              Winners
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">
+              {winnerHistory.length === 0
+                ? "No spins yet"
+                : `${winnerHistory.length} ${winnerHistory.length === 1 ? "spin" : "spins"} so far, newest first`}
+            </p>
+
+            {winnerHistory.length > 0 && (
+              <ol className="max-h-[50vh] overflow-y-auto text-left divide-y divide-gray-100 rounded-lg border border-gray-100 mb-4">
+                {[...winnerHistory].reverse().map((winner, i) => {
+                  const spinNumber = winnerHistory.length - i;
+                  return (
+                    <li key={`${spinNumber}-${winner}`} className="flex items-center gap-3 px-3 py-2">
+                      <span className="w-6 text-right text-xs text-gray-400 tabular-nums">{spinNumber}</span>
+                      <span className={`flex-1 truncate ${i === 0 ? "font-semibold text-gray-900" : "text-gray-700"}`}>
+                        {winner}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+
+            <div className="flex gap-3">
+              {winnerHistory.length > 0 && (
+                <button
+                  onClick={() => setWinnerHistory([])}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                  style={{ touchAction: "manipulation" }}
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                onClick={() => setShowHistoryPopup(false)}
+                className="flex-1 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
+                style={{ touchAction: "manipulation" }}
+                autoFocus
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2198,8 +2182,8 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                   <div className="flex items-start">
                     <span className="text-blue-300 mr-2">▸</span>
                     <p className="text-gray-300 text-xs">
-                      <span className="text-blue-300 font-mono">Entropy:</span>{" "}
-                      Keyboard/mouse timing, CPU thermal noise
+                      <span className="text-blue-300 font-mono">Spin power:</span>{" "}
+                      Only changes how long the wheel turns, never where it lands
                     </p>
                   </div>
                   <div className="flex items-start">
@@ -2244,22 +2228,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                       {((1 / wheelNames.length) * 100).toFixed(2)}%
                     </p>
                   </div>
-                  {includeFreeSpins &&
-                    wheelNames.filter((n) => n === "RESPIN").length > 0 && (
-                      <div className="bg-black/30 rounded p-2">
-                        <p className="text-purple-300 font-mono text-[10px]">
-                          RESPIN ODDS
-                        </p>
-                        <p className="text-white font-bold">
-                          {(
-                            (wheelNames.filter((n) => n === "RESPIN").length /
-                              wheelNames.length) *
-                            100
-                          ).toFixed(2)}
-                          %
-                        </p>
-                      </div>
-                    )}
+                  <div className="bg-black/30 rounded p-2">
+                    <p className="text-purple-300 font-mono text-[10px]">
+                      SPINS THIS SESSION
+                    </p>
+                    <p className="text-white font-bold">{winnerHistory.length}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2275,6 +2249,33 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         </div>
       )}
 
+      {/* Mute toggle - small, bottom-left */}
+      <button
+        type="button"
+        onClick={toggleMute}
+        aria-label={muted ? "Unmute wheel sounds" : "Mute wheel sounds"}
+        aria-pressed={muted}
+        title={muted ? "Sound off" : "Sound on"}
+        className="fixed z-[45] w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 text-white/90 backdrop-blur-sm border border-white/20 flex items-center justify-center transition-colors cursor-pointer"
+        style={{
+          left: "max(0.75rem, env(safe-area-inset-left))",
+          bottom: "max(0.75rem, env(safe-area-inset-bottom))",
+          touchAction: "manipulation",
+        }}
+      >
+        {muted ? (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5L6 9H3v6h3l5 4V5z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M22 9l-6 6m0-6l6 6" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5L6 9H3v6h3l5 4V5z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13" />
+          </svg>
+        )}
+      </button>
+
       {/* Footer - Compact single line */}
       <div ref={footerRef} className="w-full text-center flex-shrink-0 pb-8 sm:pb-4" style={{
         minHeight: '40px',
@@ -2287,7 +2288,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               {fairnessText}
             </div>
           )}
-          {/* Last winner and fairness link combined */}
+          {/* Last winner, history and fairness links */}
           <div className="flex items-center gap-2 text-[9px] sm:text-[10px] text-white/70">
             <span className="whitespace-nowrap">
               Last: {winnerHistory.length > 0 ? (
@@ -2298,6 +2299,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                 <span className="text-white/40">—</span>
               )}
             </span>
+            <span className="text-white/40">•</span>
+            <button
+              onClick={() => setShowHistoryPopup(true)}
+              className="text-white/70 hover:text-white underline"
+              style={{ touchAction: "manipulation" }}
+            >
+              history{winnerHistory.length > 0 ? ` (${winnerHistory.length})` : ""}
+            </button>
             <span className="text-white/40">•</span>
             <button
               onClick={() => {
