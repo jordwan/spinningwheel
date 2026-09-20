@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getSupabaseClient, isSupabaseEnabled } from '../supabase/client';
+import { debugLog } from '../utils/logger';
 
 /**
  * Supabase adapter that handles all database operations with graceful error handling
@@ -13,12 +14,12 @@ export class SupabaseAdapter {
       if (isSupabaseEnabled()) {
         this.client = getSupabaseClient();
         if (this.client) {
-          console.log('📡 Supabase adapter initialized');
+          debugLog('📡 Supabase adapter initialized');
         } else {
           console.warn('🚫 Supabase client creation failed - running in local-only mode');
         }
       } else {
-        console.log('🚫 Supabase not available - running in local-only mode');
+        debugLog('🚫 Supabase not available - running in local-only mode');
       }
     } catch (error) {
       console.warn('🚨 Supabase adapter construction failed - running in local-only mode:', error);
@@ -28,7 +29,7 @@ export class SupabaseAdapter {
 
   async insertSession(sessionData: Record<string, unknown>): Promise<void> {
     if (!this.client) {
-      console.log('🔇 Supabase not available, skipping session insert');
+      debugLog('🔇 Supabase not available, skipping session insert');
       return;
     }
 
@@ -65,7 +66,7 @@ export class SupabaseAdapter {
 
   async updateSession(sessionId: string, sessionData: Record<string, unknown>): Promise<void> {
     if (!this.client) {
-      console.log('🔇 Supabase not available, skipping session update');
+      debugLog('🔇 Supabase not available, skipping session update');
       return;
     }
 
@@ -96,7 +97,7 @@ export class SupabaseAdapter {
 
   async insertConfiguration(configData: Record<string, unknown>): Promise<void> {
     if (!this.client) {
-      console.log('🔇 Supabase not available, skipping configuration insert');
+      debugLog('🔇 Supabase not available, skipping configuration insert');
       return;
     }
 
@@ -127,7 +128,7 @@ export class SupabaseAdapter {
 
   async insertSpin(spinData: Record<string, unknown>): Promise<void> {
     if (!this.client) {
-      console.log('🔇 Supabase not available, skipping spin insert');
+      debugLog('🔇 Supabase not available, skipping spin insert');
       return;
     }
 
@@ -162,7 +163,7 @@ export class SupabaseAdapter {
 
   async updateSpin(spinId: string, updateData: Record<string, unknown>): Promise<void> {
     if (!this.client) {
-      console.log('🔇 Supabase not available, skipping spin update');
+      debugLog('🔇 Supabase not available, skipping spin update');
       return;
     }
 
@@ -238,7 +239,7 @@ export class SupabaseAdapter {
         return false;
       }
 
-      console.log('✅ Database connection successful');
+      debugLog('✅ Database connection successful');
       return true;
     } catch (err) {
       console.error('❌ Connection test failed:', err);
@@ -264,7 +265,7 @@ export class SupabaseAdapter {
         .select('id')
         .limit(1);
       results.sessions = !sessionsError;
-      if (sessionsError) console.log('❌ Sessions table issue:', sessionsError.message);
+      if (sessionsError) debugLog('❌ Sessions table issue:', sessionsError.message);
 
       // Test wheel_configurations table
       const { error: configError } = await client
@@ -272,7 +273,7 @@ export class SupabaseAdapter {
         .select('id')
         .limit(1);
       results.configurations = !configError;
-      if (configError) console.log('❌ Configurations table issue:', configError.message);
+      if (configError) debugLog('❌ Configurations table issue:', configError.message);
 
       // Test spin_results table
       const { error: spinsError } = await client
@@ -280,13 +281,13 @@ export class SupabaseAdapter {
         .select('id')
         .limit(1);
       results.spins = !spinsError;
-      if (spinsError) console.log('❌ Spin results table issue:', spinsError.message);
+      if (spinsError) debugLog('❌ Spin results table issue:', spinsError.message);
 
     } catch (err) {
       console.error('❌ Schema verification failed:', err);
     }
 
-    console.log('📊 Schema verification results:', results);
+    debugLog('📊 Schema verification results:', results);
     return results;
   }
 

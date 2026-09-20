@@ -35,6 +35,10 @@ export interface SpinRecord {
 
 const SESSION_STORAGE_KEY = 'wheel_session_data';
 const SESSION_EXPIRY_DAYS = 30;
+// Cap what we keep in localStorage. A classroom that spins all year would otherwise
+// grow this blob forever and pay for JSON.parse/stringify of it on every save.
+const MAX_STORED_CONFIGS = 100;
+const MAX_STORED_SPINS = 500;
 
 /**
  * Local-first session management that works instantly without database dependencies
@@ -189,6 +193,9 @@ export class LocalSession {
     };
 
     this.configurations.push(config);
+    if (this.configurations.length > MAX_STORED_CONFIGS) {
+      this.configurations = this.configurations.slice(-MAX_STORED_CONFIGS);
+    }
     this.notifyChange();
 
     // Trigger event-based sync
@@ -216,6 +223,9 @@ export class LocalSession {
     };
 
     this.spins.push(spin);
+    if (this.spins.length > MAX_STORED_SPINS) {
+      this.spins = this.spins.slice(-MAX_STORED_SPINS);
+    }
     this.notifyChange();
 
     // Trigger event-based sync

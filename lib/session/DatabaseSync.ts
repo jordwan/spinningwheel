@@ -1,4 +1,5 @@
 import { LocalSession, WheelConfig, SpinRecord } from './LocalSession';
+import { debugLog } from '../utils/logger';
 
 interface SyncOperation {
   id: string;
@@ -30,6 +31,19 @@ export class DatabaseSync {
   private lastSyncTime: string | null = null;
   private sessionInsertAttempted: boolean = false;
   private static globalSessionInsertAttempted: Set<string> = new Set();
+  private isProcessing: boolean = false;
+  private processRequestedWhileBusy: boolean = false;
+  private destroyed: boolean = false;
+  // Keep stable references so destroy() can actually remove the listeners
+  private readonly handleOnline = () => {
+    this.isOnline = true;
+    debugLog('🌐 Back online - resuming sync');
+    this.processSyncQueue();
+  };
+  private readonly handleOffline = () => {
+    this.isOnline = false;
+    debugLog('🚫 Offline - sync paused');
+  };
 
   private readonly SYNC_INTERVAL = 30000; // 30 seconds - only for retrying failed operations
   private readonly MAX_RETRIES = 3;
@@ -60,23 +74,14 @@ export class DatabaseSync {
     // Immediately sync the session to database
     // Non-blocking - if it fails, the 30-second loop will retry
     this.processSyncQueue().catch(err => {
-      console.log('⚠️ Initial session sync failed, will retry in background:', err);
+      debugLog('⚠️ Initial session sync failed, will retry in background:', err);
     });
   }
 
   private setupNetworkListeners(): void {
     if (typeof window !== 'undefined') {
-      window.addEventListener('online', () => {
-        this.isOnline = true;
-        console.log('🌐 Back online - resuming sync');
-        this.processSyncQueue();
-      });
-
-      window.addEventListener('offline', () => {
-        this.isOnline = false;
-        console.log('🚫 Offline - sync paused');
-      });
-
+      window.addEventListener('online', this.handleOnline);
+      window.addEventListener('offline', this.handleOffline);
       this.isOnline = navigator.onLine;
     }
   }
@@ -100,17 +105,17 @@ export class DatabaseSync {
 
   private queueInitialSessionInsert(): void {
     const sessionId = this.localSession.getSessionId();
-    console.log(`🔍 Session insert check: adapter=${!!this.adapter}, instanceAttempted=${this.sessionInsertAttempted}, globalAttempted=${DatabaseSync.globalSessionInsertAttempted.has(sessionId)}`);
+    debugLog(`🔍 Session insert check: adapter=${!!this.adapter}, instanceAttempted=${this.sessionInsertAttempted}, globalAttempted=${DatabaseSync.globalSessionInsertAttempted.has(sessionId)}`);
 
     if (!this.adapter || this.sessionInsertAttempted || DatabaseSync.globalSessionInsertAttempted.has(sessionId)) {
-      console.log('⏭️ Skipping session insert - already attempted globally or no adapter');
+      debugLog('⏭️ Skipping session insert - already attempted globally or no adapter');
       return;
     }
 
     const data = this.localSession.getDataForSync();
     const now = new Date().toISOString();
 
-    console.log(`📝 Queueing session insert for session ID: ${data.session.id}`);
+    debugLog(`📝 Queueing session insert for session ID: ${data.session.id}`);
 
     // Queue initial session insert (only happens once when adapter is first set)
     this.queueOperation({
@@ -124,7 +129,7 @@ export class DatabaseSync {
 
     this.sessionInsertAttempted = true;
     DatabaseSync.globalSessionInsertAttempted.add(sessionId);
-    console.log('✅ Session insert queued and flags set (instance + global)');
+    debugLog('✅ Session insert queued and flags set (instance + global)');
   }
 
 
@@ -140,7 +145,7 @@ export class DatabaseSync {
         const existingSpinId = op.id.replace('ack_', '');
         const newSpinId = operation.id.replace('ack_', '');
         if (existingSpinId === newSpinId) {
-          console.log(`🔄 Replacing acknowledgment for spin ${newSpinId}`);
+          debugLog(`🔄 Replacing acknowledgment for spin ${newSpinId}`);
           return false;
         }
       }
@@ -155,12 +160,31 @@ export class DatabaseSync {
   }
 
   private async processSyncQueue(): Promise<void> {
-    if (!this.adapter || !this.isOnline || this.syncQueue.length === 0) {
+    if (this.destroyed || !this.adapter || !this.isOnline || this.syncQueue.length === 0) {
       return;
     }
 
-    // Removed excessive sync logging to reduce console noise
+    // Only one pass at a time. Event-based triggers (config saved, spin recorded,
+    // retry timers, the 30s loop) can overlap; without this guard the same
+    // operation could be sent twice before the first attempt finished.
+    if (this.isProcessing) {
+      this.processRequestedWhileBusy = true;
+      return;
+    }
+    this.isProcessing = true;
 
+    try {
+      await this.processOperations();
+    } finally {
+      this.isProcessing = false;
+      if (this.processRequestedWhileBusy) {
+        this.processRequestedWhileBusy = false;
+        void this.processSyncQueue();
+      }
+    }
+  }
+
+  private async processOperations(): Promise<void> {
     const operations = [...this.syncQueue];
     const successfulOps: string[] = [];
 
@@ -272,7 +296,7 @@ export class DatabaseSync {
     // Immediately sync configuration to database
     // Non-blocking - if it fails, the 30-second loop will retry
     this.processSyncQueue().catch(err => {
-      console.log('⚠️ Configuration sync failed, will retry in background:', err);
+      debugLog('⚠️ Configuration sync failed, will retry in background:', err);
     });
   }
 
@@ -292,7 +316,7 @@ export class DatabaseSync {
     // Immediately sync spin result to database
     // Non-blocking - if it fails, the 30-second loop will retry
     this.processSyncQueue().catch(err => {
-      console.log('⚠️ Spin sync failed, will retry in background:', err);
+      debugLog('⚠️ Spin sync failed, will retry in background:', err);
     });
   }
 
@@ -317,10 +341,13 @@ export class DatabaseSync {
    * Cleanup when component unmounts
    */
   destroy(): void {
+    this.destroyed = true;
     this.stopSyncLoop();
+    // Dropping the adapter also stops any pending retry timers from doing work
+    this.adapter = null;
     if (typeof window !== 'undefined') {
-      window.removeEventListener('online', () => {});
-      window.removeEventListener('offline', () => {});
+      window.removeEventListener('online', this.handleOnline);
+      window.removeEventListener('offline', this.handleOffline);
     }
   }
 }

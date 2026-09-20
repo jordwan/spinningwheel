@@ -6,13 +6,17 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 // Create a singleton Supabase client for use in the browser
 let supabase: ReturnType<typeof createClient<Database>> | null = null;
+let warnedMissingCredentials = false;
 
 export function getSupabaseClient(): ReturnType<typeof createClient<Database>> | null {
   // Return null if credentials aren't configured
   if (!supabaseUrl || !supabaseAnonKey ||
       supabaseUrl === 'your_supabase_project_url' ||
       supabaseAnonKey === 'your_supabase_anon_key') {
-    console.warn('Supabase credentials not configured. Session storage disabled.');
+    if (!warnedMissingCredentials) {
+      warnedMissingCredentials = true;
+      console.warn('Supabase credentials not configured. Session storage disabled.');
+    }
     return null;
   }
 

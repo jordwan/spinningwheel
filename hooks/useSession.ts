@@ -3,6 +3,9 @@ import { LocalSession, SpinRecord } from '../lib/session/LocalSession';
 import { DatabaseSync } from '../lib/session/DatabaseSync';
 import { SupabaseAdapter } from '../lib/session/SupabaseAdapter';
 import { createShareableConfig } from '../lib/supabase/wheel-config';
+import { debugLog } from '../lib/utils/logger';
+
+type SyncStatus = ReturnType<DatabaseSync['getSyncStatus']>;
 
 interface UseSessionReturn {
   sessionId: string | null;
@@ -13,7 +16,7 @@ interface UseSessionReturn {
   recordSpin: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
   updateSpinAcknowledgment: (spinId: string, method: 'button' | 'backdrop' | 'x' | 'remove') => Promise<void>;
   getSessionHistory: () => Promise<SpinRecord[] | null>;
-  getSyncStatus?: () => any; // Optional debug info
+  getSyncStatus?: () => SyncStatus | null; // Optional debug info
 }
 
 export function useSession(): UseSessionReturn {
@@ -42,19 +45,13 @@ export function useSession(): UseSessionReturn {
         try {
           const adapter = new SupabaseAdapter();
           if (adapter.isReady()) {
-            // Verify database schema exists
-            const schemaCheck = await adapter.verifySchema();
-            const allTablesExist = schemaCheck.sessions && schemaCheck.configurations && schemaCheck.spins;
-
-            if (allTablesExist) {
-              syncService.setAdapter(adapter);
-              console.log('🚀 Database sync enabled - all tables verified');
-            } else {
-              console.warn('⚠️ Database tables missing or inaccessible. Please run schema.sql in Supabase.');
-              console.log('📱 Continuing in local-only mode');
-            }
+            // No upfront schema probe: it cost three round trips on every page load.
+            // Every adapter method already swallows and logs its own errors, so a
+            // missing table degrades to local-only mode per operation instead.
+            syncService.setAdapter(adapter);
+            debugLog('🚀 Database sync enabled');
           } else {
-            console.log('📱 Running in local-only mode');
+            debugLog('📱 Running in local-only mode');
           }
         } catch (err) {
           console.warn('Database adapter initialization failed:', err);
