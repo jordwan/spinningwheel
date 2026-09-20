@@ -44,6 +44,33 @@ function sanitizeName(name: string): string {
     .replace(/[^\p{L}\p{M}\p{N}\s\-\._']/gu, "");
 }
 
+// Fit a long name into MAX_NAME_LENGTH without making the user retype it.
+// "Michael Jamalathew Hernandez" -> "Michael J. Hernandez" -> "Michael J. H." -> "Michael\u2026"
+function shortenName(name: string, max: number = MAX_NAME_LENGTH): string {
+  if (name.length <= max) return name;
+  const words = name.split(" ").filter(Boolean);
+  const initial = (w: string) => w.charAt(0).toUpperCase() + ".";
+
+  if (words.length >= 2) {
+    const first = words[0];
+    const last = words[words.length - 1];
+    const middles = words.slice(1, -1).map(initial);
+    const candidates = [
+      [first, ...middles, last].join(" "), // Michael J. Hernandez
+      [first, ...middles, initial(last)].join(" "), // Michael J. H.
+      `${first} ${initial(last)}`, // Michael H.
+    ];
+    for (const candidate of candidates) {
+      if (candidate.length <= max) return candidate;
+    }
+    // Even the first name is too long: trim it and keep the last initial
+    const room = max - 3; // space + initial + dot
+    return `${first.slice(0, room - 1)}\u2026 ${initial(last)}`;
+  }
+
+  return name.slice(0, max - 1) + "\u2026";
+}
+
 // Split typed or pasted text into names on commas and new lines
 function splitNames(text: string): string[] {
   return text
@@ -180,6 +207,8 @@ export default function Home() {
   const [committedNames, setCommittedNames] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null);
+  // Pills we shortened automatically, mapped to what was typed (for the tooltip)
+  const [shortenedFrom, setShortenedFrom] = useState<Record<string, string>>({});
   const nameInputRef = useRef<HTMLInputElement>(null);
   const duplicateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -397,33 +426,49 @@ export default function Home() {
     setCurrentConfigId(configId);
   };
 
-  // Add names to the pills, skipping ones already on the wheel (case-insensitive)
+  const showNotice = useCallback((message: string) => {
+    setDuplicateNotice(message);
+    if (duplicateTimerRef.current) clearTimeout(duplicateTimerRef.current);
+    duplicateTimerRef.current = setTimeout(() => setDuplicateNotice(null), 3000);
+  }, []);
+
+  // Add names to the pills: long ones are shortened to fit, duplicates are skipped
   const addNames = useCallback((incoming: string[]) => {
     setCommittedNames((current) => {
       const seen = new Set(current.map((n) => n.toLowerCase()));
       const added: string[] = [];
       const skipped: string[] = [];
-      for (const name of incoming) {
+      const shortened: Record<string, string> = {};
+      for (const original of incoming) {
+        const name = shortenName(original);
         const key = name.toLowerCase();
         if (seen.has(key)) {
-          skipped.push(name);
+          skipped.push(original);
           continue;
         }
         seen.add(key);
         added.push(name);
+        if (name !== original) shortened[name] = original;
       }
-      if (skipped.length > 0) {
-        setDuplicateNotice(
+
+      const shortenedList = Object.keys(shortened);
+      if (shortenedList.length > 0) {
+        setShortenedFrom((prev) => ({ ...prev, ...shortened }));
+        showNotice(
+          shortenedList.length === 1
+            ? `Shortened "${shortened[shortenedList[0]]}" to fit the wheel`
+            : `${shortenedList.length} long names were shortened to fit the wheel`
+        );
+      } else if (skipped.length > 0) {
+        showNotice(
           skipped.length === 1
             ? `"${skipped[0]}" is already on the wheel`
             : `${skipped.length} names were already on the wheel`
         );
-        if (duplicateTimerRef.current) clearTimeout(duplicateTimerRef.current);
-        duplicateTimerRef.current = setTimeout(() => setDuplicateNotice(null), 2500);
       }
       return added.length ? [...current, ...added] : current;
     });
-  }, []);
+  }, [showNotice]);
 
   // Turn whatever is typed into pills
   const commitDraft = useCallback(() => {
@@ -439,7 +484,7 @@ export default function Home() {
 
   // What the wheel will get: the pills plus whatever is still being typed
   const previewNames = useMemo(() => {
-    const pending = sanitizeName(draft);
+    const pending = shortenName(sanitizeName(draft));
     if (!pending) return committedNames;
     const dup = committedNames.some((n) => n.toLowerCase() === pending.toLowerCase());
     return dup ? committedNames : [...committedNames, pending];
@@ -765,16 +810,17 @@ export default function Home() {
                 className="w-full min-h-32 max-h-48 overflow-y-auto px-3 py-2.5 border-2 border-gray-300 rounded-lg focus-within:border-blue-500 cursor-text text-left flex flex-wrap content-start items-center gap-1.5"
               >
                 {committedNames.map((name, index) => {
-                  const tooLong = name.length > MAX_NAME_LENGTH;
+                  const original = shortenedFrom[name];
+                  const wasShortened = !!original || name.length > MAX_NAME_LENGTH;
                   return (
                     <span
                       key={`${name}-${index}`}
                       className={`inline-flex items-center gap-1 max-w-full pl-2.5 pr-1 py-1 rounded-full text-sm border ${
-                        tooLong
+                        wasShortened
                           ? "bg-orange-50 border-orange-200 text-orange-800"
                           : "bg-gray-100 border-gray-200 text-gray-800"
                       }`}
-                      title={tooLong ? `Over ${MAX_NAME_LENGTH} characters` : undefined}
+                      title={original ? `Shortened from \u201c${original}\u201d` : undefined}
                     >
                       <span className="truncate">{name}</span>
                       <button
@@ -845,6 +891,7 @@ export default function Home() {
                     onClick={() => {
                       setCommittedNames([]);
                       setDraft("");
+                      setShortenedFrom({});
                       setTeamName("");
                     }}
                     className="inline-flex items-center gap-1 px-2.5 py-1 -my-1 rounded-full border border-gray-300 bg-gray-50 text-gray-600 hover:border-red-300 hover:bg-red-50 hover:text-red-600 whitespace-nowrap cursor-pointer transition-colors"
