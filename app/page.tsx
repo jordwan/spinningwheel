@@ -5,6 +5,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   lazy,
   Suspense,
 } from "react";
@@ -27,12 +28,7 @@ import {
 import { useSession } from "../hooks/useSession";
 import { useViewportHeight } from "../hooks/useViewportHeight";
 import HuePicker from "./components/HuePicker";
-import {
-  accentHexFromHue,
-  generatePaletteFromColor,
-  hexToHsl,
-  isValidHexColor,
-} from "../lib/utils/palette";
+import { accentHexFromHue, hexToHsl, isValidHexColor } from "../lib/utils/palette";
 
 // Lazy load the heavy SpinningWheel component
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
@@ -106,6 +102,8 @@ export default function Home() {
   // Wheel colours: automatic theme, or a user-picked accent hue
   const [accentHue, setAccentHue] = useState(210);
   const [useCustomColor, setUseCustomColor] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
   const accentColor = useCustomColor ? accentHexFromHue(accentHue) : null;
 
   // Session tracking
@@ -221,9 +219,10 @@ export default function Home() {
     showShareModal,
   ]);
 
-  // Escape key dismisses the simple modals (warnings + share)
+  // Escape key dismisses the colour popover, then the simple modals (warnings + share)
   useEffect(() => {
     const anyDismissable =
+      showColorPicker ||
       showMinNamesWarning ||
       showLongNameWarning ||
       showDuplicateWarning ||
@@ -232,6 +231,10 @@ export default function Home() {
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (showColorPicker) {
+        setShowColorPicker(false);
+        return;
+      }
       setShowMinNamesWarning(false);
       setShowLongNameWarning(false);
       setShowDuplicateWarning(false);
@@ -240,11 +243,24 @@ export default function Home() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    showColorPicker,
     showMinNamesWarning,
     showLongNameWarning,
     showDuplicateWarning,
     showShareModal,
   ]);
+
+  // Clicking anywhere outside the colour popover closes it
+  useEffect(() => {
+    if (!showColorPicker) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
+        setShowColorPicker(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [showColorPicker]);
 
   // Validate name lengths
   const validateNameLengths = (namesList: string[]): boolean => {
@@ -711,60 +727,92 @@ export default function Home() {
                 )}
               </div>
 
-              {/* 2. Wheel name */}
-              <input
-                type="text"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                placeholder="Wheel name (optional)"
-                aria-label="Wheel name (optional)"
-                className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                style={{ touchAction: "manipulation" }}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="none"
-                spellCheck={false}
-              />
+              {/* 2. Wheel name + colour swatch */}
+              <div className="flex items-end gap-3 mb-4">
+                <input
+                  type="text"
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  placeholder="Wheel name (optional)"
+                  aria-label="Wheel name (optional)"
+                  className="flex-1 min-w-0 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                  style={{ touchAction: "manipulation" }}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
 
-              {/* 3. Colors */}
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <span className="text-sm font-medium text-gray-700">Colors</span>
-                <div className="flex items-center gap-3">
+                {/* Colour: a swatch showing what the wheel will use; click for the picker */}
+                <div ref={colorPickerRef} className="relative flex flex-col items-center flex-shrink-0">
+                  <span className="text-[11px] leading-none text-gray-500 mb-1">Colors</span>
                   <button
                     type="button"
-                    onClick={handleAutoColors}
-                    aria-pressed={!useCustomColor}
-                    className={`px-3 py-1.5 text-sm font-semibold rounded-full border-2 transition-colors cursor-pointer ${
-                      !useCustomColor
-                        ? "border-blue-500 text-blue-600 bg-blue-50"
-                        : "border-gray-300 text-gray-600 hover:border-blue-400"
-                    }`}
-                    style={{ touchAction: "manipulation" }}
-                  >
-                    Auto
-                  </button>
-                  <HuePicker
-                    hue={accentHue}
-                    active={useCustomColor}
-                    onChange={handleAccentHueChange}
-                    onActivate={() => {
-                      if (!useCustomColor) handleAccentHueChange(accentHue);
+                    onClick={() => setShowColorPicker((open) => !open)}
+                    aria-haspopup="dialog"
+                    aria-expanded={showColorPicker}
+                    aria-label={useCustomColor ? "Wheel color (custom). Change" : "Wheel color: auto. Change"}
+                    title="Wheel colors"
+                    className="w-[52px] h-[52px] rounded-lg border-2 border-gray-300 hover:border-blue-500 shadow-sm flex items-center justify-center cursor-pointer transition-colors"
+                    style={{
+                      touchAction: "manipulation",
+                      background: accentColor
+                        ? accentColor
+                        : "conic-gradient(from 0deg, hsl(0 85% 55%), hsl(60 85% 55%), hsl(120 85% 50%), hsl(180 85% 50%), hsl(240 85% 58%), hsl(300 85% 58%), hsl(360 85% 55%))",
                     }}
-                    size={44}
-                  />
-                  {/* Preview of the resulting palette */}
-                  <div className="flex -space-x-1.5 w-[4.5rem] justify-end" aria-hidden="true">
-                    {(accentColor
-                      ? generatePaletteFromColor(accentColor, 5)
-                      : ["#FF6B35", "#E91E63", "#FFD23F", "#06FFA5", "#45B7D1"]
-                    ).map((c, i) => (
+                  >
+                    {!useCustomColor && (
                       <span
-                        key={i}
-                        className="inline-block w-4 h-4 rounded-full border-2 border-white shadow-sm"
-                        style={{ background: c }}
+                        className="text-[11px] font-bold text-white"
+                        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.7)" }}
+                      >
+                        Auto
+                      </span>
+                    )}
+                  </button>
+
+                  {showColorPicker && (
+                    <div
+                      role="dialog"
+                      aria-label="Pick a wheel color"
+                      className="absolute right-0 z-20 bg-white rounded-xl shadow-2xl border border-gray-200 p-3 flex flex-col items-center gap-3"
+                      style={{ bottom: "calc(100% + 8px)", width: "11rem" }}
+                    >
+                      <HuePicker
+                        hue={accentHue}
+                        active={useCustomColor}
+                        onChange={handleAccentHueChange}
+                        onActivate={() => {
+                          if (!useCustomColor) handleAccentHueChange(accentHue);
+                        }}
+                        size={112}
                       />
-                    ))}
-                  </div>
+                      <p className="text-[11px] text-gray-500 -mt-1">Drag around the ring</p>
+                      <div className="flex gap-2 w-full">
+                        <button
+                          type="button"
+                          onClick={handleAutoColors}
+                          aria-pressed={!useCustomColor}
+                          className={`flex-1 px-3 py-1.5 text-sm font-semibold rounded-lg border-2 transition-colors cursor-pointer ${
+                            !useCustomColor
+                              ? "border-blue-500 text-blue-600 bg-blue-50"
+                              : "border-gray-300 text-gray-600 hover:border-blue-400"
+                          }`}
+                          style={{ touchAction: "manipulation" }}
+                        >
+                          Auto
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowColorPicker(false)}
+                          className="flex-1 px-3 py-1.5 text-sm font-semibold rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors cursor-pointer"
+                          style={{ touchAction: "manipulation" }}
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
