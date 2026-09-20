@@ -72,27 +72,70 @@ const normalizeAngleDifference = (angleDiff: number): number => {
 
 /** ========= TEXT UTILITIES ========= */
 
-const getSimpleFontSize = (
-  segmentCount: number,
-  isNumbers: boolean = false
-): number => {
-  // Numbers are typically shorter (1-3 characters) so we can use larger fonts
-  if (isNumbers && segmentCount <= 20) {
-    if (segmentCount <= 10) return 20;
-    if (segmentCount <= 15) return 18;
-    return 16;
-  }
+const LABEL_FONT = "Arial, Helvetica, sans-serif";
+const LABEL_MIN_FONT = 8;
+const CAP_RADIUS = 25;
+// Labels run from just outside the centre cap to just inside the rim
+const LABEL_INNER_MIN = CAP_RADIUS + 12;
+const LABEL_EDGE_PADDING = 14;
 
-  // Original logic for names
-  if (segmentCount <= 10) return 16;
-  if (segmentCount <= 20) return 14;
-  if (segmentCount <= 30) return 12;
-  return 10;
+// Biggest font we'd use for a given number of slices (before fitting)
+const maxLabelFont = (segmentCount: number, radius: number): number => {
+  const byCount =
+    segmentCount <= 4 ? 28 :
+    segmentCount <= 8 ? 24 :
+    segmentCount <= 12 ? 20 :
+    segmentCount <= 20 ? 16 :
+    segmentCount <= 30 ? 13 : 11;
+  return Math.max(LABEL_MIN_FONT, Math.min(byCount, Math.round(radius * 0.12)));
 };
 
-const simpleTextTruncate = (text: string, maxLength: number): string => {
-  if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength - 3) + "...";
+interface FittedLabel {
+  text: string;
+  fontSize: number;
+}
+
+/**
+ * Shrink (and only then truncate) a label so it fits its slice.
+ * Two constraints: it must fit lengthwise between the cap and the rim, and its font
+ * size can't exceed the slice's width at the point where the text starts (slices are
+ * narrowest near the centre, so long text must be small or move outward).
+ */
+const fitLabel = (
+  measure: CanvasRenderingContext2D,
+  text: string,
+  outerR: number,
+  sliceAngle: number,
+  maxFont: number
+): FittedLabel => {
+  const chordAt = (r: number) => 2 * r * Math.sin(sliceAngle / 2);
+  const fits = (label: string, fs: number) => {
+    measure.font = `bold ${fs}px ${LABEL_FONT}`;
+    const innerR = outerR - measure.measureText(label).width;
+    return innerR >= LABEL_INNER_MIN && fs <= chordAt(innerR);
+  };
+
+  for (let fs = maxFont; fs >= LABEL_MIN_FONT; fs--) {
+    if (fits(text, fs)) return { text, fontSize: fs };
+  }
+
+  // Still too big at the minimum size: trim characters until it fits
+  for (let n = text.length - 1; n >= 1; n--) {
+    const label = text.slice(0, n).trimEnd() + "\u2026";
+    if (fits(label, LABEL_MIN_FONT)) return { text: label, fontSize: LABEL_MIN_FONT };
+  }
+
+  // Nothing fits (tiny wheel, very many slices): show what we can
+  return { text: text.slice(0, 2), fontSize: LABEL_MIN_FONT };
+};
+
+// Dark text on light slices, white text on dark ones (YIQ perceived brightness)
+const contrastTextColor = (hex: string): string => {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex);
+  if (!m) return "#ffffff";
+  const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 150 ? "#1f2937" : "#ffffff";
 };
 
 /** ========= COLOR UTILITIES ========= */
@@ -599,29 +642,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     };
   }, [canvasCSSSize, wheelNames.length]);
 
-  /** ========= Simple text processing ========= */
-  const textInfo = useMemo(() => {
-    if (showBlank) return { fontSize: 16, displayTexts: [] };
-
-    // Detect if we're showing numbers (all segments are numeric)
-    const isNumbers =
-      wheelNames.length > 0 &&
-      wheelNames.every((name) => name !== "" && /^\d+$/.test(name));
-
-    const fontSize = getSimpleFontSize(wheelNames.length, isNumbers);
-
-    // Simple truncation based on segment count
-    const maxLength =
-      wheelNames.length <= 10 ? 20 : wheelNames.length <= 20 ? 15 : 12;
-
-    const displayTexts = wheelNames.map((name) => {
-      if (name === "") return name;
-      return simpleTextTruncate(name, maxLength);
-    });
-
-    return { fontSize, displayTexts };
-  }, [wheelNames, showBlank]);
-
   /** ========= Fairness text ========= */
   useEffect(() => {
     if (showBlank) {
@@ -1010,7 +1030,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
     if (!wheelNames.length) {
       map.clear();
-      return map;
+      return new Map(map);
     }
 
     const theme = selectedTheme && selectedTheme.length ? selectedTheme : COLOR_THEMES[0];
@@ -1043,7 +1063,9 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       });
     }
 
-    return map;
+    // Return a fresh Map so consumers (label contrast colours) re-derive when colours change;
+    // the ref keeps the stable assignments between renders.
+    return new Map(map);
   }, [wheelNames, selectedTheme, accentColor]);
 
   // Colours for the label-less placeholder wheel
@@ -1060,6 +1082,35 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     const color = wheelColors.get(name);
     return color || "#FF6B35ff"; // Use vibrant fallback instead of gray
   }, [wheelColors]);
+
+  // Offscreen context used only for measuring text
+  const measureCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
+  // Per-slice label: fitted text, font size and a contrasting colour. Cached so the
+  // spin animation doesn't re-measure text every frame.
+  const labelLayout = useMemo<FittedLabel[] & { colors?: string[] }>(() => {
+    if (showBlank || !wheelGeometry || typeof document === "undefined") return [];
+    if (!measureCtxRef.current) {
+      measureCtxRef.current = document.createElement("canvas").getContext("2d");
+    }
+    const measure = measureCtxRef.current;
+    if (!measure) return [];
+
+    const { radius, sliceAngle } = wheelGeometry;
+    const outerR = radius - LABEL_EDGE_PADDING;
+    const maxFont = maxLabelFont(wheelNames.length, radius);
+    const layout = wheelNames.map((name) => fitLabel(measure, name, outerR, sliceAngle, maxFont));
+
+    // One font size for the whole wheel looks far better than a ransom note. Use the
+    // smallest size that fits every label, but never below 60% of the max: the few
+    // labels that still don't fit at that size shrink or truncate on their own.
+    const smallest = Math.min(...layout.map((l) => l.fontSize));
+    const unifiedFont = Math.max(smallest, Math.round(maxFont * 0.6));
+    const result = wheelNames.map((name) => fitLabel(measure, name, outerR, sliceAngle, unifiedFont));
+
+    const colors = wheelNames.map((name) => contrastTextColor(getColorForName(name)));
+    return Object.assign(result, { colors });
+  }, [wheelNames, wheelGeometry, showBlank, getColorForName]);
 
   // Radial gradient for a segment
   const createGradient = useCallback(
@@ -1094,7 +1145,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       if (!wheelGeometry) return;
 
       const { centerX, centerY, radius, sliceAngle } = wheelGeometry;
-      const { fontSize, displayTexts } = textInfo;
+      const labelColors = labelLayout.colors ?? [];
 
       // Performance optimizations based on segment count
       const useSimplifiedGradients = performanceMode === "performance";
@@ -1143,28 +1194,19 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
         // Labels (skip for blank segments)
         if (!showBlank) {
-          ctx.save();
-          ctx.translate(centerX, centerY);
-          ctx.rotate(start + sliceAngle / 2);
-          ctx.textAlign = "right";
-
-          // Use simple pre-calculated font size and display text
-          const displayText = displayTexts[i] || name;
-          const fs = fontSize;
-
-          ctx.fillStyle = "#fff";
-          ctx.font = `bold ${fs}px Arial`;
-
-          // Position text consistently from edge, regardless of length
-          const paddingFromEdge = 15; // Consistent padding from wheel edge
-
-          // Super thin black outline for better legibility on light colors
-          ctx.strokeStyle = "#000";
-          ctx.lineWidth = 0.5; // As thin as possible
-          ctx.strokeText(displayText, radius - paddingFromEdge, fs / 3);
-
-          ctx.fillText(displayText, radius - paddingFromEdge, fs / 3);
-          ctx.restore();
+          const label = labelLayout[i];
+          if (label) {
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(start + sliceAngle / 2);
+            ctx.textAlign = "right";
+            ctx.textBaseline = "middle";
+            ctx.font = `bold ${label.fontSize}px ${LABEL_FONT}`;
+            // No outline: colour is chosen for contrast against this slice
+            ctx.fillStyle = labelColors[i] ?? "#ffffff";
+            ctx.fillText(label.text, radius - LABEL_EDGE_PADDING, 0);
+            ctx.restore();
+          }
         }
       });
 
@@ -1175,7 +1217,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         0,
         centerX,
         centerY,
-        25
+        CAP_RADIUS
       );
       capGradient.addColorStop(0, "#4a4a4a");
       capGradient.addColorStop(0.5, "#2a2a2a");
@@ -1183,7 +1225,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       capGradient.addColorStop(1, "#000000");
 
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 25, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, CAP_RADIUS, 0, 2 * Math.PI);
       ctx.fillStyle = capGradient;
       ctx.fill();
       ctx.strokeStyle = "#333";
@@ -1199,7 +1241,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     },
     [
       wheelGeometry,
-      textInfo,
+      labelLayout,
       wheelNames,
       getColorForName,
       selectedTheme,
