@@ -288,7 +288,9 @@ export const endSession = () => {
  * Google Ads Conversion Tracking
  * Track conversion events for Google Ads campaigns
  */
-const GOOGLE_ADS_ID = 'AW-17581138422';
+// Prefer the env var so a staging site can't fire production conversions
+const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || 'AW-17581138422';
+const SPIN_CONVERSION_LABEL = 'Gt9zCIS84Z4bEPbDq79B';
 
 interface ConversionData {
   send_to: string;
@@ -331,7 +333,7 @@ export const trackSpinButtonConversion = (callback?: () => void) => {
   if (typeof window !== 'undefined' && window.gtag) {
     try {
       window.gtag('event', 'conversion', {
-        'send_to': 'AW-17581138422/Gt9zCIS84Z4bEPbDq79B',
+        'send_to': `${GOOGLE_ADS_ID}/${SPIN_CONVERSION_LABEL}`,
         'event_callback': callback
       });
     } catch (error) {

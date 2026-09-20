@@ -86,6 +86,51 @@ const simpleTextTruncate = (text: string, maxLength: number): string => {
   return text.slice(0, maxLength - 3) + "...";
 };
 
+/** ========= COLOR UTILITIES ========= */
+// Helper function to convert hex to RGB
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+};
+
+// Helper function to convert RGB to hex
+const rgbToHex = (r: number, g: number, b: number): string => {
+  const toHex = (n: number) => {
+    const clamped = Math.max(0, Math.min(255, Math.round(n)));
+    const hex = clamped.toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  };
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}ff`;
+};
+
+// Lighten a color by a percentage (0-1)
+const lightenColor = (hex: string, percent: number): string => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+
+  const r = rgb.r + (255 - rgb.r) * percent;
+  const g = rgb.g + (255 - rgb.g) * percent;
+  const b = rgb.b + (255 - rgb.b) * percent;
+
+  return rgbToHex(r, g, b);
+};
+
+// Darken a color by a percentage (0-1)
+const darkenColor = (hex: string, percent: number): string => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+
+  const r = rgb.r * (1 - percent);
+  const g = rgb.g * (1 - percent);
+  const b = rgb.b * (1 - percent);
+
+  return rgbToHex(r, g, b);
+};
+
 interface SpinningWheelProps {
   names?: string[];
   onReset?: () => void;
@@ -1027,50 +1072,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     []
   );
 
-  // Helper function to convert hex to RGB
-  const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : null;
-  };
-
-  // Helper function to convert RGB to hex
-  const rgbToHex = (r: number, g: number, b: number): string => {
-    const toHex = (n: number) => {
-      const clamped = Math.max(0, Math.min(255, Math.round(n)));
-      const hex = clamped.toString(16);
-      return hex.length === 1 ? '0' + hex : hex;
-    };
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}ff`;
-  };
-
-  // Lighten a color by a percentage (0-1)
-  const lightenColor = (hex: string, percent: number): string => {
-    const rgb = hexToRgb(hex);
-    if (!rgb) return hex;
-
-    const r = rgb.r + (255 - rgb.r) * percent;
-    const g = rgb.g + (255 - rgb.g) * percent;
-    const b = rgb.b + (255 - rgb.b) * percent;
-
-    return rgbToHex(r, g, b);
-  };
-
-  // Darken a color by a percentage (0-1)
-  const darkenColor = (hex: string, percent: number): string => {
-    const rgb = hexToRgb(hex);
-    if (!rgb) return hex;
-
-    const r = rgb.r * (1 - percent);
-    const g = rgb.g * (1 - percent);
-    const b = rgb.b * (1 - percent);
-
-    return rgbToHex(r, g, b);
-  };
-
   // Generate extended color palette (up to 20 unique colors)
   const generateExtendedPalette = useCallback((baseColors: string[]): string[] => {
     const extended: string[] = [];
@@ -1761,6 +1762,37 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     requestAnimationFrame(animate);
   };
 
+  /** ========= Winner acknowledgement (Close / backdrop / Escape / Respin / Remove) ========= */
+  const acknowledgeWinner = useCallback(
+    (method: "button" | "backdrop" | "x" | "remove") => {
+      if (selectedName && selectedName !== "RESPIN") {
+        setWinnerHistory((prev) => [...prev, selectedName]);
+      }
+      setShowWinnerModal(false);
+      setWinnerRhyme("");
+      trackWinnerAcknowledged(method);
+      if (onUpdateSpinAcknowledgment && currentSpinId) {
+        onUpdateSpinAcknowledgment(currentSpinId, method);
+      }
+    },
+    [selectedName, currentSpinId, onUpdateSpinAcknowledgment]
+  );
+
+  // Escape dismisses the fairness popup, then the winner modal
+  useEffect(() => {
+    if (!showWinnerModal && !showFairnessPopup) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (showFairnessPopup) {
+        setShowFairnessPopup(false);
+      } else if (showWinnerModal) {
+        acknowledgeWinner("x");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showWinnerModal, showFairnessPopup, acknowledgeWinner]);
+
   /** ========= UI ========= */
   return (
     <div
@@ -1989,22 +2021,14 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
           onClick={(e) => {
             // Close modal when clicking backdrop
             if (e.target === e.currentTarget) {
-              // Save winner when user acknowledges the win by clicking backdrop
-              if (selectedName && selectedName !== "RESPIN") {
-                setWinnerHistory((prev) => [...prev, selectedName]);
-              }
-              setShowWinnerModal(false);
-              setWinnerRhyme("");
-              // Track winner acknowledged via backdrop
-              trackWinnerAcknowledged("backdrop");
-              // Update spin acknowledgment in database
-              if (onUpdateSpinAcknowledgment && currentSpinId) {
-                onUpdateSpinAcknowledgment(currentSpinId, "backdrop");
-              }
+              acknowledgeWinner("backdrop");
             }
           }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="winner-name"
             className="bg-white rounded-2xl p-6 sm:p-8 transform scale-100 animate-bounce-in pointer-events-auto text-center max-w-[90vw] w-full max-w-md"
             style={{
               boxShadow:
@@ -2019,6 +2043,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               {winnerRhyme}
             </h2>
             <p
+              id="winner-name"
               className={`font-bold text-green-600 animate-pulse mb-6 leading-tight break-words ${
                 selectedName.length > 15
                   ? "text-2xl sm:text-3xl"
@@ -2038,20 +2063,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             {/* Main buttons */}
             <div className="mt-6 flex gap-3">
               <button
-                onClick={() => {
-                  // Save winner when user acknowledges the win
-                  if (selectedName && selectedName !== "RESPIN") {
-                    setWinnerHistory((prev) => [...prev, selectedName]);
-                  }
-                  setShowWinnerModal(false);
-                  setWinnerRhyme("");
-                  // Track winner acknowledged via button
-                  trackWinnerAcknowledged("button");
-                  // Update spin acknowledgment in database
-                  if (onUpdateSpinAcknowledgment && currentSpinId) {
-                    onUpdateSpinAcknowledgment(currentSpinId, "button");
-                  }
-                }}
+                onClick={() => acknowledgeWinner("button")}
                 className="flex-1 px-6 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors"
                 style={{ touchAction: "manipulation" }}
               >
@@ -2060,18 +2072,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
               <button
                 onClick={() => {
-                  // Save winner to history before respinning
-                  if (selectedName && selectedName !== "RESPIN") {
-                    setWinnerHistory((prev) => [...prev, selectedName]);
-                  }
-                  // Close modal
-                  setShowWinnerModal(false);
-                  setWinnerRhyme("");
-                  // Track winner acknowledged via respin
-                  trackWinnerAcknowledged("button");
-                  if (onUpdateSpinAcknowledgment && currentSpinId) {
-                    onUpdateSpinAcknowledgment(currentSpinId, "button");
-                  }
+                  acknowledgeWinner("button");
                   // Automatically spin again
                   setTimeout(() => {
                     spin();
@@ -2091,24 +2092,10 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                   onClick={async () => {
                     // Remove the winner from the wheel
                     const newNames = wheelNames.filter(name => name !== selectedName && name !== "RESPIN");
-
-                    // Save winner to history
-                    if (selectedName && selectedName !== "RESPIN") {
-                      setWinnerHistory((prev) => [...prev, selectedName]);
-                    }
-
-                    // Close modal
-                    setShowWinnerModal(false);
-                    setWinnerRhyme("");
+                    acknowledgeWinner("remove");
 
                     // Create new configuration with remaining names
                     await onRemoveWinner(newNames);
-
-                    // Track winner acknowledged via removal
-                    trackWinnerAcknowledged("remove");
-                    if (onUpdateSpinAcknowledgment && currentSpinId) {
-                      onUpdateSpinAcknowledgment(currentSpinId, "remove");
-                    }
                   }}
                   className="text-sm text-red-600 hover:underline transition-all"
                   style={{ touchAction: "manipulation" }}

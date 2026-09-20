@@ -4,7 +4,6 @@ import {
   useState,
   useEffect,
   useCallback,
-  useRef,
   lazy,
   Suspense,
 } from "react";
@@ -77,7 +76,6 @@ const WheelLoadingPlaceholder = () => (
 export default function Home() {
   const [showNameInput, setShowNameInput] = useState(true);
   const [wheelNames, setWheelNames] = useState<string[]>([]);
-  const [inputValue, setInputValue] = useState("");
   const [teamName, setTeamName] = useState("");
   const [randomNameCount, setRandomNameCount] = useState("6");
   const [showRandomCountInput, setShowRandomCountInput] = useState(false);
@@ -102,11 +100,7 @@ export default function Home() {
   const { saveConfiguration, recordSpin, updateSpinAcknowledgment, createShareableWheel } =
     useSession();
 
-  // Debouncing refs for performance optimization
-  const inputDebounceRef = useRef<NodeJS.Timeout | null>(null);
-  const nameProcessingDebounceRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Local input state for immediate UI feedback (separate from debounced state)
+  // Textarea contents (parsed only on submit)
   const [localInputValue, setLocalInputValue] = useState("");
 
   // Hydration guard - ensures client-side rendering
@@ -137,20 +131,6 @@ export default function Home() {
     };
   }, []);
 
-  // Cleanup debounce timers on unmount
-  useEffect(() => {
-    const nameProcessingDebounce = nameProcessingDebounceRef.current;
-
-    return () => {
-      if (inputDebounceRef.current) {
-        clearTimeout(inputDebounceRef.current);
-      }
-      if (nameProcessingDebounce) {
-        clearTimeout(nameProcessingDebounce);
-      }
-    };
-  }, []);
-
   // Unified viewport management
   const { isFirefox } = useViewportHeight({
     enableFirefoxSupport: true,
@@ -175,7 +155,6 @@ export default function Home() {
     if (showNameInput && isUsingCustomNames && wheelNames.length > 0) {
       // If we have custom names and the modal is opening, repopulate the input
       const customNamesString = wheelNames.join(", ");
-      setInputValue(customNamesString);
       setLocalInputValue(customNamesString);
     }
   }, [showNameInput, isUsingCustomNames, wheelNames]); // Include all dependencies
@@ -207,6 +186,31 @@ export default function Home() {
     }
   }, [
     showNameInput,
+    showMinNamesWarning,
+    showLongNameWarning,
+    showDuplicateWarning,
+    showShareModal,
+  ]);
+
+  // Escape key dismisses the simple modals (warnings + share)
+  useEffect(() => {
+    const anyDismissable =
+      showMinNamesWarning ||
+      showLongNameWarning ||
+      showDuplicateWarning ||
+      showShareModal;
+    if (!anyDismissable) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setShowMinNamesWarning(false);
+      setShowLongNameWarning(false);
+      setShowDuplicateWarning(false);
+      setShowShareModal(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
     showMinNamesWarning,
     showLongNameWarning,
     showDuplicateWarning,
@@ -287,68 +291,59 @@ export default function Home() {
     setCurrentConfigId(configId);
   };
 
-  // Debounced input change handler to reduce expensive processing
   const handleInputChange = useCallback((value: string) => {
-    // Update local state immediately for UI responsiveness
     setLocalInputValue(value);
-
-    // Clear any existing debounce timer
-    if (inputDebounceRef.current) {
-      clearTimeout(inputDebounceRef.current);
-    }
-
-    // Debounce the actual processing for performance (especially with regex operations)
-    inputDebounceRef.current = setTimeout(() => {
-      setInputValue(value);
-    }, 150); // 150ms debounce to balance responsiveness with performance
   }, []);
 
   // Memoized enhanced name processing to reduce computation
-  const processNames = useCallback((input: string): string[] => {
-    const enhancedTrim = (name: string): string => {
-      return name
-        .trim()
-        .replace(/\s+/g, " ") // Replace multiple spaces with single space
-        .replace(/[^\w\s\-\.]/g, "") // Remove special characters except hyphens and dots
-        .substring(0, 20); // Cap length at 20 characters
-    };
+  const processNames = useCallback(
+    (input: string): { names: string[]; duplicatesRemoved: number } => {
+      const enhancedTrim = (name: string): string => {
+        return name
+          .trim()
+          .replace(/\s+/g, " ") // Replace multiple spaces with single space
+          // Keep letters and digits from any language (José, Zoë, 李), plus spaces,
+          // hyphens, dots, underscores and apostrophes. The old \w-based version
+          // silently mangled accented names ("José" became "Jos").
+          .replace(/[^\p{L}\p{M}\p{N}\s\-\._']/gu, "");
+        // No length cap here: validateNameLengths() warns the user instead of
+        // silently chopping "Alexander Hamilton Jr" to 20 characters.
+      };
 
-    let names: string[];
+      // Delimiter priority: commas, then one-name-per-line (pasted rosters like
+      // "Mary Ann\nJohn Smith"), then plain whitespace.
+      const trimmed = input.trim();
+      const separator = trimmed.includes(",")
+        ? ","
+        : /\r?\n/.test(trimmed)
+        ? /\r?\n/
+        : /\s+/;
 
-    if (input.includes(",")) {
-      // Use comma-separated parsing
-      names = input
-        .split(",")
+      const cleaned = trimmed
+        .split(separator)
         .map(enhancedTrim)
         .filter((name) => name.length > 0);
-    } else {
-      // Use space-separated parsing
-      names = input
-        .split(/\s+/)
-        .map(enhancedTrim)
-        .filter((name) => name.length > 0);
-    }
 
-    // Remove duplicates (case-insensitive)
-    return names.filter(
-      (name, index, arr) =>
-        arr.findIndex((n) => n.toLowerCase() === name.toLowerCase()) === index
-    );
-  }, []);
+      // Remove duplicates (case-insensitive)
+      const names = cleaned.filter(
+        (name, index, arr) =>
+          arr.findIndex((n) => n.toLowerCase() === name.toLowerCase()) === index
+      );
+
+      return { names, duplicatesRemoved: cleaned.length - names.length };
+    },
+    []
+  );
 
   const handleSubmitNames = () => {
     // This function now only handles custom names
     // Random generation is handled by separate functions
 
-    // Parse raw names using the same logic as processNames for accurate comparison
-    const rawNames = inputValue.includes(",")
-      ? inputValue.split(",").map((name) => name.trim()).filter((name) => name.length > 0)
-      : inputValue.split(/\s+/).map((name) => name.trim()).filter((name) => name.length > 0);
-
-    const names = processNames(inputValue);
+    // Read the live textarea value, not the 150ms-debounced copy, so a quick
+    // paste-then-Enter can't submit stale input.
+    const { names, duplicatesRemoved } = processNames(localInputValue);
 
     // Show warning if duplicates were removed
-    const duplicatesRemoved = rawNames.length - names.length;
     if (duplicatesRemoved > 0) {
       setDuplicateWarningText(
         `${duplicatesRemoved} duplicate ${
@@ -557,7 +552,12 @@ export default function Home() {
         {/* Name Input Popup (overlay on top of wheel) */}
         {showNameInput && (
           <div className="fixed inset-0 flex items-center justify-center z-[70] p-4 pointer-events-none">
-            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full pointer-events-auto text-center relative">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={showRandomCountInput ? "How many random tiles?" : "Customize Wheel"}
+              className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full pointer-events-auto text-center relative"
+            >
               {/* Close button */}
               <button
                 onClick={() => {
@@ -620,7 +620,7 @@ export default function Home() {
                   <textarea
                     value={localInputValue}
                     onChange={(e) => handleInputChange(e.target.value)}
-                    onKeyPress={handleKeyPress}
+                    onKeyDown={handleKeyPress}
                     placeholder="eg: mike, cindy, jamal, wayne..."
                     className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
                     style={{ touchAction: "manipulation" }}
@@ -691,7 +691,7 @@ export default function Home() {
                             setIsEditingCount(false);
                             setHasStartedTyping(false);
                           }}
-                          onKeyPress={(e) => {
+                          onKeyDown={(e) => {
                             if (e.key === "Enter") {
                               e.currentTarget.blur();
                             }
@@ -736,14 +736,8 @@ export default function Home() {
                     <button
                       onClick={() => {
                         if (localInputValue.trim() !== "") {
-                          // Clear both local and debounced input states
                           setLocalInputValue("");
-                          setInputValue("");
                           setTeamName("");
-                          // Clear debounce timer
-                          if (inputDebounceRef.current) {
-                            clearTimeout(inputDebounceRef.current);
-                          }
                         } else {
                           // Show random count input
                           setShowRandomCountInput(true);
@@ -797,9 +791,11 @@ export default function Home() {
         {/* Minimum Names Warning Modal */}
         {showMinNamesWarning && (
           <>
-            <div className="fixed inset-0 backdrop-blur-[2px] z-[59]" />
-            <div className="fixed inset-0 flex items-center justify-center z-[60] p-4 pointer-events-none">
+            <div className="fixed inset-0 backdrop-blur-[2px] z-[79]" />
+            <div className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-none">
               <div
+                role="dialog"
+                aria-modal="true"
                 className="bg-white rounded-2xl p-6 max-w-sm w-full pointer-events-auto text-center relative"
                 style={{
                   boxShadow:
@@ -845,9 +841,11 @@ export default function Home() {
         {/* Long Names Warning Modal */}
         {showLongNameWarning && (
           <>
-            <div className="fixed inset-0 backdrop-blur-[2px] z-[59]" />
-            <div className="fixed inset-0 flex items-center justify-center z-[60] p-4 pointer-events-none">
+            <div className="fixed inset-0 backdrop-blur-[2px] z-[79]" />
+            <div className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-none">
               <div
+                role="dialog"
+                aria-modal="true"
                 className="bg-white rounded-2xl p-6 max-w-sm w-full pointer-events-auto text-center relative"
                 style={{
                   boxShadow:
@@ -891,9 +889,11 @@ export default function Home() {
         {/* Duplicate Names Warning Modal */}
         {showDuplicateWarning && (
           <>
-            <div className="fixed inset-0 backdrop-blur-[2px] z-[59]" />
-            <div className="fixed inset-0 flex items-center justify-center z-[60] p-4 pointer-events-none">
+            <div className="fixed inset-0 backdrop-blur-[2px] z-[79]" />
+            <div className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-none">
               <div
+                role="dialog"
+                aria-modal="true"
                 className="bg-white rounded-2xl p-6 max-w-sm w-full pointer-events-auto text-center relative"
                 style={{
                   boxShadow:
@@ -939,9 +939,12 @@ export default function Home() {
         {/* Share Modal */}
         {showShareModal && (
           <>
-            <div className="fixed inset-0 backdrop-blur-[2px] z-[59]" />
-            <div className="fixed inset-0 flex items-center justify-center z-[60] p-4 pointer-events-none">
+            <div className="fixed inset-0 backdrop-blur-[2px] z-[79]" />
+            <div className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-none">
               <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Share Your Wheel"
                 className="bg-white rounded-2xl p-6 max-w-md w-full pointer-events-auto text-center relative"
                 style={{
                   boxShadow:
@@ -1079,6 +1082,7 @@ export default function Home() {
                 src="/logo.png"
                 alt="iWheeli"
                 fill
+                sizes="(min-width: 1024px) 208px, (min-width: 640px) 176px, 144px"
                 className="object-contain"
                 priority
               />
@@ -1148,12 +1152,11 @@ export default function Home() {
                   // They will only be cleared if user explicitly clicks "Clear"
                   if (!isUsingCustomNames) {
                     // Only clear if we were using random/numbers
-                    setInputValue("");
                     setLocalInputValue("");
                     setTeamName("");
                   }
                   // If using custom names, preserve them but show input modal
-                  // The inputValue and teamName stay as they were
+                  // The input and teamName stay as they were
                   setShowRandomCountInput(false);
                   setCurrentConfigId(null);
                   document.title = teamName ? `${teamName} – iWheeli – Random Name Picker Wheel` : "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners";

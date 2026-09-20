@@ -167,6 +167,7 @@ export default function SharedWheelClient({
                 src="/logo.png"
                 alt="iWheeli"
                 fill
+                sizes="(min-width: 1024px) 192px, (min-width: 640px) 160px, 128px"
                 className="object-contain"
                 priority
               />
