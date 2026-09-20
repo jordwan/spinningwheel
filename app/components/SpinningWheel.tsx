@@ -2199,28 +2199,43 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             </button>
 
             <h3 id="history-title" className="text-lg font-semibold text-gray-900 mb-1">
-              Winners
+              Spin history
             </h3>
-            <p className="text-xs text-gray-500 mb-4">
-              {winnerHistory.length === 0
-                ? "No spins yet"
-                : `${winnerHistory.length} ${winnerHistory.length === 1 ? "spin" : "spins"} so far, newest first`}
-            </p>
 
-            {winnerHistory.length > 0 && (
-              <ol className="max-h-[50vh] overflow-y-auto text-left divide-y divide-gray-100 rounded-lg border border-gray-100 mb-4">
-                {[...winnerHistory].reverse().map((winner, i) => {
-                  const spinNumber = winnerHistory.length - i;
-                  return (
-                    <li key={`${spinNumber}-${winner}`} className="flex items-center gap-3 px-3 py-2">
-                      <span className="w-6 text-right text-xs text-gray-400 tabular-nums">{spinNumber}</span>
-                      <span className={`flex-1 truncate ${i === 0 ? "font-semibold text-gray-900" : "text-gray-700"}`}>
-                        {winner}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
+            {winnerHistory.length === 0 ? (
+              <p className="text-xs text-gray-500 mb-4">No spins yet</p>
+            ) : (
+              <>
+                {/* Latest winner, styled like the winner popup */}
+                <p className="text-[11px] uppercase tracking-wide text-gray-400 mt-2">
+                  Latest winner
+                </p>
+                <p
+                  className={`font-bold text-green-600 leading-tight break-words px-2 ${
+                    winnerHistory[winnerHistory.length - 1].length > 12 ? "text-3xl" : "text-4xl"
+                  }`}
+                  style={{ wordBreak: "break-word", overflowWrap: "break-word" }}
+                >
+                  {winnerHistory[winnerHistory.length - 1]}
+                </p>
+                <p className="text-xs text-gray-500 mb-4">
+                  Spin {winnerHistory.length} of {winnerHistory.length}
+                </p>
+
+                {winnerHistory.length > 1 && (
+                  <ol className="max-h-[40vh] overflow-y-auto text-left divide-y divide-gray-100 rounded-lg border border-gray-100 mb-4">
+                    {[...winnerHistory].slice(0, -1).reverse().map((winner, i) => {
+                      const spinNumber = winnerHistory.length - 1 - i;
+                      return (
+                        <li key={`${spinNumber}-${winner}`} className="flex items-center gap-3 px-3 py-2">
+                          <span className="w-6 text-right text-xs text-gray-400 tabular-nums">{spinNumber}</span>
+                          <span className="flex-1 truncate text-gray-700">{winner}</span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+              </>
             )}
 
             <div className="flex gap-3">

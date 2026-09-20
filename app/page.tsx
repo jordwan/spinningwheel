@@ -35,6 +35,17 @@ import { toTitleCase } from "../lib/utils/text";
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
 
 const MAX_NAME_LENGTH = 20;
+const SHARE_STORAGE_KEY = "wheel_last_share";
+
+// Everything a share link captures. Same key = same wheel = same link.
+function shareKeyFor(
+  names: string[],
+  teamName: string,
+  accentColor: string | null,
+  inputMethod: "custom" | "random"
+): string {
+  return JSON.stringify([names, teamName.trim(), accentColor ?? null, inputMethod]);
+}
 
 // Tidy one name: collapse whitespace, keep letters/digits from any language
 // (José, Zoë, 李) plus spaces, hyphens, dots, underscores and apostrophes.
@@ -170,7 +181,19 @@ export default function Home() {
   const [shareUrl, setShareUrl] = useState("");
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [showCopySuccess, setShowCopySuccess] = useState(false);
-  const [currentShareSlug, setCurrentShareSlug] = useState<string | null>(null);
+  // Last share link plus a fingerprint of what it contains. If the wheel hasn't changed,
+  // Share reuses the link instead of creating another snapshot. Persisted so a reload
+  // of the same wheel still reuses it.
+  const [shareRecord, setShareRecord] = useState<{ slug: string; key: string } | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(SHARE_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed.slug === "string" && typeof parsed.key === "string" ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
   // Wheel colours: automatic theme, or a user-picked accent hue
   const [accentHue, setAccentHue] = useState(210);
   const [useCustomColor, setUseCustomColor] = useState(false);
@@ -386,7 +409,6 @@ export default function Home() {
     setIsUsingCustomNames(false); // Track that we're using random names
     setShowNameInput(false);
     setShowRandomCountInput(false);
-    setCurrentShareSlug(null); // Clear any existing share slug since config changed
     // Track random names selection
     trackRandomSelection("names", count);
     trackInputMethodSelected("random");
@@ -414,7 +436,6 @@ export default function Home() {
     setIsUsingCustomNames(false); // Track that we're using sequential numbers
     setShowNameInput(false);
     setShowRandomCountInput(false);
-    setCurrentShareSlug(null); // Clear any existing share slug since config changed
     // Track sequential numbers selection
     trackRandomSelection("numbers", count);
     trackInputMethodSelected("numbers");
@@ -499,12 +520,10 @@ export default function Home() {
   const handleAccentHueChange = (hue: number) => {
     setAccentHue(hue);
     setUseCustomColor(true);
-    setCurrentShareSlug(null);
     setCurrentConfigId(null);
   };
   const handleAutoColors = () => {
     setUseCustomColor(false);
-    setCurrentShareSlug(null);
     setCurrentConfigId(null);
     setShowColorPicker(false); // choosing Auto is a complete answer; no extra Done needed
   };
@@ -542,7 +561,6 @@ export default function Home() {
         setWheelNames(names);
         setIsUsingCustomNames(true); // Track that we're using custom names
         setShowNameInput(false);
-        setCurrentShareSlug(null); // Clear any existing share slug since config changed
 
         // Update document title with team name
         if (teamName) {
@@ -638,21 +656,20 @@ export default function Home() {
 
     setIsCreatingShare(true);
     try {
-      // Check if we already have a slug for this wheel configuration
-      let slug = currentShareSlug;
+      // Reuse the existing link if this exact wheel was already shared
+      const inputMethod = isUsingCustomNames ? 'custom' : 'random';
+      const key = shareKeyFor(wheelNames, teamName, accentColor, inputMethod);
+      let slug = shareRecord && shareRecord.key === key ? shareRecord.slug : null;
 
-      // Only create a new slug if we don't have one yet
       if (!slug) {
-        slug = await createShareableWheel(
-          wheelNames,
-          teamName || undefined,
-          isUsingCustomNames ? 'custom' : 'random',
-          accentColor
-        );
+        slug = await createShareableWheel(wheelNames, teamName || undefined, inputMethod, accentColor);
 
         if (slug) {
-          // Save the slug so we reuse it next time
-          setCurrentShareSlug(slug);
+          const record = { slug, key };
+          setShareRecord(record);
+          try {
+            window.localStorage.setItem(SHARE_STORAGE_KEY, JSON.stringify(record));
+          } catch {}
         }
       }
 
@@ -1495,7 +1512,6 @@ export default function Home() {
                 onRemoveWinner={async (newNames: string[]) => {
                   // Update the wheel names in the parent component
                   setWheelNames(newNames);
-                  setCurrentShareSlug(null); // Clear share slug since config changed
                   // Create new configuration with the remaining names
                   const newConfigId = await saveConfiguration(
                     newNames,
@@ -1510,7 +1526,6 @@ export default function Home() {
                   // Track reset action with context
                   trackWheelReset(isUsingCustomNames);
                   setShowNameInput(true);
-                  setCurrentShareSlug(null); // Clear share slug on reset
                   // Preserve custom names and team name when resetting
                   // They will only be cleared if user explicitly clicks "Clear"
                   if (!isUsingCustomNames) {
