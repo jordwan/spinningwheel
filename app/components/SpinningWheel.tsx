@@ -18,7 +18,7 @@ import {
   incrementSpinCount,
   trackSpinButtonConversion,
 } from "../utils/analytics";
-import { generatePaletteFromColor } from "../../lib/utils/palette";
+import { generatePaletteFromColor, hexToHsl, hslToHex } from "../../lib/utils/palette";
 
 /** ========= CRYPTO RNG  ========= */
 const cryptoRandom = (): number => {
@@ -79,15 +79,18 @@ const CAP_RADIUS = 25;
 const LABEL_INNER_MIN = CAP_RADIUS + 12;
 const LABEL_EDGE_PADDING = 14;
 
+// Labels live in the outer part of the slice; nothing reaches further in than this
+const LABEL_INNER_FRACTION = 0.42;
+
 // Biggest font we'd use for a given number of slices (before fitting)
 const maxLabelFont = (segmentCount: number, radius: number): number => {
   const byCount =
-    segmentCount <= 4 ? 28 :
-    segmentCount <= 8 ? 24 :
-    segmentCount <= 12 ? 20 :
-    segmentCount <= 20 ? 16 :
+    segmentCount <= 4 ? 22 :
+    segmentCount <= 8 ? 20 :
+    segmentCount <= 12 ? 17 :
+    segmentCount <= 20 ? 15 :
     segmentCount <= 30 ? 13 : 11;
-  return Math.max(LABEL_MIN_FONT, Math.min(byCount, Math.round(radius * 0.12)));
+  return Math.max(LABEL_MIN_FONT, Math.min(byCount, Math.round(radius * 0.1)));
 };
 
 interface FittedLabel {
@@ -96,46 +99,54 @@ interface FittedLabel {
 }
 
 /**
- * Shrink (and only then truncate) a label so it fits its slice.
- * Two constraints: it must fit lengthwise between the cap and the rim, and its font
- * size can't exceed the slice's width at the point where the text starts (slices are
- * narrowest near the centre, so long text must be small or move outward).
+ * Fit a label into the outer band of its slice.
+ * Constraints: it must fit lengthwise between `innerMin` and the rim, and its font
+ * size can't exceed the slice's width where the text begins (slices are narrowest
+ * near the centre). With `allowShrink` the font steps down first; otherwise the
+ * size is fixed and only the text is trimmed (used for the wheel-wide uniform pass).
  */
 const fitLabel = (
   measure: CanvasRenderingContext2D,
   text: string,
   outerR: number,
+  innerMin: number,
   sliceAngle: number,
-  maxFont: number
+  maxFont: number,
+  allowShrink: boolean
 ): FittedLabel => {
   const chordAt = (r: number) => 2 * r * Math.sin(sliceAngle / 2);
   const fits = (label: string, fs: number) => {
     measure.font = `bold ${fs}px ${LABEL_FONT}`;
     const innerR = outerR - measure.measureText(label).width;
-    return innerR >= LABEL_INNER_MIN && fs <= chordAt(innerR);
+    return innerR >= innerMin && fs <= chordAt(innerR);
   };
 
-  for (let fs = maxFont; fs >= LABEL_MIN_FONT; fs--) {
+  const minFont = allowShrink ? LABEL_MIN_FONT : maxFont;
+  for (let fs = maxFont; fs >= minFont; fs--) {
     if (fits(text, fs)) return { text, fontSize: fs };
   }
 
-  // Still too big at the minimum size: trim characters until it fits
+  // Trim characters until it fits at the smallest allowed size
   for (let n = text.length - 1; n >= 1; n--) {
     const label = text.slice(0, n).trimEnd() + "\u2026";
-    if (fits(label, LABEL_MIN_FONT)) return { text: label, fontSize: LABEL_MIN_FONT };
+    if (fits(label, minFont)) return { text: label, fontSize: minFont };
   }
 
   // Nothing fits (tiny wheel, very many slices): show what we can
-  return { text: text.slice(0, 2), fontSize: LABEL_MIN_FONT };
+  return { text: text.slice(0, 2), fontSize: minFont };
 };
 
-// Dark text on light slices, white text on dark ones (YIQ perceived brightness)
-const contrastTextColor = (hex: string): string => {
+// Label colour is a deep or pale shade of the slice's own colour: dark-on-light or
+// light-on-dark for legibility, but tinted so the wheel reads as one palette instead
+// of a jumble of black and white.
+const labelColorFor = (hex: string): string => {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex);
   if (!m) return "#ffffff";
   const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
   const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-  return yiq >= 150 ? "#1f2937" : "#ffffff";
+  const { h, s: sat } = hexToHsl(hex.slice(0, 7));
+  const s = Math.min(sat, 45);
+  return yiq >= 150 ? hslToHex(h, s, 18) : hslToHex(h, s, 94);
 };
 
 /** ========= COLOR UTILITIES ========= */
@@ -1098,17 +1109,23 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
     const { radius, sliceAngle } = wheelGeometry;
     const outerR = radius - LABEL_EDGE_PADDING;
+    const innerMin = Math.max(LABEL_INNER_MIN, radius * LABEL_INNER_FRACTION);
     const maxFont = maxLabelFont(wheelNames.length, radius);
-    const layout = wheelNames.map((name) => fitLabel(measure, name, outerR, sliceAngle, maxFont));
 
-    // One font size for the whole wheel looks far better than a ransom note. Use the
-    // smallest size that fits every label, but never below 60% of the max: the few
-    // labels that still don't fit at that size shrink or truncate on their own.
-    const smallest = Math.min(...layout.map((l) => l.fontSize));
+    // Pass 1: how small would each label need to be to fit whole?
+    const probe = wheelNames.map((name) =>
+      fitLabel(measure, name, outerR, innerMin, sliceAngle, maxFont, true)
+    );
+    // Pass 2: one font size for the whole wheel: the smallest that fits everything,
+    // floored at 60% of the max. Labels that still don't fit are trimmed, never shrunk,
+    // so every name sits in the same band at the same size.
+    const smallest = Math.min(...probe.map((l) => l.fontSize));
     const unifiedFont = Math.max(smallest, Math.round(maxFont * 0.6));
-    const result = wheelNames.map((name) => fitLabel(measure, name, outerR, sliceAngle, unifiedFont));
+    const result = wheelNames.map((name) =>
+      fitLabel(measure, name, outerR, innerMin, sliceAngle, unifiedFont, false)
+    );
 
-    const colors = wheelNames.map((name) => contrastTextColor(getColorForName(name)));
+    const colors = wheelNames.map((name) => labelColorFor(getColorForName(name)));
     return Object.assign(result, { colors });
   }, [wheelNames, wheelGeometry, showBlank, getColorForName]);
 
