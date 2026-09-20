@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getConfigBySlug } from '@/lib/supabase/wheel-config';
 import { slugToTitle, validateSlug } from '@/lib/utils/slug';
+import { toTitleCase } from '@/lib/utils/text';
 import SharedWheelClient from './SharedWheelClient';
 
 interface PageProps {
@@ -33,7 +34,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const title = config.teamName || slugToTitle(slug);
+  const title = config.teamName ? toTitleCase(config.teamName) : slugToTitle(slug);
   const description = `Spin the wheel: ${config.names.slice(0, 5).join(', ')}${config.names.length > 5 ? '...' : ''}`;
 
   return {

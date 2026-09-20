@@ -1825,7 +1825,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
       {/* Wheel name. On phones it sits below the logo/share row; wider screens have room beside them */}
       {title && !showBlank && (
-        <div ref={titleRef} className="flex-shrink-0 w-full px-4 pt-14 sm:pt-1 pb-1 text-center">
+        <div ref={titleRef} className="flex-shrink-0 w-full px-4 pt-14 sm:pt-1 pb-4 sm:pb-2 text-center">
           <h1
             className="mx-auto max-w-[85vw] sm:max-w-[60vw] truncate text-white font-bold text-lg sm:text-2xl leading-tight"
             style={{ textShadow: "0 2px 10px rgba(0,0,0,0.45)" }}
@@ -2404,9 +2404,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         aria-label={muted ? "Unmute wheel sounds" : "Mute wheel sounds"}
         aria-pressed={muted}
         title={muted ? "Sound off" : "Sound on"}
-        className="fixed z-[45] w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 text-white/90 backdrop-blur-sm border border-white/20 flex items-center justify-center transition-colors cursor-pointer"
+        className={`fixed z-[45] w-9 h-9 rounded-full backdrop-blur-sm border flex items-center justify-center transition-colors cursor-pointer ${
+          muted
+            ? "bg-red-500/80 hover:bg-red-500 border-red-200/70 text-white"
+            : "bg-black/30 hover:bg-black/50 border-white/20 text-white/90"
+        }`}
         style={{
-          left: "max(0.75rem, env(safe-area-inset-left))",
+          right: "max(0.75rem, env(safe-area-inset-right))",
           bottom: "max(0.75rem, env(safe-area-inset-bottom))",
           touchAction: "manipulation",
         }}

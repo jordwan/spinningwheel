@@ -2,6 +2,7 @@ import { ImageResponse } from 'next/og';
 import { WheelCard, OG_SIZE } from '@/lib/og/WheelCard';
 import { getConfigBySlug } from '@/lib/supabase/wheel-config';
 import { slugToTitle, validateSlug } from '@/lib/utils/slug';
+import { toTitleCase } from '@/lib/utils/text';
 
 export const alt = 'Shared wheel on iWheeli';
 export const size = OG_SIZE;
@@ -25,7 +26,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
     );
   }
 
-  const title = config.teamName || slugToTitle(slug);
+  const title = config.teamName ? toTitleCase(config.teamName) : slugToTitle(slug);
   const count = config.names.length;
 
   return new ImageResponse(

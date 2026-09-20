@@ -29,6 +29,7 @@ import { useSession } from "../hooks/useSession";
 import { useViewportHeight } from "../hooks/useViewportHeight";
 import HuePicker from "./components/HuePicker";
 import { accentHexFromHue, hexToHsl, hslToHex, isValidHexColor } from "../lib/utils/palette";
+import { toTitleCase } from "../lib/utils/text";
 
 // Lazy load the heavy SpinningWheel component
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
@@ -193,6 +194,8 @@ export default function Home() {
   const accentColor = useCustomColor ? accentHexFromHue(accentHue) : null;
   // A darker cut of the accent so it reads as text on white (blue when automatic)
   const accentTextColor = useCustomColor ? hslToHex(accentHue, 70, 38) : "#2563eb";
+  // Display form of the wheel name ("team jamal" -> "Team Jamal"); slugs stay lowercase
+  const displayTitle = toTitleCase(teamName);
 
   // Session tracking
   const {
@@ -543,7 +546,7 @@ export default function Home() {
 
         // Update document title with team name
         if (teamName) {
-          document.title = `${teamName} – iWheeli – Random Name Picker Wheel`;
+          document.title = `${displayTitle} – iWheeli – Random Name Picker Wheel`;
         }
 
         // Track custom names submission
@@ -684,7 +687,7 @@ export default function Home() {
   // Share to WhatsApp
   const handleWhatsAppShare = () => {
     try {
-      const wheelTitle = teamName || 'Spinning Wheel';
+      const wheelTitle = displayTitle || 'Spinning Wheel';
       const message = `Check out this wheel! ${wheelTitle} - ${shareUrl}`;
       const encodedMessage = encodeURIComponent(message);
 
@@ -1329,9 +1332,9 @@ export default function Home() {
                       <h3
                         className="text-2xl font-bold mb-1 truncate"
                         style={{ color: accentTextColor }}
-                        title={teamName}
+                        title={displayTitle}
                       >
-                        {teamName}
+                        {displayTitle}
                       </h3>
                       <p className="text-sm text-gray-600 mb-4">
                         Share this wheel. Anyone with the link can view and spin it
@@ -1484,7 +1487,7 @@ export default function Home() {
                 showBlank={!(showNameInput && previewNames.length >= 2) && wheelNames.length < 2}
                 controlsDisabled={showNameInput}
                 accentColor={accentColor}
-                title={wheelNames.length >= 2 && teamName.trim() ? teamName.trim() : null}
+                title={wheelNames.length >= 2 && displayTitle ? displayTitle : null}
                 isFirefox={isFirefox}
                 configId={currentConfigId}
                 onRecordSpin={recordSpin}
@@ -1520,7 +1523,7 @@ export default function Home() {
                   // The input and teamName stay as they were
                   setShowRandomCountInput(false);
                   setCurrentConfigId(null);
-                  document.title = teamName ? `${teamName} – iWheeli – Random Name Picker Wheel` : "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners";
+                  document.title = teamName ? `${displayTitle} – iWheeli – Random Name Picker Wheel` : "iWheeli – Random Name Picker Wheel | Spin to Choose Names & Winners";
                 }}
               />
             </Suspense>

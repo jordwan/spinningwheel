@@ -4,6 +4,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import Image from "next/image";
 import { useSession } from "../../hooks/useSession";
 import { useViewportHeight } from "../../hooks/useViewportHeight";
+import { toTitleCase } from "../../lib/utils/text";
 
 const SpinningWheel = lazy(() => import("../components/SpinningWheel"));
 
@@ -82,7 +83,7 @@ export default function SharedWheelClient({
 
     // Update document title
     if (teamName) {
-      document.title = `${teamName} – iWheeli – Random Name Picker Wheel`;
+      document.title = `${toTitleCase(teamName)} – iWheeli – Random Name Picker Wheel`;
     }
   }, [names, teamName, inputMethod, accentColor, saveConfiguration]);
 
@@ -185,7 +186,7 @@ export default function SharedWheelClient({
                 names={currentNames}
                 showBlank={false}
                 accentColor={accentColor}
-                title={teamName ?? null}
+                title={teamName ? toTitleCase(teamName) : null}
                 isFirefox={isFirefox}
                 configId={currentConfigId}
                 onRecordSpin={recordSpin}
