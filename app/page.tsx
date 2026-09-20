@@ -33,6 +33,33 @@ import { accentHexFromHue, hexToHsl, isValidHexColor } from "../lib/utils/palett
 // Lazy load the heavy SpinningWheel component
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
 
+// Copy text to the clipboard; resolves true on success. Falls back to execCommand
+// for older browsers. Callers should treat false as "show the manual Copy button".
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to the legacy path
+  }
+  try {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.setAttribute("readonly", "");
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textArea);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 // Loading placeholder component for better LCP
 const WheelLoadingPlaceholder = () => (
   <div className="flex flex-col items-center w-full h-full justify-center">
@@ -104,6 +131,22 @@ export default function Home() {
   const [useCustomColor, setUseCustomColor] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Show "Copied!" on the copy button for a moment
+  const flashCopied = useCallback(() => {
+    setShowCopySuccess(true);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setShowCopySuccess(false), 2000);
+  }, []);
+
+  // One place to dismiss the simple modals (warnings + share)
+  const closeSimpleModals = useCallback(() => {
+    setShowMinNamesWarning(false);
+    setShowLongNameWarning(false);
+    setShowDuplicateWarning(false);
+    setShowShareModal(false);
+  }, []);
   const accentColor = useCustomColor ? accentHexFromHue(accentHue) : null;
 
   // Session tracking
@@ -235,10 +278,7 @@ export default function Home() {
         setShowColorPicker(false);
         return;
       }
-      setShowMinNamesWarning(false);
-      setShowLongNameWarning(false);
-      setShowDuplicateWarning(false);
-      setShowShareModal(false);
+      closeSimpleModals();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -248,6 +288,7 @@ export default function Home() {
     showLongNameWarning,
     showDuplicateWarning,
     showShareModal,
+    closeSimpleModals,
   ]);
 
   // Clicking anywhere outside the colour popover closes it
@@ -512,6 +553,9 @@ export default function Home() {
         setShareUrl(url);
         setShowShareModal(true);
         trackShareModalOpened('button');
+        // Copy straight away so most people never need the button. Browsers may refuse
+        // (Safari after the network wait); then the Copy Link button is right there.
+        if (await copyToClipboard(url)) flashCopied();
       } else {
         alert('Failed to create shareable link. Please try again.');
       }
@@ -525,25 +569,10 @@ export default function Home() {
 
   // Copy share URL to clipboard
   const handleCopyUrl = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setShowCopySuccess(true);
-      setTimeout(() => setShowCopySuccess(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy URL:', err);
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = shareUrl;
-      document.body.appendChild(textArea);
-      textArea.select();
-      try {
-        document.execCommand('copy');
-        setShowCopySuccess(true);
-        setTimeout(() => setShowCopySuccess(false), 2000);
-      } catch {
-        alert('Failed to copy URL. Please copy manually: ' + shareUrl);
-      }
-      document.body.removeChild(textArea);
+    if (await copyToClipboard(shareUrl)) {
+      flashCopied();
+    } else {
+      alert('Failed to copy URL. Please copy manually: ' + shareUrl);
     }
   };
 
@@ -984,7 +1013,12 @@ export default function Home() {
         {showMinNamesWarning && (
           <>
             <div className="fixed inset-0 backdrop-blur-[2px] z-[79]" />
-            <div className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-none">
+            <div
+              className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-auto"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) closeSimpleModals();
+              }}
+            >
               <div
                 role="dialog"
                 aria-modal="true"
@@ -1034,7 +1068,12 @@ export default function Home() {
         {showLongNameWarning && (
           <>
             <div className="fixed inset-0 backdrop-blur-[2px] z-[79]" />
-            <div className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-none">
+            <div
+              className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-auto"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) closeSimpleModals();
+              }}
+            >
               <div
                 role="dialog"
                 aria-modal="true"
@@ -1082,7 +1121,12 @@ export default function Home() {
         {showDuplicateWarning && (
           <>
             <div className="fixed inset-0 backdrop-blur-[2px] z-[79]" />
-            <div className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-none">
+            <div
+              className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-auto"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) closeSimpleModals();
+              }}
+            >
               <div
                 role="dialog"
                 aria-modal="true"
@@ -1132,7 +1176,12 @@ export default function Home() {
         {showShareModal && (
           <>
             <div className="fixed inset-0 backdrop-blur-[2px] z-[79]" />
-            <div className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-none">
+            <div
+              className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-auto"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) closeSimpleModals();
+              }}
+            >
               <div
                 role="dialog"
                 aria-modal="true"
@@ -1182,11 +1231,16 @@ export default function Home() {
                       />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
                     Share Your Wheel
                   </h3>
+                  {teamName.trim() && (
+                    <p className="text-base font-semibold text-blue-600 mb-1 truncate" title={teamName}>
+                      {teamName}
+                    </p>
+                  )}
                   <p className="text-sm text-gray-600 mb-4">
-                    Anyone with this link can view and spin this wheel
+                    Anyone with this link can view and spin {teamName.trim() ? "it" : "this wheel"}
                   </p>
 
                   {/* URL Display */}

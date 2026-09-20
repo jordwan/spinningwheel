@@ -2142,7 +2142,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
 
       {/* Fairness Popup */}
       {showFairnessPopup && (
-        <div className="fixed inset-0 flex items-center justify-center z-[70] pointer-events-auto backdrop-blur-sm bg-black/20">
+        <div
+          className="fixed inset-0 flex items-center justify-center z-[70] pointer-events-auto backdrop-blur-sm bg-black/20"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowFairnessPopup(false);
+          }}
+        >
           <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl p-6 max-w-lg w-full mx-4 text-center relative border border-gray-700">
             <button
               onClick={() => setShowFairnessPopup(false)}
@@ -2340,9 +2345,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             <span className="text-white/40">•</span>
             <button
               onClick={() => setShowHistoryPopup(true)}
-              className="text-white/70 hover:text-white underline"
-              style={{ touchAction: "manipulation" }}
+              aria-label={`Spin history, ${winnerHistory.length} ${winnerHistory.length === 1 ? "spin" : "spins"}`}
+              className="inline-flex items-center gap-1 px-2.5 py-1 -my-1 rounded-full bg-white/15 hover:bg-white/30 border border-white/25 text-white text-[11px] sm:text-xs font-medium transition-colors cursor-pointer"
+              style={{ touchAction: "manipulation", minHeight: 28 }}
             >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               history{winnerHistory.length > 0 ? ` (${winnerHistory.length})` : ""}
             </button>
             <span className="text-white/40">•</span>
