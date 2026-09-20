@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { LocalSession, SpinRecord } from '../lib/session/LocalSession';
+import { LocalSession, SpinRecord, WheelConfig } from '../lib/session/LocalSession';
 import { DatabaseSync } from '../lib/session/DatabaseSync';
 import { SupabaseAdapter } from '../lib/session/SupabaseAdapter';
 import { createShareableConfig } from '../lib/supabase/wheel-config';
@@ -16,6 +16,8 @@ interface UseSessionReturn {
   recordSpin: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
   updateSpinAcknowledgment: (spinId: string, method: 'button' | 'backdrop' | 'x' | 'remove') => Promise<void>;
   getSessionHistory: () => Promise<SpinRecord[] | null>;
+  /** Most recently saved wheel in this browser (for restoring on return visits) */
+  getLastConfiguration: () => WheelConfig | null;
   getSyncStatus?: () => SyncStatus | null; // Optional debug info
 }
 
@@ -143,6 +145,11 @@ export function useSession(): UseSessionReturn {
     }
   }, [sessionId]);
 
+  // Last saved wheel (synchronous, from localStorage)
+  const getLastConfiguration = useCallback((): WheelConfig | null => {
+    return localSessionRef.current?.getCurrentConfiguration() ?? null;
+  }, []);
+
   // Get sync status for debugging (optional)
   const getSyncStatus = useCallback(() => {
     return syncServiceRef.current?.getSyncStatus() || null;
@@ -157,6 +164,7 @@ export function useSession(): UseSessionReturn {
     recordSpin,
     updateSpinAcknowledgment,
     getSessionHistory,
+    getLastConfiguration,
     getSyncStatus,
   };
 }

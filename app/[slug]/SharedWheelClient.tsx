@@ -64,6 +64,8 @@ export default function SharedWheelClient({
 }: SharedWheelClientProps) {
   const [mounted, setMounted] = useState(false);
   const [currentConfigId, setCurrentConfigId] = useState<string | null>(null);
+  // The visitor's working copy of the list: "Remove <winner>" shrinks it, Reset restores it
+  const [currentNames, setCurrentNames] = useState<string[]>(names);
   const { saveConfiguration, recordSpin, updateSpinAcknowledgment } = useSession();
 
   useEffect(() => {
@@ -178,14 +180,14 @@ export default function SharedWheelClient({
           <div className="flex-1 w-full max-w-5xl mx-auto min-h-0 flex flex-col overflow-hidden py-2">
             <Suspense fallback={<WheelLoadingPlaceholder />}>
               <SpinningWheel
-                names={names}
-                includeFreeSpins={false}
+                names={currentNames}
                 showBlank={false}
                 isFirefox={isFirefox}
                 configId={currentConfigId}
                 onRecordSpin={recordSpin}
                 onUpdateSpinAcknowledgment={updateSpinAcknowledgment}
                 onRemoveWinner={async (newNames: string[]) => {
+                  setCurrentNames(newNames);
                   const newConfigId = await saveConfiguration(
                     newNames,
                     teamName,
@@ -195,8 +197,11 @@ export default function SharedWheelClient({
                   return newConfigId;
                 }}
                 onReset={() => {
-                  // For shared wheels, reset just reloads the page
-                  window.location.reload();
+                  // Shared wheels can't be edited: Reset puts the original list back
+                  setCurrentNames(names);
+                  saveConfiguration(names, teamName, inputMethod).then((configId) =>
+                    setCurrentConfigId(configId)
+                  );
                 }}
               />
             </Suspense>

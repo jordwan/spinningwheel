@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   lazy,
   Suspense,
 } from "react";
@@ -97,8 +98,13 @@ export default function Home() {
   const [currentShareSlug, setCurrentShareSlug] = useState<string | null>(null);
 
   // Session tracking
-  const { saveConfiguration, recordSpin, updateSpinAcknowledgment, createShareableWheel } =
-    useSession();
+  const {
+    saveConfiguration,
+    recordSpin,
+    updateSpinAcknowledgment,
+    createShareableWheel,
+    getLastConfiguration,
+  } = useSession();
 
   // Textarea contents (parsed only on submit)
   const [localInputValue, setLocalInputValue] = useState("");
@@ -109,6 +115,14 @@ export default function Home() {
 
     // Start analytics session
     startSession();
+
+    // Welcome back: prefill the last custom wheel from this browser so a returning
+    // teacher/host doesn't retype the list. They still confirm with "Create wheel".
+    const last = getLastConfiguration();
+    if (last && last.inputMethod === "custom" && last.names.length >= 2) {
+      setLocalInputValue(last.names.join(", "));
+      if (last.teamName) setTeamName(last.teamName);
+    }
 
     // Detect mobile device
     const checkIsMobile = () => {
@@ -129,7 +143,7 @@ export default function Home() {
       // End analytics session on unmount
       endSession();
     };
-  }, []);
+  }, [getLastConfiguration]);
 
   // Unified viewport management
   const { isFirefox } = useViewportHeight({
@@ -242,8 +256,10 @@ export default function Home() {
     return getRandomNames(count);
   };
 
+  const randomCount = Math.min(Math.max(parseInt(randomNameCount) || 6, 2), 99);
+
   const handleRandomNames = async () => {
-    const count = Math.min(parseInt(randomNameCount) || 10, 99);
+    const count = randomCount;
     const names = generateRandomNames(count);
     setWheelNames(names);
     setIsUsingCustomNames(false); // Track that we're using random names
@@ -260,7 +276,7 @@ export default function Home() {
   };
 
   const handleSequentialNumbers = async () => {
-    const count = Math.min(parseInt(randomNameCount) || 10, 99);
+    const count = randomCount;
     const numbers = Array.from({ length: count }, (_, i) => (i + 1).toString());
 
     // Shuffle the numbers array to randomize their position on the wheel
@@ -335,13 +351,32 @@ export default function Home() {
     []
   );
 
+  // Parsed live as the user types: powers the "4 names ready" hint and the wheel preview
+  const parsedInput = useMemo(
+    () => processNames(localInputValue),
+    [processNames, localInputValue]
+  );
+  const previewNames = parsedInput.names;
+
+  // Close the setup card and keep whatever wheel is behind it (or a blank one to play with)
+  const handleCloseNameInput = () => {
+    setShowNameInput(false);
+    setShowRandomCountInput(false);
+    trackModalClosed("name_input", "x_button");
+    // Reset cleared the config id; re-save so spins on the kept wheel are recorded
+    if (wheelNames.length >= 2 && !currentConfigId) {
+      saveConfiguration(
+        wheelNames,
+        teamName || undefined,
+        isUsingCustomNames ? "custom" : "random"
+      ).then((configId) => setCurrentConfigId(configId));
+    }
+  };
+
   const handleSubmitNames = () => {
     // This function now only handles custom names
     // Random generation is handled by separate functions
-
-    // Read the live textarea value, not the 150ms-debounced copy, so a quick
-    // paste-then-Enter can't submit stale input.
-    const { names, duplicatesRemoved } = processNames(localInputValue);
+    const { names, duplicatesRemoved } = parsedInput;
 
     // Show warning if duplicates were removed
     if (duplicatesRemoved > 0) {
@@ -555,22 +590,12 @@ export default function Home() {
             <div
               role="dialog"
               aria-modal="true"
-              aria-label={showRandomCountInput ? "How many random tiles?" : "Customize Wheel"}
-              className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full pointer-events-auto text-center relative"
+              aria-label="Customize Wheel"
+              className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 max-w-2xl w-full pointer-events-auto text-center relative"
             >
-              {/* Close button */}
+              {/* Close button - keeps the wheel behind (or a blank one to play with) */}
               <button
-                onClick={() => {
-                  if (showRandomCountInput) {
-                    // Go back to custom names input
-                    setShowRandomCountInput(false);
-                    trackModalClosed("random_input", "x_button");
-                  } else {
-                    // On custom names screen, X button goes to random selector
-                    setShowRandomCountInput(true);
-                    trackModalClosed("name_input", "x_to_random");
-                  }
-                }}
+                onClick={handleCloseNameInput}
                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
                 aria-label="Close"
                 style={{ touchAction: "manipulation" }}
@@ -590,200 +615,246 @@ export default function Home() {
                   />
                 </svg>
               </button>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                {showRandomCountInput
-                  ? "How many random tiles?"
-                  : "Customize Wheel"}
-              </h2>
-              {!showRandomCountInput && (
-                <p className="text-gray-600 mb-4">
-                  <span className="text-sm text-gray-500">
-                    Input your own names/numbers <br></br>or use random to
-                    select number of tiles.
-                  </span>
-                </p>
-              )}
-              {!showRandomCountInput ? (
-                <>
+
+              <h2 className="text-2xl font-bold text-gray-800 mb-1">Customize Wheel</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Add at least 2 names, or generate random names or numbers.
+              </p>
+
+              {/* 1. Names */}
+              <textarea
+                value={localInputValue}
+                onChange={(e) => handleInputChange(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="mike, cindy, jamal, wayne"
+                aria-label="Names for the wheel"
+                aria-describedby="names-help"
+                className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
+                style={{ touchAction: "manipulation" }}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                autoFocus={!isMobileDevice}
+              />
+
+              {/* Live parsing feedback */}
+              <div
+                id="names-help"
+                className="flex items-center justify-between gap-3 mt-1.5 mb-3 min-h-[1.25rem] text-xs text-left"
+              >
+                <span
+                  className={
+                    previewNames.length >= 2
+                      ? "text-green-600 font-medium"
+                      : "text-gray-500"
+                  }
+                  aria-live="polite"
+                >
+                  {localInputValue.trim() === ""
+                    ? "Separate names with commas, or put one per line"
+                    : previewNames.length === 0
+                    ? "Keep typing\u2026"
+                    : previewNames.length === 1
+                    ? "1 name so far. Add at least one more"
+                    : `${previewNames.length} names ready${
+                        parsedInput.duplicatesRemoved > 0
+                          ? ` (${parsedInput.duplicatesRemoved} duplicate${
+                              parsedInput.duplicatesRemoved === 1 ? "" : "s"
+                            } ignored)`
+                          : ""
+                      }`}
+                </span>
+                {localInputValue.trim() !== "" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocalInputValue("");
+                      setTeamName("");
+                    }}
+                    className="text-gray-400 hover:text-red-600 underline whitespace-nowrap cursor-pointer"
+                    style={{ touchAction: "manipulation" }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* 2. Wheel name */}
+              <input
+                type="text"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="Wheel name (optional)"
+                aria-label="Wheel name (optional)"
+                className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                style={{ touchAction: "manipulation" }}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowRandomCountInput((open) => !open)}
+                  aria-expanded={showRandomCountInput}
+                  aria-controls="random-panel"
+                  className={`w-1/3 px-2 sm:px-4 py-3 font-semibold rounded-lg border-2 transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                    showRandomCountInput
+                      ? "border-blue-500 text-blue-600 bg-blue-50"
+                      : "border-gray-300 text-gray-700 hover:border-blue-500 hover:text-blue-600"
+                  }`}
+                  style={{ touchAction: "manipulation" }}
+                >
+                  Random
+                  <svg
+                    className={`w-4 h-4 flex-shrink-0 transition-transform ${showRandomCountInput ? "rotate-180" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={handleSubmitNames}
+                  disabled={previewNames.length < 2}
+                  className={`w-2/3 px-6 py-3 font-semibold rounded-lg transition-colors ${
+                    previewNames.length < 2
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
+                  }`}
+                  style={{ touchAction: "manipulation" }}
+                >
+                  Create wheel
+                </button>
+              </div>
+
+              {/* Random names / numbers panel (expands in place) */}
+              {showRandomCountInput && (
+                <div
+                  id="random-panel"
+                  className="mt-4 pt-4 border-t border-gray-200 text-left"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">How many tiles?</span>
+                    {isEditingCount ? (
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        min="2"
+                        max="99"
+                        value={randomNameCount}
+                        aria-label="Number of tiles"
+                        onFocus={(e) => {
+                          setHasStartedTyping(false);
+                          e.target.select(); // Select all text for easy replacement
+                        }}
+                        onChange={(e) => {
+                          let value = e.target.value;
+
+                          // Check for non-numeric characters on desktop
+                          if (value && !/^\d*$/.test(value)) {
+                            // Flash a visual warning
+                            e.target.style.borderColor = "red";
+                            setTimeout(() => {
+                              e.target.style.borderColor = "#3b82f6";
+                            }, 500);
+                            return;
+                          }
+
+                          // Handle fresh typing (replace existing value)
+                          if (!hasStartedTyping && value.length > 0) {
+                            setHasStartedTyping(true);
+                          }
+
+                          // Limit to 2 digits - keep last 2 digits if more are entered
+                          if (value.length > 2) {
+                            value = value.slice(-2);
+                          }
+
+                          // Allow empty string for user typing
+                          if (value === "") {
+                            setRandomNameCount("");
+                            return;
+                          }
+
+                          // Accept any 1-2 digit number, validation happens on blur
+                          setRandomNameCount(value);
+                        }}
+                        onBlur={(e) => {
+                          // Ensure valid value on blur and exit edit mode
+                          const num = parseInt(e.target.value);
+                          if (isNaN(num) || num < 2) {
+                            setRandomNameCount("2");
+                          } else if (num > 99) {
+                            setRandomNameCount("99");
+                          }
+                          setIsEditingCount(false);
+                          setHasStartedTyping(false);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.currentTarget.blur();
+                          }
+                        }}
+                        className="text-lg font-semibold text-gray-700 text-center bg-transparent border-b-2 border-blue-500 outline-none w-20 px-2 py-1 h-8 rounded"
+                        style={{ touchAction: "manipulation" }}
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingCount(true)}
+                        className="text-lg font-semibold text-gray-700 hover:text-blue-600 transition-colors cursor-pointer px-2 py-1 rounded hover:bg-gray-100"
+                        style={{ touchAction: "manipulation" }}
+                        title="Type a number"
+                      >
+                        {randomNameCount} tiles
+                      </button>
+                    )}
+                  </div>
                   <input
-                    type="text"
-                    value={teamName}
-                    onChange={(e) => setTeamName(e.target.value)}
-                    placeholder="Wheel name (optional)"
-                    className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                    style={{ touchAction: "manipulation" }}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
+                    type="range"
+                    min="2"
+                    max="99"
+                    value={parseInt(randomNameCount) || 6}
+                    onChange={(e) => setRandomNameCount(e.target.value)}
+                    aria-label="Number of tiles"
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                    style={{
+                      background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${
+                        (((parseInt(randomNameCount) || 6) - 2) / 97) * 100
+                      }%, #e5e7eb ${
+                        (((parseInt(randomNameCount) || 6) - 2) / 97) * 100
+                      }%, #e5e7eb 100%)`,
+                      touchAction: "manipulation",
+                    }}
+                    autoFocus={!isEditingCount}
                   />
-                  <textarea
-                    value={localInputValue}
-                    onChange={(e) => handleInputChange(e.target.value)}
-                    onKeyDown={handleKeyPress}
-                    placeholder="eg: mike, cindy, jamal, wayne..."
-                    className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
-                    style={{ touchAction: "manipulation" }}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    autoFocus={!showRandomCountInput && !isMobileDevice}
-                  />
-                </>
-              ) : (
-                <div>
-                  {/* Merged Slider and Manual Input */}
-                  <div>
-                    <div className="flex items-center justify-center mb-2">
-                      {isEditingCount ? (
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          min="2"
-                          max="99"
-                          value={randomNameCount}
-                          onFocus={(e) => {
-                            setHasStartedTyping(false);
-                            e.target.select(); // Select all text for easy replacement
-                          }}
-                          onChange={(e) => {
-                            let value = e.target.value;
-
-                            // Check for non-numeric characters on desktop
-                            if (value && !/^\d*$/.test(value)) {
-                              // Flash a visual warning
-                              e.target.style.borderColor = "red";
-                              setTimeout(() => {
-                                e.target.style.borderColor = "#3b82f6";
-                              }, 500);
-                              return;
-                            }
-
-                            // Handle fresh typing (replace existing value)
-                            if (!hasStartedTyping && value.length > 0) {
-                              setHasStartedTyping(true);
-                            }
-
-                            // Limit to 2 digits - keep last 2 digits if more are entered
-                            if (value.length > 2) {
-                              value = value.slice(-2);
-                            }
-
-                            // Allow empty string for user typing
-                            if (value === "") {
-                              setRandomNameCount("");
-                              return;
-                            }
-
-                            // Accept any 1-2 digit number, validation happens on blur
-                            setRandomNameCount(value);
-                          }}
-                          onBlur={(e) => {
-                            // Ensure valid value on blur and exit edit mode
-                            const num = parseInt(e.target.value);
-                            if (isNaN(num) || num < 2) {
-                              setRandomNameCount("2");
-                            } else if (num > 99) {
-                              setRandomNameCount("99");
-                            }
-                            setIsEditingCount(false);
-                            setHasStartedTyping(false);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.currentTarget.blur();
-                            }
-                          }}
-                          className="text-lg font-semibold text-gray-700 text-center bg-transparent border-b-2 border-blue-500 outline-none w-24 px-2 py-1 h-8 rounded hover:bg-gray-100"
-                          style={{ touchAction: "manipulation" }}
-                          autoFocus
-                        />
-                      ) : (
-                        <button
-                          onClick={() => setIsEditingCount(true)}
-                          className="text-lg font-semibold text-gray-700 hover:text-blue-600 transition-colors cursor-pointer px-2 py-1 rounded hover:bg-gray-100"
-                          style={{ touchAction: "manipulation" }}
-                        >
-                          {randomNameCount} tiles
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      type="range"
-                      min="2"
-                      max="99"
-                      value={parseInt(randomNameCount) || 6}
-                      onChange={(e) => setRandomNameCount(e.target.value)}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                      style={{
-                        background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${
-                          (((parseInt(randomNameCount) || 6) - 2) / 97) * 100
-                        }%, #e5e7eb ${
-                          (((parseInt(randomNameCount) || 6) - 2) / 97) * 100
-                        }%, #e5e7eb 100%)`,
-                        touchAction: "manipulation",
-                      }}
-                      autoFocus={showRandomCountInput && !isEditingCount}
-                    />
-                  </div>
-                </div>
-              )}
-              <div className="mt-4">
-                {!showRandomCountInput ? (
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => {
-                        if (localInputValue.trim() !== "") {
-                          setLocalInputValue("");
-                          setTeamName("");
-                        } else {
-                          // Show random count input
-                          setShowRandomCountInput(true);
-                        }
-                      }}
-                      className={`w-1/3 px-6 py-3 font-semibold rounded-lg transition-colors cursor-pointer ${
-                        localInputValue.trim() !== ""
-                          ? "bg-blue-500 text-white hover:bg-blue-600"
-                          : "bg-green-500 text-white hover:bg-green-600"
-                      }`}
-                      style={{ touchAction: "manipulation" }}
-                    >
-                      {localInputValue.trim() !== "" ? "Clear" : "Random"}
-                    </button>
-                    <button
-                      onClick={handleSubmitNames}
-                      disabled={localInputValue.trim() === ""}
-                      className={`w-2/3 px-6 py-3 font-semibold rounded-lg transition-colors ${
-                        localInputValue.trim() === ""
-                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          : "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
-                      }`}
-                      style={{ touchAction: "manipulation" }}
-                    >
-                      Enter
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 mt-3">
                     <button
                       onClick={handleRandomNames}
-                      className="flex-1 px-6 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
+                      className="flex-1 px-4 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
                       style={{ touchAction: "manipulation" }}
                     >
-                      Names
+                      {randomCount} random names
                     </button>
                     <button
                       onClick={handleSequentialNumbers}
-                      className="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
+                      className="flex-1 px-4 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
                       style={{ touchAction: "manipulation" }}
                     >
-                      Numbers
+                      Numbers 1–{randomCount}
                     </button>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1123,9 +1194,15 @@ export default function Home() {
               fallback={<WheelLoadingPlaceholder />}
             >
               <SpinningWheel
-                names={wheelNames.length > 0 ? wheelNames : undefined}
-                includeFreeSpins={false}
-                showBlank={showNameInput}
+                names={
+                  showNameInput && previewNames.length >= 2
+                    ? previewNames
+                    : wheelNames.length >= 2
+                    ? wheelNames
+                    : undefined
+                }
+                showBlank={!(showNameInput && previewNames.length >= 2) && wheelNames.length < 2}
+                controlsDisabled={showNameInput}
                 isFirefox={isFirefox}
                 configId={currentConfigId}
                 onRecordSpin={recordSpin}

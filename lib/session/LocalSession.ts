@@ -16,6 +16,8 @@ export interface WheelConfig {
   sessionId: string;
   names: string[];
   segmentCount: number;
+  teamName?: string;
+  inputMethod?: 'custom' | 'random' | 'numbers';
   createdAt: string;
   [key: string]: unknown; // Allow additional properties for database compatibility
 }
@@ -189,6 +191,8 @@ export class LocalSession {
       sessionId: this.sessionData.id,
       names: [...names],
       segmentCount: names.length,
+      teamName,
+      inputMethod,
       createdAt: new Date().toISOString(),
     };
 
