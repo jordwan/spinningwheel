@@ -18,6 +18,7 @@ import {
   incrementSpinCount,
   trackSpinButtonConversion,
 } from "../utils/analytics";
+import { generatePaletteFromColor } from "../../lib/utils/palette";
 
 /** ========= CRYPTO RNG  ========= */
 const cryptoRandom = (): number => {
@@ -169,6 +170,10 @@ const seededShuffle = (colors: string[], seedString: string): string[] => {
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash;
   }
+  // The string hash is a signed 32-bit int. A negative seed made the LCG below produce
+  // negative indices, which swapped `undefined` into the palette; every name that landed
+  // on one of those slots fell back to orange. Keep the seed non-negative.
+  hash = Math.abs(hash);
 
   const shuffled = [...colors];
   let currentIndex = shuffled.length;
@@ -289,6 +294,8 @@ interface SpinningWheelProps {
   showBlank?: boolean;
   /** Disable the SPIN / Reset buttons, e.g. while the setup modal is open on top */
   controlsDisabled?: boolean;
+  /** User-chosen accent colour (#rrggbb). null = automatic theme */
+  accentColor?: string | null;
   isFirefox?: boolean;
   configId?: string | null;
   onRecordSpin?: (configId: string, winner: string, isRespin: boolean, spinPower: number) => Promise<string | null>;
@@ -301,6 +308,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
   onReset,
   showBlank = false,
   controlsDisabled = false,
+  accentColor = null,
   isFirefox = false,
   configId,
   onRecordSpin,
@@ -991,8 +999,12 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     }
   }, [showBlank]);
 
+  // Which colour source the current map was built from (theme id or accent hex)
+  const paletteKeyRef = useRef<string>("");
+
   // Stable colour per name. Existing names keep their colour when the list is edited
-  // (winner removed, a name added); a completely new list gets a fresh assignment.
+  // (winner removed, a name added); a completely new list, or a change of colour
+  // source (Auto theme resolved after preview, user picked a colour), starts fresh.
   const wheelColors = useMemo(() => {
     const map = originalColorMap.current;
 
@@ -1002,7 +1014,15 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     }
 
     const theme = selectedTheme && selectedTheme.length ? selectedTheme : COLOR_THEMES[0];
-    const palette = generateExtendedPalette(seededShuffle(theme, wheelNames.join('|')));
+    const palette = accentColor
+      ? generatePaletteFromColor(accentColor, Math.max(wheelNames.length, 10))
+      : generateExtendedPalette(seededShuffle(theme, wheelNames.join('|')));
+
+    const paletteKey = accentColor ?? `theme:${theme[0]}`;
+    if (paletteKeyRef.current !== paletteKey) {
+      map.clear();
+      paletteKeyRef.current = paletteKey;
+    }
 
     const missing = wheelNames.filter((name) => !map.has(name));
     const isNewWheel = map.size === 0 || missing.length === wheelNames.length;
@@ -1024,7 +1044,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
     }
 
     return map;
-  }, [wheelNames, selectedTheme]);
+  }, [wheelNames, selectedTheme, accentColor]);
+
+  // Colours for the label-less placeholder wheel
+  const blankPalette = useMemo(
+    () => (accentColor ? generatePaletteFromColor(accentColor, BLANK_SEGMENTS) : null),
+    [accentColor]
+  );
 
   // Get color for a specific name
   const getColorForName = useCallback((name: string): string => {
@@ -1085,9 +1111,11 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
         ctx.arc(centerX, centerY, radius, start, end);
         ctx.closePath();
 
-        // Blank placeholder slices cycle through the theme; real slices use their assigned colour
+        // Blank placeholder slices cycle through the palette; real slices use their assigned colour
         const baseColor = showBlank
-          ? selectedTheme[i % selectedTheme.length]
+          ? blankPalette
+            ? blankPalette[i % blankPalette.length]
+            : selectedTheme[i % selectedTheme.length]
           : getColorForName(name);
 
         if (useSimplifiedGradients) {
@@ -1175,6 +1203,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       wheelNames,
       getColorForName,
       selectedTheme,
+      blankPalette,
       showBlank,
       createGradient,
       performanceMode,
