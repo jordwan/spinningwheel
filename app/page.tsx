@@ -401,6 +401,7 @@ export default function Home() {
     setUseCustomColor(false);
     setCurrentShareSlug(null);
     setCurrentConfigId(null);
+    setShowColorPicker(false); // choosing Auto is a complete answer; no extra Done needed
   };
 
   // Close the setup card and keep whatever wheel is behind it (or a blank one to play with)

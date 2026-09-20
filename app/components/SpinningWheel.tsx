@@ -1967,7 +1967,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
       {/* Winner Modal */}
       {showWinnerModal && selectedName && (
         <div
-          className="fixed inset-0 flex items-center justify-center z-50 pointer-events-auto p-4 bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 flex items-center justify-center z-[65] pointer-events-auto p-4 bg-black/40 backdrop-blur-sm"
           onClick={(e) => {
             // Close modal when clicking backdrop
             if (e.target === e.currentTarget) {
@@ -1979,7 +1979,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="winner-name"
-            className="bg-white rounded-2xl p-6 sm:p-8 transform scale-100 animate-bounce-in pointer-events-auto text-center max-w-[90vw] w-full max-w-md"
+            className="relative bg-white rounded-2xl px-6 pb-6 pt-12 sm:px-8 sm:pb-8 sm:pt-12 transform scale-100 animate-bounce-in pointer-events-auto text-center max-w-[90vw] w-full max-w-md"
             style={{
               boxShadow:
                 "0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)",
@@ -1989,17 +1989,36 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               e.stopPropagation();
             }}
           >
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-2 leading-tight">
+            <button
+              onClick={() => acknowledgeWinner("x")}
+              className="absolute top-3 right-3 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-all duration-200 cursor-pointer"
+              aria-label="Close"
+              style={{ touchAction: "manipulation" }}
+              autoFocus
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-500 mb-2 leading-tight">
               {winnerRhyme}
             </h2>
             <p
               id="winner-name"
-              className={`font-bold text-green-600 mb-6 leading-tight break-words ${
+              className={`font-bold text-green-600 mb-2 leading-tight break-words ${
                 selectedName.length > 15
-                  ? "text-2xl sm:text-3xl"
-                  : selectedName.length > 10
                   ? "text-3xl sm:text-4xl"
-                  : "text-4xl sm:text-5xl"
+                  : selectedName.length > 10
+                  ? "text-4xl sm:text-5xl"
+                  : "text-5xl sm:text-6xl"
               }`}
               style={{
                 wordBreak: "break-word",
@@ -2010,16 +2029,7 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               {selectedName}
             </p>
 
-            {/* Main buttons */}
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={() => acknowledgeWinner("button")}
-                className="flex-1 px-6 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors"
-                style={{ touchAction: "manipulation" }}
-              >
-                Close
-              </button>
-
+            <div className="mt-6 flex flex-col gap-3">
               <button
                 onClick={() => {
                   acknowledgeWinner("button");
@@ -2028,16 +2038,13 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                     spin();
                   }, 100);
                 }}
-                className="flex-1 px-6 py-2.5 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors"
+                className="w-full px-6 py-3 bg-green-500 text-white text-lg font-bold rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
                 style={{ touchAction: "manipulation" }}
               >
-                Respin
+                Spin again
               </button>
-            </div>
 
-            {/* Remove link underneath */}
-            {wheelNames.length > 2 && onRemoveWinner && (
-              <div className="mt-3">
+              {wheelNames.length > 2 && onRemoveWinner && (
                 <button
                   onClick={async () => {
                     // Remove the winner from the wheel
@@ -2047,13 +2054,18 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                     // Create new configuration with remaining names
                     await onRemoveWinner(newNames);
                   }}
-                  className="text-sm text-red-600 hover:underline transition-all"
+                  className="w-full px-6 py-2.5 rounded-lg border-2 border-red-200 text-red-600 font-semibold hover:bg-red-50 hover:border-red-300 transition-colors cursor-pointer truncate"
                   style={{ touchAction: "manipulation" }}
+                  title={`Remove ${selectedName} from the wheel`}
                 >
                   Remove {selectedName}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+
+            <p className="mt-4 text-[11px] text-gray-400">
+              Tap outside or press Esc to close
+            </p>
           </div>
         </div>
       )}
