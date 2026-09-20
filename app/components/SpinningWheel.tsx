@@ -2141,31 +2141,32 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
                 Spin again
               </button>
 
-              {wheelNames.length > 2 && onRemoveWinner && (
+              <div className="flex gap-3">
+                {wheelNames.length > 2 && onRemoveWinner && (
+                  <button
+                    onClick={async () => {
+                      // Remove the winner from the wheel
+                      const newNames = wheelNames.filter(name => name !== selectedName);
+                      acknowledgeWinner("remove");
+
+                      // Create new configuration with remaining names
+                      await onRemoveWinner(newNames);
+                    }}
+                    className="flex-1 min-w-0 px-4 py-2.5 rounded-lg border-2 border-red-200 text-red-600 font-semibold hover:bg-red-50 hover:border-red-300 transition-colors cursor-pointer truncate"
+                    style={{ touchAction: "manipulation" }}
+                    title={`Remove ${selectedName} from the wheel`}
+                  >
+                    Remove {selectedName}
+                  </button>
+                )}
                 <button
-                  onClick={async () => {
-                    // Remove the winner from the wheel
-                    const newNames = wheelNames.filter(name => name !== selectedName);
-                    acknowledgeWinner("remove");
-
-                    // Create new configuration with remaining names
-                    await onRemoveWinner(newNames);
-                  }}
-                  className="w-full px-6 py-2.5 rounded-lg border-2 border-red-200 text-red-600 font-semibold hover:bg-red-50 hover:border-red-300 transition-colors cursor-pointer truncate"
+                  onClick={() => acknowledgeWinner("button")}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition-colors cursor-pointer"
                   style={{ touchAction: "manipulation" }}
-                  title={`Remove ${selectedName} from the wheel`}
                 >
-                  Remove {selectedName}
+                  Close
                 </button>
-              )}
-
-              <button
-                onClick={() => acknowledgeWinner("button")}
-                className="w-full px-6 py-2.5 rounded-lg bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition-colors cursor-pointer"
-                style={{ touchAction: "manipulation" }}
-              >
-                Close
-              </button>
+              </div>
             </div>
 
           </div>
