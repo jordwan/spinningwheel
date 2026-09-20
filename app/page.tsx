@@ -33,6 +33,25 @@ import { accentHexFromHue, hexToHsl, hslToHex, isValidHexColor } from "../lib/ut
 // Lazy load the heavy SpinningWheel component
 const SpinningWheel = lazy(() => import("./components/SpinningWheel"));
 
+const MAX_NAME_LENGTH = 20;
+
+// Tidy one name: collapse whitespace, keep letters/digits from any language
+// (José, Zoë, 李) plus spaces, hyphens, dots, underscores and apostrophes.
+function sanitizeName(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{M}\p{N}\s\-\._']/gu, "");
+}
+
+// Split typed or pasted text into names on commas and new lines
+function splitNames(text: string): string[] {
+  return text
+    .split(/[,\r\n]+/)
+    .map(sanitizeName)
+    .filter((name) => name.length > 0);
+}
+
 // Copy text to the clipboard; resolves true on success. Falls back to execCommand
 // for older browsers. Callers should treat false as "show the manual Copy button".
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -117,8 +136,6 @@ export default function Home() {
   const [longNameWarningText, setLongNameWarningText] = useState("");
   const [isUsingCustomNames, setIsUsingCustomNames] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
-  const [duplicateWarningText, setDuplicateWarningText] = useState("");
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [currentConfigId, setCurrentConfigId] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -144,7 +161,6 @@ export default function Home() {
   const closeSimpleModals = useCallback(() => {
     setShowMinNamesWarning(false);
     setShowLongNameWarning(false);
-    setShowDuplicateWarning(false);
     setShowShareModal(false);
   }, []);
   const accentColor = useCustomColor ? accentHexFromHue(accentHue) : null;
@@ -160,8 +176,12 @@ export default function Home() {
     getLastConfiguration,
   } = useSession();
 
-  // Textarea contents (parsed only on submit)
-  const [localInputValue, setLocalInputValue] = useState("");
+  // Names box: committed names show as pills; `draft` is what's being typed
+  const [committedNames, setCommittedNames] = useState<string[]>([]);
+  const [draft, setDraft] = useState("");
+  const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const duplicateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Hydration guard - ensures client-side rendering
   useEffect(() => {
@@ -174,7 +194,7 @@ export default function Home() {
     // teacher/host doesn't retype the list. They still confirm with "Create wheel".
     const last = getLastConfiguration();
     if (last && last.inputMethod === "custom" && last.names.length >= 2) {
-      setLocalInputValue(last.names.join(", "));
+      setCommittedNames(last.names);
       if (last.teamName) setTeamName(last.teamName);
     }
     if (last && isValidHexColor(last.accentColor)) {
@@ -211,7 +231,6 @@ export default function Home() {
       showNameInput ||
       showMinNamesWarning ||
       showLongNameWarning ||
-      showDuplicateWarning ||
       showShareModal,
   });
 
@@ -225,9 +244,9 @@ export default function Home() {
   // Populate input field when modal opens with existing custom names
   useEffect(() => {
     if (showNameInput && isUsingCustomNames && wheelNames.length > 0) {
-      // If we have custom names and the modal is opening, repopulate the input
-      const customNamesString = wheelNames.join(", ");
-      setLocalInputValue(customNamesString);
+      // If we have custom names and the modal is opening, repopulate the pills
+      setCommittedNames(wheelNames);
+      setDraft("");
     }
   }, [showNameInput, isUsingCustomNames, wheelNames]); // Include all dependencies
 
@@ -239,7 +258,6 @@ export default function Home() {
       showNameInput ||
       showMinNamesWarning ||
       showLongNameWarning ||
-      showDuplicateWarning ||
       showShareModal;
 
     if (anyModalOpen) {
@@ -260,7 +278,6 @@ export default function Home() {
     showNameInput,
     showMinNamesWarning,
     showLongNameWarning,
-    showDuplicateWarning,
     showShareModal,
   ]);
 
@@ -270,7 +287,6 @@ export default function Home() {
       showColorPicker ||
       showMinNamesWarning ||
       showLongNameWarning ||
-      showDuplicateWarning ||
       showShareModal;
     if (!anyDismissable) return;
 
@@ -288,7 +304,6 @@ export default function Home() {
     showColorPicker,
     showMinNamesWarning,
     showLongNameWarning,
-    showDuplicateWarning,
     showShareModal,
     closeSimpleModals,
   ]);
@@ -307,7 +322,7 @@ export default function Home() {
 
   // Validate name lengths
   const validateNameLengths = (namesList: string[]): boolean => {
-    const maxLength = 20; // Reasonable limit for display
+    const maxLength = MAX_NAME_LENGTH; // Reasonable limit for display
     const longNames = namesList.filter((name) => name.length > maxLength);
 
     if (longNames.length > 0) {
@@ -382,56 +397,55 @@ export default function Home() {
     setCurrentConfigId(configId);
   };
 
-  const handleInputChange = useCallback((value: string) => {
-    setLocalInputValue(value);
+  // Add names to the pills, skipping ones already on the wheel (case-insensitive)
+  const addNames = useCallback((incoming: string[]) => {
+    setCommittedNames((current) => {
+      const seen = new Set(current.map((n) => n.toLowerCase()));
+      const added: string[] = [];
+      const skipped: string[] = [];
+      for (const name of incoming) {
+        const key = name.toLowerCase();
+        if (seen.has(key)) {
+          skipped.push(name);
+          continue;
+        }
+        seen.add(key);
+        added.push(name);
+      }
+      if (skipped.length > 0) {
+        setDuplicateNotice(
+          skipped.length === 1
+            ? `"${skipped[0]}" is already on the wheel`
+            : `${skipped.length} names were already on the wheel`
+        );
+        if (duplicateTimerRef.current) clearTimeout(duplicateTimerRef.current);
+        duplicateTimerRef.current = setTimeout(() => setDuplicateNotice(null), 2500);
+      }
+      return added.length ? [...current, ...added] : current;
+    });
   }, []);
 
-  // Memoized enhanced name processing to reduce computation
-  const processNames = useCallback(
-    (input: string): { names: string[]; duplicatesRemoved: number } => {
-      const enhancedTrim = (name: string): string => {
-        return name
-          .trim()
-          .replace(/\s+/g, " ") // Replace multiple spaces with single space
-          // Keep letters and digits from any language (José, Zoë, 李), plus spaces,
-          // hyphens, dots, underscores and apostrophes. The old \w-based version
-          // silently mangled accented names ("José" became "Jos").
-          .replace(/[^\p{L}\p{M}\p{N}\s\-\._']/gu, "");
-        // No length cap here: validateNameLengths() warns the user instead of
-        // silently chopping "Alexander Hamilton Jr" to 20 characters.
-      };
+  // Turn whatever is typed into pills
+  const commitDraft = useCallback(() => {
+    const names = splitNames(draft);
+    if (names.length > 0) addNames(names);
+    setDraft("");
+  }, [draft, addNames]);
 
-      // Delimiter priority: commas and/or new lines (Enter after each name, or a pasted
-      // roster like "Mary Ann\nJohn Smith"), then plain whitespace.
-      const trimmed = input.trim();
-      const separator = trimmed.includes(",")
-        ? /[,\r\n]+/
-        : /\r?\n/.test(trimmed)
-        ? /\r?\n/
-        : /\s+/;
+  const removeName = useCallback((index: number) => {
+    setCommittedNames((current) => current.filter((_, i) => i !== index));
+    nameInputRef.current?.focus();
+  }, []);
 
-      const cleaned = trimmed
-        .split(separator)
-        .map(enhancedTrim)
-        .filter((name) => name.length > 0);
+  // What the wheel will get: the pills plus whatever is still being typed
+  const previewNames = useMemo(() => {
+    const pending = sanitizeName(draft);
+    if (!pending) return committedNames;
+    const dup = committedNames.some((n) => n.toLowerCase() === pending.toLowerCase());
+    return dup ? committedNames : [...committedNames, pending];
+  }, [committedNames, draft]);
 
-      // Remove duplicates (case-insensitive)
-      const names = cleaned.filter(
-        (name, index, arr) =>
-          arr.findIndex((n) => n.toLowerCase() === name.toLowerCase()) === index
-      );
-
-      return { names, duplicatesRemoved: cleaned.length - names.length };
-    },
-    []
-  );
-
-  // Parsed live as the user types: powers the "4 names ready" hint and the wheel preview
-  const parsedInput = useMemo(
-    () => processNames(localInputValue),
-    [processNames, localInputValue]
-  );
-  const previewNames = parsedInput.names;
+  const hasAnyInput = committedNames.length > 0 || draft.trim() !== "";
 
   // Changing colours invalidates the share link and the saved config (both carry the colour)
   const handleAccentHueChange = (hue: number) => {
@@ -466,18 +480,12 @@ export default function Home() {
   const handleSubmitNames = () => {
     // This function now only handles custom names
     // Random generation is handled by separate functions
-    const { names, duplicatesRemoved } = parsedInput;
+    const names = previewNames;
 
-    // Show warning if duplicates were removed
-    if (duplicatesRemoved > 0) {
-      setDuplicateWarningText(
-        `${duplicatesRemoved} duplicate ${
-          duplicatesRemoved === 1 ? "name was" : "names were"
-        } removed.`
-      );
-      setShowDuplicateWarning(true);
-      // Track duplicate warning
-      trackValidationWarning("duplicates", { count: duplicatesRemoved });
+    // Anything still being typed becomes a pill, so the list on screen matches the wheel
+    if (draft.trim() !== "") {
+      setCommittedNames(names);
+      setDraft("");
     }
 
     if (names.length >= 2) {
@@ -516,31 +524,64 @@ export default function Home() {
     // Removed the else clause that would show random count input
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key !== "Enter" || e.shiftKey) return;
+  const submitOrWarn = () => {
+    if (previewNames.length >= 2) {
+      handleSubmitNames();
+    } else if (previewNames.length === 1) {
+      setShowMinNamesWarning(true);
+      trackValidationWarning("min_names", { count: 1 });
+    }
+  };
 
-    // Ctrl/Cmd+Enter always creates the wheel
-    if (e.metaKey || e.ctrlKey) {
+  // Names box: Enter/comma commit a pill, Backspace on empty removes the last pill,
+  // Enter on an empty box (or Ctrl/Cmd+Enter) creates the wheel
+  const handleNameInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
       e.preventDefault();
-      if (previewNames.length >= 2) handleSubmitNames();
+      if (e.metaKey || e.ctrlKey) {
+        commitDraft();
+        submitOrWarn();
+        return;
+      }
+      if (draft.trim() !== "") {
+        commitDraft();
+      } else {
+        submitOrWarn();
+      }
       return;
     }
-
-    // Plain Enter "commits" the current name by starting a new line. Pressing Enter
-    // again on an empty line (or with the caret on one) means "I'm done": create the wheel.
-    const el = e.currentTarget;
-    const beforeCaret = el.value.slice(0, el.selectionStart ?? el.value.length);
-    const currentLine = beforeCaret.slice(beforeCaret.lastIndexOf("\n") + 1);
-    if (currentLine.trim() === "") {
+    if (e.key === ",") {
       e.preventDefault();
-      if (previewNames.length >= 2) {
-        handleSubmitNames();
-      } else if (previewNames.length === 1) {
-        setShowMinNamesWarning(true);
-        trackValidationWarning("min_names", { count: 1 });
-      }
+      commitDraft();
+      return;
     }
-    // otherwise let the newline through
+    if (e.key === "Backspace" && draft === "" && committedNames.length > 0) {
+      e.preventDefault();
+      setCommittedNames((current) => current.slice(0, -1));
+    }
+  };
+
+  // Pasting a list adds every name at once
+  const handleNamePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text");
+    if (!/[,\r\n]/.test(text)) return; // single name: let the normal paste happen
+    e.preventDefault();
+    const names = splitNames(draft + text);
+    if (names.length > 0) addNames(names);
+    setDraft("");
+  };
+
+  // Enter anywhere else in the card (wheel name, etc.) creates the wheel
+  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    const target = e.target as HTMLElement;
+    if (target === nameInputRef.current) return; // handled above
+    const tag = target.tagName;
+    if (tag === "BUTTON" || tag === "TEXTAREA") return; // native behaviour
+    if (tag === "INPUT" && (target as HTMLInputElement).type === "number") return; // tile count: Enter = done editing
+    e.preventDefault();
+    commitDraft();
+    submitOrWarn();
   };
 
   // Handle creating a shareable link
@@ -688,6 +729,7 @@ export default function Home() {
               aria-modal="true"
               aria-label="Customize Wheel"
               className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 max-w-2xl w-full pointer-events-auto text-center relative"
+              onKeyDown={handleCardKeyDown}
             >
               {/* Close button - keeps the wheel behind (or a blank one to play with) */}
               <button
@@ -717,55 +759,92 @@ export default function Home() {
                 Add at least 2 names, or generate random names or numbers.
               </p>
 
-              {/* 1. Names */}
-              <textarea
-                value={localInputValue}
-                onChange={(e) => handleInputChange(e.target.value)}
-                onKeyDown={handleKeyPress}
-                placeholder={"mike\ncindy\njamal\nwayne"}
-                aria-label="Names for the wheel"
-                aria-describedby="names-help"
-                className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
-                style={{ touchAction: "manipulation" }}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                autoFocus={!isMobileDevice}
-              />
+              {/* 1. Names - pills + inline input */}
+              <div
+                onClick={() => nameInputRef.current?.focus()}
+                className="w-full min-h-32 max-h-48 overflow-y-auto px-3 py-2.5 border-2 border-gray-300 rounded-lg focus-within:border-blue-500 cursor-text text-left flex flex-wrap content-start items-center gap-1.5"
+              >
+                {committedNames.map((name, index) => {
+                  const tooLong = name.length > MAX_NAME_LENGTH;
+                  return (
+                    <span
+                      key={`${name}-${index}`}
+                      className={`inline-flex items-center gap-1 max-w-full pl-2.5 pr-1 py-1 rounded-full text-sm border ${
+                        tooLong
+                          ? "bg-orange-50 border-orange-200 text-orange-800"
+                          : "bg-gray-100 border-gray-200 text-gray-800"
+                      }`}
+                      title={tooLong ? `Over ${MAX_NAME_LENGTH} characters` : undefined}
+                    >
+                      <span className="truncate">{name}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeName(index);
+                        }}
+                        aria-label={`Remove ${name}`}
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 cursor-pointer flex-shrink-0"
+                        style={{ touchAction: "manipulation" }}
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </span>
+                  );
+                })}
+                <input
+                  ref={nameInputRef}
+                  type="text"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={handleNameInputKeyDown}
+                  onPaste={handleNamePaste}
+                  onBlur={commitDraft}
+                  placeholder={committedNames.length > 0 ? "Add another\u2026" : "Type a name, press Enter"}
+                  aria-label="Names for the wheel"
+                  aria-describedby="names-help"
+                  className="flex-1 min-w-[10rem] py-1 bg-transparent outline-none text-base text-gray-900 placeholder:text-gray-400"
+                  style={{ touchAction: "manipulation" }}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="words"
+                  spellCheck={false}
+                  enterKeyHint="enter"
+                  autoFocus={!isMobileDevice}
+                />
+              </div>
 
-              {/* Live parsing feedback */}
+              {/* Live feedback */}
               <div
                 id="names-help"
                 className="flex items-center justify-between gap-3 mt-1.5 mb-3 min-h-[1.25rem] text-xs text-left"
               >
                 <span
                   className={
-                    previewNames.length >= 2
+                    duplicateNotice
+                      ? "text-orange-600 font-medium"
+                      : previewNames.length >= 2
                       ? "text-green-600 font-medium"
                       : "text-gray-500"
                   }
                   aria-live="polite"
                 >
-                  {localInputValue.trim() === ""
-                    ? "Press Enter after each name, or separate with commas"
-                    : previewNames.length === 0
-                    ? "Keep typing\u2026"
+                  {duplicateNotice
+                    ? duplicateNotice
+                    : !hasAnyInput
+                    ? "Press Enter after each name, or paste a whole list"
                     : previewNames.length === 1
-                    ? "1 name so far. Press Enter and add at least one more"
-                    : `${previewNames.length} names ready${
-                        parsedInput.duplicatesRemoved > 0
-                          ? ` (${parsedInput.duplicatesRemoved} duplicate${
-                              parsedInput.duplicatesRemoved === 1 ? "" : "s"
-                            } ignored)`
-                          : ""
-                      }`}
+                    ? "1 name so far. Add at least one more"
+                    : `${previewNames.length} names ready`}
                 </span>
-                {localInputValue.trim() !== "" && (
+                {hasAnyInput && (
                   <button
                     type="button"
                     onClick={() => {
-                      setLocalInputValue("");
+                      setCommittedNames([]);
+                      setDraft("");
                       setTeamName("");
                     }}
                     className="inline-flex items-center gap-1 px-2.5 py-1 -my-1 rounded-full border border-gray-300 bg-gray-50 text-gray-600 hover:border-red-300 hover:bg-red-50 hover:text-red-600 whitespace-nowrap cursor-pointer transition-colors"
@@ -1139,61 +1218,6 @@ export default function Home() {
           </>
         )}
 
-        {/* Duplicate Names Warning Modal */}
-        {showDuplicateWarning && (
-          <>
-            <div className="fixed inset-0 backdrop-blur-[2px] z-[79]" />
-            <div
-              className="fixed inset-0 flex items-center justify-center z-[80] p-4 pointer-events-auto"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) closeSimpleModals();
-              }}
-            >
-              <div
-                role="dialog"
-                aria-modal="true"
-                className="bg-white rounded-2xl p-6 max-w-sm w-full pointer-events-auto text-center relative"
-                style={{
-                  boxShadow:
-                    "0 0 40px rgba(0, 0, 0, 0.3), 0 0 80px rgba(0, 0, 0, 0.15)",
-                }}
-              >
-                <div className="mb-4">
-                  <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-3">
-                    <svg
-                      className="w-6 h-6 text-blue-600"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Duplicates Removed
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    {duplicateWarningText}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowDuplicateWarning(false)}
-                  className="w-full px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
-                  style={{ touchAction: "manipulation" }}
-                  autoFocus
-                >
-                  Got it
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
         {/* Share Modal */}
         {showShareModal && (
           <>
@@ -1440,7 +1464,8 @@ export default function Home() {
                   // They will only be cleared if user explicitly clicks "Clear"
                   if (!isUsingCustomNames) {
                     // Only clear if we were using random/numbers
-                    setLocalInputValue("");
+                    setCommittedNames([]);
+                    setDraft("");
                     setTeamName("");
                   }
                   // If using custom names, preserve them but show input modal
