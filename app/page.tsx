@@ -788,7 +788,6 @@ export default function Home() {
                         }}
                         size={112}
                       />
-                      <p className="text-[11px] text-gray-500 -mt-1">Drag around the ring</p>
                       <div className="flex gap-2 w-full">
                         <button
                           type="button"

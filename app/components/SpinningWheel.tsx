@@ -2063,9 +2063,6 @@ const SpinningWheel: React.FC<SpinningWheelProps> = ({
               )}
             </div>
 
-            <p className="mt-4 text-[11px] text-gray-400">
-              Tap outside or press Esc to close
-            </p>
           </div>
         </div>
       )}
